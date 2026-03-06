@@ -10,6 +10,7 @@ pub enum Pane {
 pub struct PlaylistItem {
     pub path: PathBuf,
     pub duration: Option<Duration>,
+    pub alias: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,9 +83,18 @@ impl TuiState {
         }
     }
 
-    pub fn add_to_playlist(&mut self, path: PathBuf, duration: Option<Duration>) {
+    pub fn add_to_playlist(
+        &mut self,
+        path: PathBuf,
+        duration: Option<Duration>,
+        alias: Option<String>,
+    ) {
         if !self.playlist.iter().any(|item| item.path == path) {
-            self.playlist.push(PlaylistItem { path, duration });
+            self.playlist.push(PlaylistItem {
+                path,
+                duration,
+                alias,
+            });
         }
     }
 

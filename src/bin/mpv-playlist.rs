@@ -11,22 +11,19 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use mpv_playlist::{
     analysis,
     app::{App, DEFAULT_EXTENSIONS},
-    cache::DurationCache,
     media::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
     mpv::{MpvBackend, MpvClient, MpvipcBackend},
-    playlist::{FileBackend, PlaylistStorage, PlaylistStorageBackend},
+    playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
     ui,
 };
-
-const CACHE_FILE: &str = "analysis.toml";
 
 #[derive(Parser)]
 #[command(name = "mpv-playlist")]
 #[command(about = "TUI playlist manager for mpv")]
 struct Args {
     /// Playlist file path
-    #[arg(short, long, default_value = "playlist.txt")]
+    #[arg(short, long, default_value = "playlist.toml")]
     playlist: PathBuf,
 
     /// mpv socket path
@@ -46,14 +43,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let extensions = parse_extensions(&args);
 
-    let all_files = collect_all_files(&args.playlist, &extensions);
-    let cache = DurationCache::load(PathBuf::from(CACHE_FILE))?;
+    let storage_backend: Arc<dyn PlaylistStorageBackend> =
+        Arc::new(TomlBackend::new(args.playlist.clone()));
+    let playlist_storage = PlaylistStorage::new(storage_backend.clone());
+
+    let playlist_data = playlist_storage.load()?;
+    let all_files = collect_all_files(&playlist_data, &extensions);
     let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
 
-    let result = analysis::analyze_files(&all_files, cache, ffprobe_backend.as_ref())?;
+    let result =
+        analysis::analyze_files(&all_files, playlist_data.files, ffprobe_backend.as_ref())?;
+
+    let durations: std::collections::HashMap<PathBuf, std::time::Duration> = result
+        .files
+        .iter()
+        .filter_map(|(k, v)| v.duration.map(|d| (k.clone(), d)))
+        .collect();
 
     let media_backend: Arc<dyn MediaQueryBackend> =
-        Arc::new(CachedMediaBackend::new(result.durations, ffprobe_backend));
+        Arc::new(CachedMediaBackend::new(durations, ffprobe_backend));
 
     let services = build_services(&args, media_backend);
 
@@ -81,17 +89,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn collect_all_files(playlist_path: &PathBuf, extensions: &[String]) -> Vec<PathBuf> {
+fn collect_all_files(playlist_data: &PlaylistData, extensions: &[String]) -> Vec<PathBuf> {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
-    if let Ok(content) = std::fs::read_to_string(playlist_path) {
-        for line in content.lines().filter(|l| !l.is_empty()) {
-            let path = PathBuf::from(line);
-            if let Ok(canonical) = path.canonicalize() {
-                files.insert(canonical);
-            } else {
-                files.insert(path);
-            }
+    for path in &playlist_data.playlist {
+        if let Ok(canonical) = path.canonicalize() {
+            files.insert(canonical);
+        } else {
+            files.insert(path.clone());
+        }
+    }
+
+    for path in playlist_data.files.keys() {
+        if let Ok(canonical) = path.canonicalize() {
+            files.insert(canonical);
+        } else {
+            files.insert(path.clone());
         }
     }
 
@@ -143,7 +156,7 @@ fn parse_extensions(args: &Args) -> Vec<String> {
 fn build_services(args: &Args, media_backend: Arc<dyn MediaQueryBackend>) -> Services {
     let mpv_backend: Arc<dyn MpvBackend> = Arc::new(MpvipcBackend::new(&args.socket));
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
-        Arc::new(FileBackend::new(args.playlist.clone()));
+        Arc::new(TomlBackend::new(args.playlist.clone()));
 
     Services {
         mpv: MpvClient::new(mpv_backend),

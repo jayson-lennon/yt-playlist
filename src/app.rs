@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{Event, KeyCode};
 
+use crate::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui_state::{Pane, PlaylistItem, TuiState};
 
@@ -31,12 +32,19 @@ impl App {
 
     pub fn load_playlist(&mut self) {
         match self.services.storage.load() {
-            Ok(items) => {
-                self.tui_state.playlist = items
+            Ok(data) => {
+                self.tui_state.playlist = data
+                    .playlist
                     .into_iter()
                     .map(|path| {
-                        let duration = self.services.media.get_duration(&path).ok();
-                        PlaylistItem { path, duration }
+                        let metadata = data.files.get(&path);
+                        let duration = metadata.and_then(|m| m.duration);
+                        let alias = metadata.and_then(|m| m.alias.clone());
+                        PlaylistItem {
+                            path,
+                            duration,
+                            alias,
+                        }
                     })
                     .collect();
                 self.refresh_directory();
@@ -48,13 +56,36 @@ impl App {
     }
 
     pub fn save_playlist(&mut self) {
-        let items: Vec<PathBuf> = self
+        let mut files = std::collections::HashMap::new();
+        for item in &self.tui_state.playlist {
+            files.insert(
+                item.path.clone(),
+                crate::playlist::FileMetadata {
+                    duration: item.duration,
+                    alias: item.alias.clone(),
+                },
+            );
+        }
+        for item in &self.tui_state.directory {
+            files.insert(
+                item.path.clone(),
+                crate::playlist::FileMetadata {
+                    duration: item.duration,
+                    alias: item.alias.clone(),
+                },
+            );
+        }
+        let playlist_paths: Vec<PathBuf> = self
             .tui_state
             .playlist
             .iter()
             .map(|item| item.path.clone())
             .collect();
-        match self.services.storage.save(&items) {
+        let data = PlaylistData {
+            playlist: playlist_paths,
+            files,
+        };
+        match self.services.storage.save(&data) {
             Ok(()) => {
                 self.tui_state.status_message = Some("Playlist saved".to_string());
             }
@@ -72,8 +103,13 @@ impl App {
                 if path.is_file() {
                     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                         if self.extensions.contains(&ext.to_lowercase()) {
-                            let duration = self.services.media.get_duration(&path).ok();
-                            entries.push(PlaylistItem { path, duration });
+                            let canonical = path.canonicalize().unwrap_or(path);
+                            let duration = self.services.media.get_duration(&canonical).ok();
+                            entries.push(PlaylistItem {
+                                path: canonical,
+                                duration,
+                                alias: None,
+                            });
                         }
                     }
                 }
@@ -152,7 +188,7 @@ impl App {
     fn move_from_directory_to_playlist(&mut self) {
         if let Some(item) = self.tui_state.selected_directory_item().cloned() {
             self.tui_state
-                .add_to_playlist(item.path.clone(), item.duration);
+                .add_to_playlist(item.path, item.duration, item.alias);
             self.tui_state
                 .directory
                 .remove(self.tui_state.directory_selected);
@@ -247,13 +283,13 @@ mod tests {
     }
 
     struct MockStorageBackend {
-        saved_items: Arc<Mutex<Vec<PathBuf>>>,
+        saved_data: Arc<Mutex<Option<PlaylistData>>>,
     }
 
     impl MockStorageBackend {
         fn new() -> Self {
             Self {
-                saved_items: Arc::new(Mutex::new(Vec::new())),
+                saved_data: Arc::new(Mutex::new(None)),
             }
         }
     }
@@ -263,12 +299,12 @@ mod tests {
             "mock"
         }
 
-        fn load(&self) -> Result<Vec<PathBuf>, Report<IoError>> {
-            Ok(Vec::new())
+        fn load(&self) -> Result<PlaylistData, Report<IoError>> {
+            Ok(PlaylistData::default())
         }
 
-        fn save(&self, items: &[PathBuf]) -> Result<(), Report<IoError>> {
-            *self.saved_items.lock().unwrap() = items.to_vec();
+        fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
+            *self.saved_data.lock().unwrap() = Some(data.clone());
             Ok(())
         }
     }
@@ -296,14 +332,20 @@ mod tests {
 
         for path in playlist_items {
             let duration = app.services.media.get_duration(&path).ok();
-            app.tui_state.playlist.push(PlaylistItem { path, duration });
+            app.tui_state.playlist.push(PlaylistItem {
+                path,
+                duration,
+                alias: None,
+            });
         }
 
         for path in directory_items {
             let duration = app.services.media.get_duration(&path).ok();
-            app.tui_state
-                .directory
-                .push(PlaylistItem { path, duration });
+            app.tui_state.directory.push(PlaylistItem {
+                path,
+                duration,
+                alias: None,
+            });
         }
 
         (app, mpv_backend, storage_backend)
@@ -319,8 +361,8 @@ mod tests {
 
         // Then the app should quit and save the playlist.
         assert!(app.should_quit);
-        let saved = storage.saved_items.lock().unwrap();
-        assert!(saved.is_empty());
+        let saved = storage.saved_data.lock().unwrap();
+        assert!(saved.as_ref().map_or(true, |d| d.playlist.is_empty()));
     }
 
     #[test]
@@ -332,9 +374,10 @@ mod tests {
         app.handle_event(key_event(KeyCode::Char('s')));
 
         // Then the playlist is saved.
-        let saved = storage.saved_items.lock().unwrap();
-        assert_eq!(saved.len(), 1);
-        assert_eq!(saved[0], PathBuf::from("test.mp4"));
+        let saved = storage.saved_data.lock().unwrap();
+        let data = saved.as_ref().expect("should have saved data");
+        assert_eq!(data.playlist.len(), 1);
+        assert_eq!(data.playlist[0], PathBuf::from("test.mp4"));
     }
 
     #[test]

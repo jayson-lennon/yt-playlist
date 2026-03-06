@@ -1,22 +1,26 @@
-use std::{collections::HashMap, io::Write, path::PathBuf, time::Duration};
+use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use error_stack::Report;
 
-use crate::cache::DurationCache;
 use crate::media::{MediaError, MediaQueryBackend};
+use crate::playlist::FileMetadata;
 
 pub struct AnalysisResult {
-    pub durations: HashMap<PathBuf, Duration>,
-    pub cache: DurationCache,
+    pub files: HashMap<PathBuf, FileMetadata>,
 }
 
 #[allow(clippy::missing_errors_doc)]
 pub fn analyze_files(
     files: &[PathBuf],
-    mut cache: DurationCache,
+    mut metadata: HashMap<PathBuf, FileMetadata>,
     backend: &dyn MediaQueryBackend,
 ) -> Result<AnalysisResult, Report<MediaError>> {
-    let uncached: Vec<_> = files.iter().filter(|p| !cache.contains(p)).collect();
+    let uncached: Vec<_> = files
+        .iter()
+        .filter(|p| {
+            !metadata.contains_key(*p) || metadata.get(*p).and_then(|m| m.duration).is_none()
+        })
+        .collect();
 
     let total = uncached.len();
     if total > 0 {
@@ -25,22 +29,21 @@ pub fn analyze_files(
 
         for (i, path) in uncached.iter().enumerate() {
             if let Ok(duration) = backend.get_duration(path) {
-                cache.insert((*path).clone(), duration);
+                let existing = metadata.remove(*path);
+                let alias = existing.and_then(|m| m.alias);
+                metadata.insert(
+                    (*path).clone(),
+                    FileMetadata {
+                        duration: Some(duration),
+                        alias,
+                    },
+                );
             }
             eprint!("\rAnalyzing durations: {}/{}", i + 1, total);
             std::io::stderr().flush().ok();
         }
         eprintln!();
-
-        if let Err(e) = cache.save() {
-            eprintln!("Warning: failed to save cache: {e:?}");
-        }
     }
 
-    let durations: HashMap<PathBuf, Duration> = files
-        .iter()
-        .filter_map(|p| cache.get(p).map(|d| (p.clone(), d)))
-        .collect();
-
-    Ok(AnalysisResult { durations, cache })
+    Ok(AnalysisResult { files: metadata })
 }

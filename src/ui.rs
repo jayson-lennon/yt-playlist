@@ -55,10 +55,12 @@ fn render_playlist(frame: &mut Frame, state: &TuiState, area: Rect) {
                 Style::default()
             };
             let duration_str = format_duration(item.duration);
-            let name = item.path.file_name().map_or_else(
-                || item.path.to_string_lossy().into_owned(),
-                |n| n.to_string_lossy().into_owned(),
-            );
+            let name = item.alias.clone().unwrap_or_else(|| {
+                item.path.file_name().map_or_else(
+                    || item.path.to_string_lossy().into_owned(),
+                    |n| n.to_string_lossy().into_owned(),
+                )
+            });
             let text = format!("{duration_str} {name}");
             ListItem::new(text).style(style)
         })
@@ -125,10 +127,12 @@ fn render_directory(frame: &mut Frame, state: &TuiState, area: Rect) {
                 Style::default()
             };
             let duration_str = format_duration(item.duration);
-            let name = item.path.file_name().map_or_else(
-                || item.path.to_string_lossy().into_owned(),
-                |n| n.to_string_lossy().into_owned(),
-            );
+            let name = item.alias.clone().unwrap_or_else(|| {
+                item.path.file_name().map_or_else(
+                    || item.path.to_string_lossy().into_owned(),
+                    |n| n.to_string_lossy().into_owned(),
+                )
+            });
             let text = format!("{duration_str} {name}");
             ListItem::new(text).style(style)
         })
