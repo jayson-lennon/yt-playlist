@@ -121,6 +121,25 @@ impl App {
 
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
+            if self.tui_state.is_renaming() {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.tui_state.cancel_rename();
+                    }
+                    KeyCode::Enter => {
+                        self.tui_state.submit_rename();
+                    }
+                    KeyCode::Backspace => {
+                        self.tui_state.pop_rename_char();
+                    }
+                    KeyCode::Char(c) => {
+                        self.tui_state.push_rename_char(c);
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
             match key.code {
                 KeyCode::Char('q') => {
                     self.save_playlist();
@@ -131,6 +150,9 @@ impl App {
                 }
                 KeyCode::Char('o') => {
                     self.open_in_mpv();
+                }
+                KeyCode::Char('r') => {
+                    self.tui_state.start_rename();
                 }
                 KeyCode::Tab => {
                     self.tui_state.switch_pane();

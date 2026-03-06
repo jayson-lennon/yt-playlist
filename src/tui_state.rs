@@ -13,6 +13,12 @@ pub struct PlaylistItem {
     pub alias: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RenameState {
+    pub active: bool,
+    pub input: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct TuiState {
     pub playlist: Vec<PlaylistItem>,
@@ -21,6 +27,7 @@ pub struct TuiState {
     pub directory_selected: usize,
     pub focused_pane: Pane,
     pub status_message: Option<String>,
+    pub rename: RenameState,
 }
 
 impl TuiState {
@@ -32,6 +39,7 @@ impl TuiState {
             directory_selected: 0,
             focused_pane: Pane::Playlist,
             status_message: None,
+            rename: RenameState::default(),
         }
     }
 
@@ -125,6 +133,56 @@ impl TuiState {
             Pane::Playlist => Pane::Directory,
             Pane::Directory => Pane::Playlist,
         };
+    }
+
+    pub fn is_renaming(&self) -> bool {
+        self.rename.active
+    }
+
+    pub fn start_rename(&mut self) {
+        let current_alias = self.get_selected_item().and_then(|item| item.alias.clone());
+        self.rename.input = current_alias.unwrap_or_default();
+        self.rename.active = true;
+    }
+
+    pub fn cancel_rename(&mut self) {
+        self.rename.active = false;
+        self.rename.input.clear();
+    }
+
+    pub fn submit_rename(&mut self) {
+        let alias = if self.rename.input.is_empty() {
+            None
+        } else {
+            Some(self.rename.input.clone())
+        };
+        if let Some(item) = self.get_selected_item_mut() {
+            item.alias = alias;
+        }
+        self.rename.active = false;
+        self.rename.input.clear();
+    }
+
+    pub fn push_rename_char(&mut self, c: char) {
+        self.rename.input.push(c);
+    }
+
+    pub fn pop_rename_char(&mut self) {
+        self.rename.input.pop();
+    }
+
+    pub fn get_selected_item(&self) -> Option<&PlaylistItem> {
+        match self.focused_pane {
+            Pane::Playlist => self.playlist.get(self.playlist_selected),
+            Pane::Directory => self.directory.get(self.directory_selected),
+        }
+    }
+
+    pub fn get_selected_item_mut(&mut self) -> Option<&mut PlaylistItem> {
+        match self.focused_pane {
+            Pane::Playlist => self.playlist.get_mut(self.playlist_selected),
+            Pane::Directory => self.directory.get_mut(self.directory_selected),
+        }
     }
 }
 

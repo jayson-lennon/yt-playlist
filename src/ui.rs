@@ -1,7 +1,7 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -27,6 +27,10 @@ pub fn render(frame: &mut Frame, state: &TuiState) {
     let status_text = state.status_message.clone().unwrap_or_default();
     let status = Paragraph::new(status_text).style(Style::default().fg(Color::Yellow));
     frame.render_widget(status, status_area);
+
+    if state.is_renaming() {
+        render_rename_popup(frame, state);
+    }
 }
 
 fn render_playlist(frame: &mut Frame, state: &TuiState, area: Rect) {
@@ -181,4 +185,45 @@ fn format_duration(duration: Option<std::time::Duration>) -> String {
         }
         None => "[--:--:--]".to_string(),
     }
+}
+
+fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
+}
+
+fn render_rename_popup(frame: &mut Frame, state: &TuiState) {
+    let area = popup_area(frame.area(), 50, 20);
+
+    frame.render_widget(Clear, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(3)])
+        .split(area);
+
+    let filename = state.get_selected_item().map_or_else(
+        || "Unknown".to_string(),
+        |item| {
+            item.path.file_name().map_or_else(
+                || item.path.to_string_lossy().into_owned(),
+                |n| n.to_string_lossy().into_owned(),
+            )
+        },
+    );
+
+    let title = Paragraph::new(filename).style(Style::default().fg(Color::Cyan));
+    frame.render_widget(title, chunks[0]);
+
+    let input_text = format!("{}█", state.rename.input);
+    let input = Paragraph::new(input_text).block(
+        Block::default()
+            .title("Alias")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
+    frame.render_widget(input, chunks[1]);
 }
