@@ -121,6 +121,25 @@ impl App {
 
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
+            if self.tui_state.is_filtering() {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.tui_state.cancel_filter();
+                    }
+                    KeyCode::Enter => {
+                        self.tui_state.submit_filter();
+                    }
+                    KeyCode::Backspace => {
+                        self.tui_state.pop_filter_char();
+                    }
+                    KeyCode::Char(c) => {
+                        self.tui_state.push_filter_char(c);
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
             if self.tui_state.is_renaming() {
                 match key.code {
                     KeyCode::Esc => {
@@ -141,6 +160,9 @@ impl App {
             }
 
             match key.code {
+                KeyCode::Char('/') => {
+                    self.tui_state.start_filter();
+                }
                 KeyCode::Char('q') => {
                     self.save_playlist();
                     self.should_quit = true;
@@ -182,12 +204,16 @@ impl App {
                     Pane::Directory => self.tui_state.move_directory_up(),
                 },
                 KeyCode::Char('J') => {
-                    if self.tui_state.focused_pane == Pane::Playlist {
+                    if self.tui_state.focused_pane == Pane::Playlist
+                        && !self.tui_state.has_active_filter(Pane::Playlist)
+                    {
                         self.tui_state.reorder_playlist_down();
                     }
                 }
                 KeyCode::Char('K') => {
-                    if self.tui_state.focused_pane == Pane::Playlist {
+                    if self.tui_state.focused_pane == Pane::Playlist
+                        && !self.tui_state.has_active_filter(Pane::Playlist)
+                    {
                         self.tui_state.reorder_playlist_up();
                     }
                 }
@@ -211,14 +237,7 @@ impl App {
         if let Some(item) = self.tui_state.selected_directory_item().cloned() {
             self.tui_state
                 .add_to_playlist(item.path, item.duration, item.alias);
-            self.tui_state
-                .directory
-                .remove(self.tui_state.directory_selected);
-            if self.tui_state.directory_selected >= self.tui_state.directory.len()
-                && !self.tui_state.directory.is_empty()
-            {
-                self.tui_state.directory_selected = self.tui_state.directory.len() - 1;
-            }
+            self.tui_state.remove_from_directory();
         }
     }
 
