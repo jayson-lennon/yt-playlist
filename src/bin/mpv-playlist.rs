@@ -177,6 +177,44 @@ fn run_app(
             app.handle_event(event);
         }
 
+        if let Some(path) = app.pending_notes_path.take() {
+            disable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )?;
+            terminal.show_cursor()?;
+
+            let result = std::process::Command::new("notes")
+                .args(["add", path.to_str().unwrap_or("")])
+                .status();
+
+            enable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                EnterAlternateScreen,
+                EnableMouseCapture
+            )?;
+            terminal.hide_cursor()?;
+            terminal.clear()?;
+            terminal.draw(|f| ui::render(f, &app.tui_state))?;
+
+            match result {
+                Ok(status) if status.success() => {
+                    app.tui_state.status_message = Some(format!("Note added: {}", path.display()));
+                }
+                Ok(status) => {
+                    app.tui_state.status_message =
+                        Some(format!("Notes command failed with code: {status}"));
+                }
+                Err(e) => {
+                    app.tui_state.status_message =
+                        Some(format!("Failed to run notes command: {e}"));
+                }
+            }
+        }
+
         if app.should_quit {
             return Ok(());
         }

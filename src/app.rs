@@ -15,6 +15,7 @@ pub struct App {
     pub tui_state: TuiState,
     pub extensions: Vec<String>,
     pub should_quit: bool,
+    pub pending_notes_path: Option<PathBuf>,
 }
 
 impl App {
@@ -24,6 +25,7 @@ impl App {
             tui_state: TuiState::new(),
             extensions,
             should_quit: false,
+            pending_notes_path: None,
         };
         app.load_playlist();
         app.refresh_directory();
@@ -220,6 +222,11 @@ impl App {
                 KeyCode::Char('x') => {
                     self.tui_state.remove_from_playlist();
                 }
+                KeyCode::Char('n') => {
+                    if let Some(item) = self.tui_state.get_selected_item() {
+                        self.pending_notes_path = Some(item.path.clone());
+                    }
+                }
                 KeyCode::Char(' ') | KeyCode::Enter => match self.tui_state.focused_pane {
                     Pane::Directory => {
                         self.move_from_directory_to_playlist();
@@ -369,6 +376,7 @@ mod tests {
             tui_state: TuiState::new(),
             extensions: DEFAULT_EXTENSIONS.iter().map(|s| s.to_string()).collect(),
             should_quit: false,
+            pending_notes_path: None,
         };
 
         for path in playlist_items {
