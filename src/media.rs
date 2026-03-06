@@ -1,4 +1,9 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use derive_more::Debug;
 use error_stack::{Report, ResultExt};
@@ -44,5 +49,30 @@ impl MediaQueryBackend for FfprobeBackend {
             .get_duration()
             .ok_or_else(|| Report::new(MediaError))
             .attach("no duration in ffprobe output")
+    }
+}
+
+pub struct CachedMediaBackend {
+    cache: HashMap<PathBuf, Duration>,
+    fallback: Arc<dyn MediaQueryBackend>,
+}
+
+impl CachedMediaBackend {
+    pub fn new(cache: HashMap<PathBuf, Duration>, fallback: Arc<dyn MediaQueryBackend>) -> Self {
+        Self { cache, fallback }
+    }
+}
+
+impl MediaQueryBackend for CachedMediaBackend {
+    fn name(&self) -> &'static str {
+        "cached"
+    }
+
+    fn get_duration(&self, path: &Path) -> Result<Duration, Report<MediaError>> {
+        let lookup_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        if let Some(duration) = self.cache.get(&lookup_path) {
+            return Ok(*duration);
+        }
+        self.fallback.get_duration(path)
     }
 }
