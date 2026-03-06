@@ -222,9 +222,6 @@ impl App {
                         self.tui_state.reorder_playlist_up();
                     }
                 }
-                KeyCode::Char('x') => {
-                    self.tui_state.remove_from_playlist();
-                }
                 KeyCode::Char('n') => {
                     if let Some(item) = self.tui_state.get_selected_item() {
                         self.pending_notes_path = Some(item.path.clone());
