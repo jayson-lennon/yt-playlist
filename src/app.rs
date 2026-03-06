@@ -121,6 +121,7 @@ impl App {
         self.tui_state.refresh_directory(entries);
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
             if self.tui_state.is_filtering() {

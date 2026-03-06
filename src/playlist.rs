@@ -40,19 +40,10 @@ pub struct FileMetadata {
     pub alias: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PlaylistData {
     pub playlist: Vec<PathBuf>,
     pub files: HashMap<PathBuf, FileMetadata>,
-}
-
-impl Default for PlaylistData {
-    fn default() -> Self {
-        Self {
-            playlist: Vec::new(),
-            files: HashMap::new(),
-        }
-    }
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -123,20 +114,20 @@ impl PlaylistStorageBackend for TomlBackend {
         let files: HashMap<PathBuf, FileMetadata> = toml
             .files
             .into_iter()
-            .filter_map(|entry| {
+            .map(|entry| {
                 let path = PathBuf::from(entry.path);
                 let canonical = path.canonicalize().ok().unwrap_or(path);
                 let duration = entry
                     .duration
                     .filter(|&d| d.is_finite() && d > 0.0)
                     .map(Duration::from_secs_f64);
-                Some((
+                (
                     canonical,
                     FileMetadata {
                         duration,
                         alias: entry.alias,
                     },
-                ))
+                )
             })
             .collect();
 

@@ -9,7 +9,7 @@ pub struct AnalysisResult {
     pub files: HashMap<PathBuf, FileMetadata>,
 }
 
-#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::missing_errors_doc, clippy::implicit_hasher)]
 pub fn analyze_files(
     files: &[PathBuf],
     mut metadata: HashMap<PathBuf, FileMetadata>,
