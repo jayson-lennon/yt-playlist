@@ -14,4 +14,5 @@ pub use playlist::{
     FileMetadata, IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend,
 };
 pub use services::Services;
-pub use tui_state::{Pane, PlaylistItem, TuiState};
+pub use tui_state::TuiState;
+pub use ui::{DirectoryPane, Filter, Pane, PlaylistItem, PlaylistPane, Rename};

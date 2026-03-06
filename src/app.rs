@@ -4,7 +4,8 @@ use crossterm::event::{Event, KeyCode};
 
 use crate::playlist::PlaylistData;
 use crate::services::Services;
-use crate::tui_state::{Pane, PlaylistItem, TuiState};
+use crate::tui_state::TuiState;
+use crate::ui::{Pane, PlaylistItem};
 
 pub const DEFAULT_EXTENSIONS: &[&str] = &[
     "mp4", "mkv", "avi", "webm", "mov", "flv", "wmv", "mp3", "flac", "wav", "ogg", "m4a", "aac",
@@ -35,7 +36,7 @@ impl App {
     pub fn load_playlist(&mut self) {
         match self.services.storage.load() {
             Ok(data) => {
-                self.tui_state.playlist = data
+                self.tui_state.playlist_pane.items = data
                     .playlist
                     .into_iter()
                     .map(|path| {
@@ -59,7 +60,7 @@ impl App {
 
     pub fn save_playlist(&mut self) {
         let mut files = std::collections::HashMap::new();
-        for item in &self.tui_state.playlist {
+        for item in &self.tui_state.playlist_pane.items {
             files.insert(
                 item.path.clone(),
                 crate::playlist::FileMetadata {
@@ -68,7 +69,7 @@ impl App {
                 },
             );
         }
-        for item in &self.tui_state.directory {
+        for item in &self.tui_state.directory_pane.items {
             files.insert(
                 item.path.clone(),
                 crate::playlist::FileMetadata {
@@ -79,7 +80,8 @@ impl App {
         }
         let playlist_paths: Vec<PathBuf> = self
             .tui_state
-            .playlist
+            .playlist_pane
+            .items
             .iter()
             .map(|item| item.path.clone())
             .collect();
@@ -251,8 +253,11 @@ impl App {
 
     fn move_from_playlist_to_directory(&mut self) {
         if let Some(item) = self.tui_state.selected_playlist_item().cloned() {
-            self.tui_state.directory.push(item);
-            self.tui_state.directory.sort_by(|a, b| a.path.cmp(&b.path));
+            self.tui_state.directory_pane.items.push(item);
+            self.tui_state
+                .directory_pane
+                .items
+                .sort_by(|a, b| a.path.cmp(&b.path));
             self.tui_state.remove_from_playlist();
         }
     }
@@ -382,7 +387,7 @@ mod tests {
 
         for path in playlist_items {
             let duration = app.services.media.get_duration(&path).ok();
-            app.tui_state.playlist.push(PlaylistItem {
+            app.tui_state.playlist_pane.items.push(PlaylistItem {
                 path,
                 duration,
                 alias: None,
@@ -391,7 +396,7 @@ mod tests {
 
         for path in directory_items {
             let duration = app.services.media.get_duration(&path).ok();
-            app.tui_state.directory.push(PlaylistItem {
+            app.tui_state.directory_pane.items.push(PlaylistItem {
                 path,
                 duration,
                 alias: None,
@@ -487,15 +492,15 @@ mod tests {
         );
 
         // When pressing 'j' multiple times.
-        assert_eq!(app.tui_state.playlist_selected, 0);
+        assert_eq!(app.tui_state.playlist_pane.selected, 0);
         app.handle_event(key_event(KeyCode::Char('j')));
-        assert_eq!(app.tui_state.playlist_selected, 1);
+        assert_eq!(app.tui_state.playlist_pane.selected, 1);
         app.handle_event(key_event(KeyCode::Char('j')));
-        assert_eq!(app.tui_state.playlist_selected, 2);
+        assert_eq!(app.tui_state.playlist_pane.selected, 2);
         app.handle_event(key_event(KeyCode::Char('j')));
 
         // Then selection stays at the last item.
-        assert_eq!(app.tui_state.playlist_selected, 2);
+        assert_eq!(app.tui_state.playlist_pane.selected, 2);
     }
 
     #[test]
@@ -509,17 +514,17 @@ mod tests {
             ],
             vec![],
         );
-        app.tui_state.playlist_selected = 2;
+        app.tui_state.playlist_pane.selected = 2;
 
         // When pressing 'k' multiple times.
         app.handle_event(key_event(KeyCode::Char('k')));
-        assert_eq!(app.tui_state.playlist_selected, 1);
+        assert_eq!(app.tui_state.playlist_pane.selected, 1);
         app.handle_event(key_event(KeyCode::Char('k')));
-        assert_eq!(app.tui_state.playlist_selected, 0);
+        assert_eq!(app.tui_state.playlist_pane.selected, 0);
         app.handle_event(key_event(KeyCode::Char('k')));
 
         // Then selection stays at the first item.
-        assert_eq!(app.tui_state.playlist_selected, 0);
+        assert_eq!(app.tui_state.playlist_pane.selected, 0);
     }
 
     #[test]
@@ -536,13 +541,13 @@ mod tests {
         app.tui_state.focused_pane = Pane::Directory;
 
         // When navigating with j/k.
-        assert_eq!(app.tui_state.directory_selected, 0);
+        assert_eq!(app.tui_state.directory_pane.selected, 0);
         app.handle_event(key_event(KeyCode::Char('j')));
-        assert_eq!(app.tui_state.directory_selected, 1);
+        assert_eq!(app.tui_state.directory_pane.selected, 1);
         app.handle_event(key_event(KeyCode::Char('k')));
 
         // Then selection moves correctly.
-        assert_eq!(app.tui_state.directory_selected, 0);
+        assert_eq!(app.tui_state.directory_pane.selected, 0);
     }
 
     #[test]
@@ -557,15 +562,21 @@ mod tests {
             vec![],
         );
         app.tui_state.focused_pane = Pane::Playlist;
-        app.tui_state.playlist_selected = 1;
+        app.tui_state.playlist_pane.selected = 1;
 
         // When pressing 'K'.
         app.handle_event(key_event(KeyCode::Char('K')));
 
         // Then the item moves up and selection follows.
-        assert_eq!(app.tui_state.playlist_selected, 0);
-        assert_eq!(app.tui_state.playlist[0].path, PathBuf::from("b.mp4"));
-        assert_eq!(app.tui_state.playlist[1].path, PathBuf::from("a.mp4"));
+        assert_eq!(app.tui_state.playlist_pane.selected, 0);
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].path,
+            PathBuf::from("b.mp4")
+        );
+        assert_eq!(
+            app.tui_state.playlist_pane.items[1].path,
+            PathBuf::from("a.mp4")
+        );
     }
 
     #[test]
@@ -580,15 +591,21 @@ mod tests {
             vec![],
         );
         app.tui_state.focused_pane = Pane::Playlist;
-        app.tui_state.playlist_selected = 0;
+        app.tui_state.playlist_pane.selected = 0;
 
         // When pressing 'J'.
         app.handle_event(key_event(KeyCode::Char('J')));
 
         // Then the item moves down and selection follows.
-        assert_eq!(app.tui_state.playlist_selected, 1);
-        assert_eq!(app.tui_state.playlist[0].path, PathBuf::from("a.mp4"));
-        assert_eq!(app.tui_state.playlist[1].path, PathBuf::from("b.mp4"));
+        assert_eq!(app.tui_state.playlist_pane.selected, 1);
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].path,
+            PathBuf::from("a.mp4")
+        );
+        assert_eq!(
+            app.tui_state.playlist_pane.items[1].path,
+            PathBuf::from("b.mp4")
+        );
     }
 
     #[test]
@@ -601,8 +618,11 @@ mod tests {
         app.handle_event(key_event(KeyCode::Char('x')));
 
         // Then the first item is removed.
-        assert_eq!(app.tui_state.playlist.len(), 1);
-        assert_eq!(app.tui_state.playlist[0].path, PathBuf::from("b.mp4"));
+        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].path,
+            PathBuf::from("b.mp4")
+        );
     }
 
     #[test]
@@ -615,9 +635,12 @@ mod tests {
         app.handle_event(key_event(KeyCode::Char('H')));
 
         // Then the item moves to the playlist.
-        assert_eq!(app.tui_state.playlist.len(), 1);
-        assert_eq!(app.tui_state.playlist[0].path, PathBuf::from("test.mp4"));
-        assert!(app.tui_state.directory.is_empty());
+        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].path,
+            PathBuf::from("test.mp4")
+        );
+        assert!(app.tui_state.directory_pane.items.is_empty());
     }
 
     #[test]
@@ -630,9 +653,12 @@ mod tests {
         app.handle_event(key_event(KeyCode::Char('L')));
 
         // Then the item moves to the directory.
-        assert!(app.tui_state.playlist.is_empty());
-        assert_eq!(app.tui_state.directory.len(), 1);
-        assert_eq!(app.tui_state.directory[0].path, PathBuf::from("test.mp4"));
+        assert!(app.tui_state.playlist_pane.items.is_empty());
+        assert_eq!(app.tui_state.directory_pane.items.len(), 1);
+        assert_eq!(
+            app.tui_state.directory_pane.items[0].path,
+            PathBuf::from("test.mp4")
+        );
     }
 
     #[rstest]
@@ -647,9 +673,12 @@ mod tests {
         app.handle_event(key_event(key));
 
         // Then the item moves to the playlist.
-        assert_eq!(app.tui_state.playlist.len(), 1);
-        assert_eq!(app.tui_state.playlist[0].path, PathBuf::from("test.mp4"));
-        assert!(app.tui_state.directory.is_empty());
+        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].path,
+            PathBuf::from("test.mp4")
+        );
+        assert!(app.tui_state.directory_pane.items.is_empty());
     }
 
     #[rstest]
@@ -664,8 +693,8 @@ mod tests {
         app.handle_event(key_event(key));
 
         // Then the item moves to the directory.
-        assert!(app.tui_state.playlist.is_empty());
-        assert_eq!(app.tui_state.directory.len(), 1);
+        assert!(app.tui_state.playlist_pane.items.is_empty());
+        assert_eq!(app.tui_state.directory_pane.items.len(), 1);
     }
 
     #[test]
