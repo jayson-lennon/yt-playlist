@@ -48,7 +48,8 @@ fn render_playlist(frame: &mut Frame, state: &TuiState, area: Rect) {
         .map(|(i, item)| {
             let style = if i == state.playlist_selected && state.focused_pane == Pane::Playlist {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -117,7 +118,8 @@ fn render_directory(frame: &mut Frame, state: &TuiState, area: Rect) {
         .map(|(i, item)| {
             let style = if i == state.directory_selected && state.focused_pane == Pane::Directory {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()

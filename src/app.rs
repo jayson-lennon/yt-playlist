@@ -106,10 +106,14 @@ impl App {
                     self.tui_state.focused_pane = Pane::Directory;
                 }
                 KeyCode::Char('H') => {
-                    self.move_from_directory_to_playlist();
+                    if self.tui_state.focused_pane == Pane::Directory {
+                        self.move_from_directory_to_playlist();
+                    }
                 }
                 KeyCode::Char('L') => {
-                    self.move_from_playlist_to_directory();
+                    if self.tui_state.focused_pane == Pane::Playlist {
+                        self.move_from_playlist_to_directory();
+                    }
                 }
                 KeyCode::Char('j') => match self.tui_state.focused_pane {
                     Pane::Playlist => self.tui_state.move_playlist_down(),
@@ -120,10 +124,14 @@ impl App {
                     Pane::Directory => self.tui_state.move_directory_up(),
                 },
                 KeyCode::Char('J') => {
-                    self.tui_state.reorder_playlist_down();
+                    if self.tui_state.focused_pane == Pane::Playlist {
+                        self.tui_state.reorder_playlist_down();
+                    }
                 }
                 KeyCode::Char('K') => {
-                    self.tui_state.reorder_playlist_up();
+                    if self.tui_state.focused_pane == Pane::Playlist {
+                        self.tui_state.reorder_playlist_up();
+                    }
                 }
                 KeyCode::Char('x') => {
                     self.tui_state.remove_from_playlist();
@@ -455,6 +463,7 @@ mod tests {
             ],
             vec![],
         );
+        app.tui_state.focused_pane = Pane::Playlist;
         app.tui_state.playlist_selected = 1;
 
         // When pressing 'K'.
@@ -477,6 +486,7 @@ mod tests {
             ],
             vec![],
         );
+        app.tui_state.focused_pane = Pane::Playlist;
         app.tui_state.playlist_selected = 0;
 
         // When pressing 'J'.
@@ -506,6 +516,7 @@ mod tests {
     fn shift_h_moves_directory_item_to_playlist() {
         // Given a directory with one item and empty playlist.
         let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        app.tui_state.focused_pane = Pane::Directory;
 
         // When pressing 'H'.
         app.handle_event(key_event(KeyCode::Char('H')));
@@ -520,6 +531,7 @@ mod tests {
     fn shift_l_moves_playlist_item_to_directory() {
         // Given a playlist with one item and empty directory.
         let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        app.tui_state.focused_pane = Pane::Playlist;
 
         // When pressing 'L'.
         app.handle_event(key_event(KeyCode::Char('L')));
