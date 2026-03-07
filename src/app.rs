@@ -145,7 +145,8 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
             self.tui_state.status_message = None;
-            if self.tui_state.which_key.active {
+            if self.tui_state.which_key.active && self.tui_state.which_key.pending_prefix.is_none()
+            {
                 self.tui_state.which_key.dismiss();
                 return;
             }
@@ -196,17 +197,22 @@ impl App {
             if let KeyCode::Char(c) = key.code {
                 if self.tui_state.pending_key == Some('g') {
                     self.tui_state.pending_key = None;
+                    self.tui_state.which_key.dismiss();
                     if c == 'm' {
                         self.execute_action(Action::LaunchMpv);
                         return;
                     }
                 } else if c == 'g' {
                     self.tui_state.pending_key = Some('g');
+                    self.tui_state.which_key.show_followup('g');
                     return;
                 }
             }
 
-            self.tui_state.pending_key = None;
+            if self.tui_state.pending_key.is_some() {
+                self.tui_state.pending_key = None;
+                self.tui_state.which_key.dismiss();
+            }
 
             if let Some(action) =
                 self.keymap
