@@ -174,13 +174,6 @@ impl Keymap {
                 KeyContext::Global,
             ),
             KeyBinding::new(
-                KeyCode::Enter,
-                Action::ToggleItem,
-                "add/remove",
-                KeyCategory::ItemActions,
-                KeyContext::Global,
-            ),
-            KeyBinding::new(
                 KeyCode::Char('r'),
                 Action::Rename,
                 "rename",
@@ -219,14 +212,14 @@ impl Keymap {
                 KeyCode::Char('L'),
                 Action::MoveToDirectory,
                 "to directory",
-                KeyCategory::PaneSwitch,
+                KeyCategory::ItemActions,
                 KeyContext::Playlist,
             ),
             KeyBinding::new(
                 KeyCode::Char('H'),
                 Action::MoveToPlaylist,
                 "to playlist",
-                KeyCategory::PaneSwitch,
+                KeyCategory::ItemActions,
                 KeyContext::Directory,
             ),
         ]
