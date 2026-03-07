@@ -363,6 +363,7 @@ impl App {
 mod tests {
     use std::{path::Path, sync::Arc, time::Duration};
 
+    use crossterm::event::KeyModifiers;
     use error_stack::Report;
 
     use super::*;
@@ -1135,5 +1136,72 @@ mod tests {
             .status_message
             .unwrap()
             .contains("MPV already running"));
+    }
+
+    #[test]
+    fn g_key_sets_pending_and_shows_followup() {
+        // Given an app.
+        let mut app = TestAppBuilder::new().build();
+        assert!(app.tui_state.pending_key.is_none());
+        assert!(!app.tui_state.which_key.active);
+
+        // When pressing 'g' key.
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('g'),
+            KeyModifiers::empty(),
+        )));
+
+        // Then pending_key is set and which_key shows followup.
+        assert_eq!(app.tui_state.pending_key, Some('g'));
+        assert!(app.tui_state.which_key.active);
+        assert_eq!(app.tui_state.which_key.pending_prefix, Some('g'));
+    }
+
+    #[test]
+    fn gm_keys_launches_mpv() {
+        // Given an app with mpv not running.
+        let mut app = TestAppBuilder::new()
+            .mpv_launcher(FakeMpvLauncher::new().running(false))
+            .build();
+
+        // When pressing 'g' then 'm'.
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('g'),
+            KeyModifiers::empty(),
+        )));
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('m'),
+            KeyModifiers::empty(),
+        )));
+
+        // Then mpv is launched and popup is dismissed.
+        assert!(app
+            .tui_state
+            .status_message
+            .unwrap()
+            .contains("MPV launched"));
+        assert!(app.tui_state.pending_key.is_none());
+        assert!(!app.tui_state.which_key.active);
+    }
+
+    #[test]
+    fn g_then_invalid_key_dismisses_popup() {
+        // Given an app with 'g' pending.
+        let mut app = TestAppBuilder::new().build();
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('g'),
+            KeyModifiers::empty(),
+        )));
+        assert_eq!(app.tui_state.pending_key, Some('g'));
+
+        // When pressing a non-followup key.
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('x'),
+            KeyModifiers::empty(),
+        )));
+
+        // Then popup is dismissed without action.
+        assert!(app.tui_state.pending_key.is_none());
+        assert!(!app.tui_state.which_key.active);
     }
 }
