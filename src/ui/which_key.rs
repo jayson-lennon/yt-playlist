@@ -1,4 +1,4 @@
-use crate::keymap::{KeyBinding, KeyCategory, Keymap};
+use crate::keymap::{KeyBinding, KeyCategory, Keymap, PrefixKeyBinding};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -35,12 +35,35 @@ impl Default for WhichKeyConfig {
 pub struct WhichKey {
     pub active: bool,
     pub config: WhichKeyConfig,
+    pub pending_prefix: Option<char>,
 }
 
 struct ColumnData<'a> {
-    categories: Vec<(&'a str, Vec<&'a KeyBinding>)>,
+    categories: Vec<(&'a str, Vec<DisplayItem<'a>>)>,
     max_key_width: usize,
     max_desc_width: usize,
+}
+
+#[derive(Debug, Clone)]
+enum DisplayItem<'a> {
+    Binding(&'a KeyBinding),
+    Prefix { key: char, description: &'a str },
+}
+
+impl DisplayItem<'_> {
+    fn key_display(&self) -> String {
+        match self {
+            DisplayItem::Binding(b) => b.key_display(),
+            DisplayItem::Prefix { key, .. } => key.to_string(),
+        }
+    }
+
+    fn description(&self) -> &str {
+        match self {
+            DisplayItem::Binding(b) => b.description,
+            DisplayItem::Prefix { description, .. } => description,
+        }
+    }
 }
 
 impl ColumnData<'_> {
@@ -54,6 +77,7 @@ impl WhichKey {
         Self {
             active: false,
             config,
+            pending_prefix: None,
         }
     }
 
@@ -63,12 +87,100 @@ impl WhichKey {
 
     pub fn dismiss(&mut self) {
         self.active = false;
+        self.pending_prefix = None;
+    }
+
+    pub fn show_followup(&mut self, prefix: char) {
+        self.active = true;
+        self.pending_prefix = Some(prefix);
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn render(&self, frame: &mut Frame, keymap: &Keymap, pane: Pane) {
+        if let Some(prefix) = self.pending_prefix {
+            if let Some(prefix_binding) = keymap.get_prefix_binding(prefix) {
+                self.render_followup(frame, prefix_binding);
+            }
+        } else {
+            self.render_main(frame, keymap, pane);
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn render_followup(&self, frame: &mut Frame, prefix_binding: &PrefixKeyBinding) {
+        let max_height = self
+            .config
+            .max_height
+            .min((f32::from(frame.area().height) * 0.3).ceil() as u16);
+
+        let max_key_width = prefix_binding
+            .followups
+            .iter()
+            .map(|_| 1)
+            .max()
+            .unwrap_or(1);
+        let max_desc_width = prefix_binding
+            .followups
+            .iter()
+            .map(|f| f.description.len())
+            .max()
+            .unwrap_or(10);
+
+        let content_width = max_key_width + 1 + max_desc_width;
+        #[allow(clippy::cast_possible_truncation)]
+        let popup_width =
+            (content_width + 4).min(usize::from(frame.area().width.saturating_sub(2))) as u16;
+        let popup_height = max_height.min(frame.area().height.saturating_sub(2));
+
+        let x = match self.config.position {
+            WhichKeyPosition::BottomLeft => 1,
+            WhichKeyPosition::BottomRight => frame
+                .area()
+                .width
+                .saturating_sub(popup_width)
+                .saturating_sub(1),
+        };
+        let y = frame
+            .area()
+            .height
+            .saturating_sub(popup_height)
+            .saturating_sub(1);
+
+        let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+        frame.render_widget(Clear, popup_area);
+
+        let title = format!(" {} ", prefix_binding.description);
+        let block = Block::default()
+            .title(title.as_str())
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow))
+            .padding(Padding::horizontal(1));
+        let inner_area = block.inner(popup_area);
+        frame.render_widget(block, popup_area);
+
+        let mut y = inner_area.y;
+        for followup in &prefix_binding.followups {
+            if y >= inner_area.bottom() {
+                break;
+            }
+
+            let key_span = Span::styled(
+                format!("{:>width$}", followup.key, width = max_key_width),
+                Style::default().fg(Color::Cyan),
+            );
+            let desc_span = Span::raw(format!(" {}", followup.description));
+            let line = Line::from(vec![key_span, desc_span]);
+            let para = Paragraph::new(line);
+            frame.render_widget(para, Rect::new(inner_area.x, y, inner_area.width, 1));
+            y += 1;
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn render_main(&self, frame: &mut Frame, keymap: &Keymap, pane: Pane) {
         let bindings = keymap.get_bindings_for_pane(pane);
-        let categories = Self::group_by_category(&bindings);
+        let categories = Self::group_by_category(&bindings, keymap);
 
         let max_height = self
             .config
@@ -97,17 +209,38 @@ impl WhichKey {
 
     fn group_by_category<'a>(
         bindings: &[&'a KeyBinding],
-    ) -> Vec<(KeyCategory, Vec<&'a KeyBinding>)> {
-        let mut categories: Vec<(KeyCategory, Vec<&'a KeyBinding>)> = Vec::new();
+        keymap: &'a Keymap,
+    ) -> Vec<(KeyCategory, Vec<DisplayItem<'a>>)> {
+        let mut categories: Vec<(KeyCategory, Vec<DisplayItem<'a>>)> = Vec::new();
 
         for binding in bindings {
             if let Some((_, items)) = categories
                 .iter_mut()
                 .find(|(cat, _)| *cat == binding.category)
             {
-                items.push(*binding);
+                items.push(DisplayItem::Binding(binding));
             } else {
-                categories.push((binding.category, vec![*binding]));
+                categories.push((binding.category, vec![DisplayItem::Binding(binding)]));
+            }
+        }
+
+        for prefix in keymap.get_prefix_bindings() {
+            if let Some((_, items)) = categories
+                .iter_mut()
+                .find(|(cat, _)| *cat == KeyCategory::General)
+            {
+                items.push(DisplayItem::Prefix {
+                    key: prefix.prefix,
+                    description: prefix.description,
+                });
+            } else if categories.is_empty() {
+                categories.push((
+                    KeyCategory::General,
+                    vec![DisplayItem::Prefix {
+                        key: prefix.prefix,
+                        description: prefix.description,
+                    }],
+                ));
             }
         }
 
@@ -136,12 +269,12 @@ impl WhichKey {
     }
 
     fn build_columns<'a>(
-        categories: &'a [(KeyCategory, Vec<&'a KeyBinding>)],
+        categories: &'a [(KeyCategory, Vec<DisplayItem<'a>>)],
         max_height: u16,
     ) -> Vec<ColumnData<'a>> {
         let rows_per_column = max_height.saturating_sub(2) as usize;
         let mut columns: Vec<ColumnData<'a>> = Vec::new();
-        let mut current_categories: Vec<(&'a str, Vec<&'a KeyBinding>)> = Vec::new();
+        let mut current_categories: Vec<(&'a str, Vec<DisplayItem<'a>>)> = Vec::new();
         let mut current_rows = 0usize;
 
         for (category, items) in categories {
@@ -165,18 +298,18 @@ impl WhichKey {
         columns
     }
 
-    fn build_column_data<'a>(categories: Vec<(&'a str, Vec<&'a KeyBinding>)>) -> ColumnData<'a> {
+    fn build_column_data<'a>(categories: Vec<(&'a str, Vec<DisplayItem<'a>>)>) -> ColumnData<'a> {
         let max_key_width = categories
             .iter()
-            .flat_map(|(_, bindings)| bindings.iter())
-            .map(|b| b.key_display().len())
+            .flat_map(|(_, items)| items.iter())
+            .map(|item| item.key_display().len())
             .max()
             .unwrap_or(5);
 
         let max_desc_width = categories
             .iter()
-            .flat_map(|(_, bindings)| bindings.iter())
-            .map(|b| b.description.len())
+            .flat_map(|(_, items)| items.iter())
+            .map(|item| item.description().len())
             .max()
             .unwrap_or(10);
 
@@ -235,7 +368,7 @@ impl WhichKey {
     fn render_column(frame: &mut Frame, area: Rect, column_data: &ColumnData<'_>) {
         let mut y = area.y;
 
-        for (category_name, bindings) in &column_data.categories {
+        for (category_name, items) in &column_data.categories {
             if y >= area.bottom() {
                 break;
             }
@@ -248,17 +381,17 @@ impl WhichKey {
             frame.render_widget(header, Rect::new(area.x, y, area.width, 1));
             y += 1;
 
-            for binding in bindings {
+            for item in items {
                 if y >= area.bottom() {
                     break;
                 }
 
-                let key = binding.key_display();
+                let key = item.key_display();
                 let key_span = Span::styled(
                     format!("{:>width$}", key, width = column_data.max_key_width),
                     Style::default().fg(Color::Cyan),
                 );
-                let desc_span = Span::raw(format!(" {}", binding.description));
+                let desc_span = Span::raw(format!(" {}", item.description()));
                 let line = Line::from(vec![key_span, desc_span]);
                 let para = Paragraph::new(line);
                 frame.render_widget(para, Rect::new(area.x, y, area.width, 1));

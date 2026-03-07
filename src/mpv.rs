@@ -1,7 +1,7 @@
 use std::{
     path::Path,
     process::{Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use derive_more::Debug;
@@ -39,29 +39,14 @@ impl MpvClient {
 
 pub struct MpvipcBackend {
     socket_path: String,
-    mpv: Mutex<Option<Mpv>>,
 }
 
 impl MpvipcBackend {
     pub fn new(socket_path: &Path) -> Self {
         let socket = socket_path.to_string_lossy().into_owned();
-        let mpv = Mpv::connect(&socket).ok();
         Self {
             socket_path: socket,
-            mpv: Mutex::new(mpv),
         }
-    }
-
-    fn get_or_connect(&self) -> Result<Mpv, Report<MpvError>> {
-        let mut guard = self.mpv.lock().map_err(|_| Report::new(MpvError))?;
-        if let Some(mpv) = guard.as_ref() {
-            return Ok(mpv.clone());
-        }
-        let mpv = Mpv::connect(&self.socket_path)
-            .change_context(MpvError)
-            .attach("failed to connect to mpv")?;
-        *guard = Some(mpv.clone());
-        Ok(mpv)
     }
 }
 
@@ -71,7 +56,9 @@ impl MpvBackend for MpvipcBackend {
     }
 
     fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>> {
-        let mpv = self.get_or_connect()?;
+        let mpv = Mpv::connect(&self.socket_path)
+            .change_context(MpvError)
+            .attach("failed to connect to mpv")?;
         mpv.run_command(MpvCommand::LoadFile {
             file: path.to_string_lossy().into_owned(),
             option: PlaylistAddOptions::Replace,

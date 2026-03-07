@@ -24,6 +24,20 @@ pub enum Action {
     LaunchMpv,
 }
 
+#[derive(Debug, Clone)]
+pub struct FollowupKey {
+    pub key: char,
+    pub action: Action,
+    pub description: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct PrefixKeyBinding {
+    pub prefix: char,
+    pub description: &'static str,
+    pub followups: Vec<FollowupKey>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCategory {
     Navigation,
@@ -92,13 +106,35 @@ impl KeyBinding {
 #[derive(Debug, Clone)]
 pub struct Keymap {
     bindings: Vec<KeyBinding>,
+    prefix_bindings: Vec<PrefixKeyBinding>,
 }
 
 impl Keymap {
     pub fn new() -> Self {
         Self {
             bindings: Self::default_bindings(),
+            prefix_bindings: Self::default_prefix_bindings(),
         }
+    }
+
+    fn default_prefix_bindings() -> Vec<PrefixKeyBinding> {
+        vec![PrefixKeyBinding {
+            prefix: 'g',
+            description: "general",
+            followups: vec![FollowupKey {
+                key: 'm',
+                action: Action::LaunchMpv,
+                description: "launch mpv",
+            }],
+        }]
+    }
+
+    pub fn get_prefix_binding(&self, prefix: char) -> Option<&PrefixKeyBinding> {
+        self.prefix_bindings.iter().find(|p| p.prefix == prefix)
+    }
+
+    pub fn get_prefix_bindings(&self) -> &[PrefixKeyBinding] {
+        &self.prefix_bindings
     }
 
     #[allow(clippy::too_many_lines)]

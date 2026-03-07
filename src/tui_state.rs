@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::ui::{DirectoryPane, ErrorPopup, Pane, PlaylistItem, PlaylistPane, Rename, WhichKey};
 
 pub struct TuiState {
+    pub pending_key: Option<char>,
     pub playlist_pane: PlaylistPane,
     pub directory_pane: DirectoryPane,
     pub focused_pane: Pane,
@@ -11,12 +12,12 @@ pub struct TuiState {
     pub which_key: WhichKey,
     pub needs_clear: bool,
     pub error_popup: ErrorPopup,
-    pub pending_key: Option<char>,
 }
 
 impl TuiState {
     pub fn new() -> Self {
         Self {
+            pending_key: None,
             playlist_pane: PlaylistPane::new(),
             directory_pane: DirectoryPane::new(),
             focused_pane: Pane::Playlist,
@@ -25,7 +26,6 @@ impl TuiState {
             which_key: WhichKey::default(),
             needs_clear: false,
             error_popup: ErrorPopup::new(),
-            pending_key: None,
         }
     }
 
