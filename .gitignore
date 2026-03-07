@@ -1,3 +1,5 @@
 /target
-playlist.txt
-
+playlist.toml
+/.build
+*.zst
+/pkg
