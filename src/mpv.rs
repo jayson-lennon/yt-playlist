@@ -106,7 +106,7 @@ fn is_mpv_running_with_socket(socket_path: &str) -> bool {
 fn spawn_mpv(socket_path: &str) -> Result<(), Report<MpvError>> {
     Command::new("mpv")
         .args([
-            "--keep-open=yes",
+            "--keep-open=always",
             "--idle",
             &format!("--input-ipc-server={socket_path}"),
         ])
