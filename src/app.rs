@@ -314,19 +314,13 @@ mod tests {
         time::Duration,
     };
 
-    use crossterm::event::{KeyEvent, KeyModifiers};
     use error_stack::Report;
-    use rstest::rstest;
 
     use super::*;
-    use crate::keymap::Keymap;
+    use crate::keymap::{Action, Keymap};
     use crate::media::{MediaError, MediaQuery, MediaQueryBackend};
     use crate::mpv::{MpvBackend, MpvClient, MpvError};
     use crate::playlist::{IoError, PlaylistStorage, PlaylistStorageBackend};
-
-    fn key_event(code: KeyCode) -> Event {
-        Event::Key(KeyEvent::new(code, KeyModifiers::empty()))
-    }
 
     struct MockMpvBackend {
         load_file_called: Arc<Mutex<Vec<PathBuf>>>,
@@ -440,12 +434,12 @@ mod tests {
     }
 
     #[test]
-    fn quit_key_saves_and_exits() {
+    fn quit_action_saves_and_exits() {
         // Given an app with an empty playlist.
         let (mut app, _, storage) = create_test_app(vec![], vec![]);
 
-        // When pressing 'q'.
-        app.handle_event(key_event(KeyCode::Char('q')));
+        // When executing Quit action.
+        app.execute_action(Action::Quit);
 
         // Then the app should quit and save the playlist.
         assert!(app.should_quit);
@@ -454,12 +448,12 @@ mod tests {
     }
 
     #[test]
-    fn save_key_persists_playlist() {
+    fn save_action_persists_playlist() {
         // Given an app with one item in the playlist.
         let (mut app, _, storage) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
-        // When pressing 's'.
-        app.handle_event(key_event(KeyCode::Char('s')));
+        // When executing Save action.
+        app.execute_action(Action::Save);
 
         // Then the playlist is saved.
         let saved = storage.saved_data.lock().unwrap();
@@ -469,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    fn tab_key_toggles_between_panes() {
+    fn switch_pane_toggles_between_panes() {
         // Given an app focused on the playlist pane with items in both panes.
         let (mut app, _, _) = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
@@ -477,21 +471,21 @@ mod tests {
         );
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
-        // When pressing Tab.
-        app.handle_event(key_event(KeyCode::Tab));
+        // When executing SwitchPane action.
+        app.execute_action(Action::SwitchPane);
 
         // Then focus switches to directory pane.
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
 
-        // When pressing Tab again.
-        app.handle_event(key_event(KeyCode::Tab));
+        // When executing SwitchPane action again.
+        app.execute_action(Action::SwitchPane);
 
         // Then focus switches back to playlist pane.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
     #[test]
-    fn h_key_switches_to_playlist_pane() {
+    fn focus_playlist_switches_to_playlist_pane() {
         // Given an app focused on the directory pane with items in both panes.
         let (mut app, _, _) = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
@@ -499,30 +493,30 @@ mod tests {
         );
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When pressing 'h'.
-        app.handle_event(key_event(KeyCode::Char('h')));
+        // When executing FocusPlaylist action.
+        app.execute_action(Action::FocusPlaylist);
 
         // Then focus switches to playlist pane.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
     #[test]
-    fn l_key_switches_to_directory_pane() {
+    fn focus_directory_switches_to_directory_pane() {
         // Given an app focused on the playlist pane with items in both panes.
         let (mut app, _, _) = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
             vec![PathBuf::from("directory.mp4")],
         );
 
-        // When pressing 'l'.
-        app.handle_event(key_event(KeyCode::Char('l')));
+        // When executing FocusDirectory action.
+        app.execute_action(Action::FocusDirectory);
 
         // Then focus switches to directory pane.
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
     }
 
     #[test]
-    fn j_key_moves_selection_down_in_playlist() {
+    fn move_down_moves_selection_down_in_playlist() {
         // Given a playlist with three items.
         let (mut app, _, _) = create_test_app(
             vec![
@@ -533,20 +527,20 @@ mod tests {
             vec![],
         );
 
-        // When pressing 'j' multiple times.
+        // When executing MoveDown action multiple times.
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
-        app.handle_event(key_event(KeyCode::Char('j')));
+        app.execute_action(Action::MoveDown);
         assert_eq!(app.tui_state.playlist_pane.selected, 1);
-        app.handle_event(key_event(KeyCode::Char('j')));
+        app.execute_action(Action::MoveDown);
         assert_eq!(app.tui_state.playlist_pane.selected, 2);
-        app.handle_event(key_event(KeyCode::Char('j')));
+        app.execute_action(Action::MoveDown);
 
         // Then selection stays at the last item.
         assert_eq!(app.tui_state.playlist_pane.selected, 2);
     }
 
     #[test]
-    fn k_key_moves_selection_up_in_playlist() {
+    fn move_up_moves_selection_up_in_playlist() {
         // Given a playlist with three items and selection on the last item.
         let (mut app, _, _) = create_test_app(
             vec![
@@ -558,19 +552,19 @@ mod tests {
         );
         app.tui_state.playlist_pane.selected = 2;
 
-        // When pressing 'k' multiple times.
-        app.handle_event(key_event(KeyCode::Char('k')));
+        // When executing MoveUp action multiple times.
+        app.execute_action(Action::MoveUp);
         assert_eq!(app.tui_state.playlist_pane.selected, 1);
-        app.handle_event(key_event(KeyCode::Char('k')));
+        app.execute_action(Action::MoveUp);
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
-        app.handle_event(key_event(KeyCode::Char('k')));
+        app.execute_action(Action::MoveUp);
 
         // Then selection stays at the first item.
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
     }
 
     #[test]
-    fn j_k_keys_navigate_directory() {
+    fn move_up_down_navigate_directory() {
         // Given a directory with three items.
         let (mut app, _, _) = create_test_app(
             vec![],
@@ -582,18 +576,18 @@ mod tests {
         );
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When navigating with j/k.
+        // When navigating with MoveDown/MoveUp.
         assert_eq!(app.tui_state.directory_pane.selected, 0);
-        app.handle_event(key_event(KeyCode::Char('j')));
+        app.execute_action(Action::MoveDown);
         assert_eq!(app.tui_state.directory_pane.selected, 1);
-        app.handle_event(key_event(KeyCode::Char('k')));
+        app.execute_action(Action::MoveUp);
 
         // Then selection moves correctly.
         assert_eq!(app.tui_state.directory_pane.selected, 0);
     }
 
     #[test]
-    fn shift_k_moves_playlist_item_up() {
+    fn reorder_up_moves_playlist_item_up() {
         // Given a playlist with three items and middle item selected.
         let (mut app, _, _) = create_test_app(
             vec![
@@ -606,8 +600,8 @@ mod tests {
         app.tui_state.focused_pane = Pane::Playlist;
         app.tui_state.playlist_pane.selected = 1;
 
-        // When pressing 'K'.
-        app.handle_event(key_event(KeyCode::Char('K')));
+        // When executing ReorderUp action.
+        app.execute_action(Action::ReorderUp);
 
         // Then the item moves up and selection follows.
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
@@ -622,7 +616,7 @@ mod tests {
     }
 
     #[test]
-    fn shift_j_moves_playlist_item_down() {
+    fn reorder_down_moves_playlist_item_down() {
         // Given a playlist with items reordered and first item selected.
         let (mut app, _, _) = create_test_app(
             vec![
@@ -635,8 +629,8 @@ mod tests {
         app.tui_state.focused_pane = Pane::Playlist;
         app.tui_state.playlist_pane.selected = 0;
 
-        // When pressing 'J'.
-        app.handle_event(key_event(KeyCode::Char('J')));
+        // When executing ReorderDown action.
+        app.execute_action(Action::ReorderDown);
 
         // Then the item moves down and selection follows.
         assert_eq!(app.tui_state.playlist_pane.selected, 1);
@@ -651,13 +645,13 @@ mod tests {
     }
 
     #[test]
-    fn shift_h_moves_directory_item_to_playlist() {
+    fn move_to_playlist_moves_directory_item_to_playlist() {
         // Given a directory with one item and empty playlist.
         let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When pressing 'H'.
-        app.handle_event(key_event(KeyCode::Char('H')));
+        // When executing MoveToPlaylist action.
+        app.execute_action(Action::MoveToPlaylist);
 
         // Then the item moves to the playlist.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
@@ -669,13 +663,13 @@ mod tests {
     }
 
     #[test]
-    fn shift_l_moves_playlist_item_to_directory() {
+    fn move_to_directory_moves_playlist_item_to_directory() {
         // Given a playlist with one item and empty directory.
         let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         app.tui_state.focused_pane = Pane::Playlist;
 
-        // When pressing 'L'.
-        app.handle_event(key_event(KeyCode::Char('L')));
+        // When executing MoveToDirectory action.
+        app.execute_action(Action::MoveToDirectory);
 
         // Then the item moves to the directory.
         assert!(app.tui_state.playlist_pane.items.is_empty());
@@ -686,16 +680,14 @@ mod tests {
         );
     }
 
-    #[rstest]
-    #[case(KeyCode::Char(' '))]
-    #[case(KeyCode::Enter)]
-    fn key_moves_item_from_directory_to_playlist(#[case] key: KeyCode) {
+    #[test]
+    fn toggle_item_moves_item_from_directory_to_playlist() {
         // Given a directory with one item and empty playlist.
         let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When pressing the key.
-        app.handle_event(key_event(key));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then the item moves to the playlist.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
@@ -706,16 +698,14 @@ mod tests {
         assert!(app.tui_state.directory_pane.items.is_empty());
     }
 
-    #[rstest]
-    #[case(KeyCode::Char(' '))]
-    #[case(KeyCode::Enter)]
-    fn key_moves_item_from_playlist_to_directory(#[case] key: KeyCode) {
+    #[test]
+    fn toggle_item_moves_item_from_playlist_to_directory() {
         // Given a playlist with one item and empty directory.
         let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         app.tui_state.focused_pane = Pane::Playlist;
 
-        // When pressing the key.
-        app.handle_event(key_event(key));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then the item moves to the directory.
         assert!(app.tui_state.playlist_pane.items.is_empty());
@@ -723,12 +713,12 @@ mod tests {
     }
 
     #[test]
-    fn o_key_opens_selected_file_in_mpv() {
+    fn play_in_mpv_opens_selected_file_in_mpv() {
         // Given a playlist with one item.
         let (mut app, mpv_backend, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
-        // When pressing 'o'.
-        app.handle_event(key_event(KeyCode::Char('o')));
+        // When executing PlayInMpv action.
+        app.execute_action(Action::PlayInMpv);
 
         // Then mpv receives the file path.
         let calls = mpv_backend.load_file_called.lock().unwrap();
@@ -743,51 +733,51 @@ mod tests {
     }
 
     #[test]
-    fn tab_does_not_switch_to_empty_directory() {
+    fn switch_pane_does_not_switch_to_empty_directory() {
         // Given a playlist with items and empty directory.
         let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
-        // When pressing Tab.
-        app.handle_event(key_event(KeyCode::Tab));
+        // When executing SwitchPane action.
+        app.execute_action(Action::SwitchPane);
 
         // Then focus stays on playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
     #[test]
-    fn tab_does_not_switch_to_empty_playlist() {
+    fn switch_pane_does_not_switch_to_empty_playlist() {
         // Given an empty playlist and directory with items.
         let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
 
-        // When pressing Tab.
-        app.handle_event(key_event(KeyCode::Tab));
+        // When executing SwitchPane action.
+        app.execute_action(Action::SwitchPane);
 
         // Then focus stays on directory.
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
     }
 
     #[test]
-    fn h_does_not_switch_to_empty_playlist() {
+    fn focus_playlist_does_not_switch_to_empty_playlist() {
         // Given an empty playlist and directory with items, focused on directory.
         let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When pressing 'h'.
-        app.handle_event(key_event(KeyCode::Char('h')));
+        // When executing FocusPlaylist action.
+        app.execute_action(Action::FocusPlaylist);
 
         // Then focus stays on directory.
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
     }
 
     #[test]
-    fn l_does_not_switch_to_empty_directory() {
+    fn focus_directory_does_not_switch_to_empty_directory() {
         // Given a playlist with items and empty directory, focused on playlist.
         let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
-        // When pressing 'l'.
-        app.handle_event(key_event(KeyCode::Char('l')));
+        // When executing FocusDirectory action.
+        app.execute_action(Action::FocusDirectory);
 
         // Then focus stays on playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -839,8 +829,8 @@ mod tests {
         );
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When moving item to playlist.
-        app.handle_event(key_event(KeyCode::Enter));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then focus switches to playlist.
         assert!(app.tui_state.directory_pane.items.is_empty());
@@ -856,8 +846,8 @@ mod tests {
         );
         app.tui_state.focused_pane = Pane::Playlist;
 
-        // When moving item to directory.
-        app.handle_event(key_event(KeyCode::Enter));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then focus switches to directory.
         assert!(app.tui_state.playlist_pane.items.is_empty());
@@ -873,8 +863,8 @@ mod tests {
         );
         app.tui_state.focused_pane = Pane::Playlist;
 
-        // When moving item to directory.
-        app.handle_event(key_event(KeyCode::Enter));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then focus stays on playlist.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
@@ -887,8 +877,8 @@ mod tests {
         let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         app.tui_state.focused_pane = Pane::Playlist;
 
-        // When moving item to directory.
-        app.handle_event(key_event(KeyCode::Enter));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then focus switches to directory.
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
@@ -900,8 +890,8 @@ mod tests {
         let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
-        // When moving item to playlist.
-        app.handle_event(key_event(KeyCode::Enter));
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
 
         // Then focus switches to playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
