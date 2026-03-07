@@ -170,7 +170,8 @@ fn run_app(
     app: &mut App,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        terminal.draw(|f| ui::render(f, &app.tui_state))?;
+        let keymap = app.keymap.clone();
+        terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
 
         if event::poll(std::time::Duration::from_millis(100))? {
             let event = event::read()?;
@@ -198,7 +199,8 @@ fn run_app(
             )?;
             terminal.hide_cursor()?;
             terminal.clear()?;
-            terminal.draw(|f| ui::render(f, &app.tui_state))?;
+            let keymap = app.keymap.clone();
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
 
             match result {
                 Ok(status) if status.success() => {

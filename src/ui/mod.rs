@@ -3,7 +3,9 @@ mod directory_pane;
 mod filter;
 mod playlist_pane;
 mod rename;
+mod which_key;
 
+use crate::keymap::Keymap;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -16,8 +18,9 @@ pub use directory_pane::DirectoryPane;
 pub use filter::Filter;
 pub use playlist_pane::PlaylistPane;
 pub use rename::Rename;
+pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
 
-pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState) {
+pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState, keymap: &Keymap) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(1)])
@@ -44,5 +47,9 @@ pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState) {
 
     if state.is_renaming() {
         state.rename.render(frame, state.get_selected_item());
+    }
+
+    if state.which_key.active {
+        state.which_key.render(frame, keymap, state.focused_pane);
     }
 }

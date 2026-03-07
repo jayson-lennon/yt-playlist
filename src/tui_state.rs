@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::ui::{DirectoryPane, Pane, PlaylistItem, PlaylistPane, Rename};
+use crate::ui::{DirectoryPane, Pane, PlaylistItem, PlaylistPane, Rename, WhichKey};
 
 pub struct TuiState {
     pub playlist_pane: PlaylistPane,
@@ -8,6 +8,7 @@ pub struct TuiState {
     pub focused_pane: Pane,
     pub status_message: Option<String>,
     pub rename: Rename,
+    pub which_key: WhichKey,
 }
 
 impl TuiState {
@@ -18,6 +19,7 @@ impl TuiState {
             focused_pane: Pane::Playlist,
             status_message: None,
             rename: Rename::new(),
+            which_key: WhichKey::default(),
         }
     }
 

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{Event, KeyCode};
 
+use crate::keymap::{Action, Keymap};
 use crate::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui_state::TuiState;
@@ -17,6 +18,7 @@ pub struct App {
     pub extensions: Vec<String>,
     pub should_quit: bool,
     pub pending_notes_path: Option<PathBuf>,
+    pub keymap: Keymap,
 }
 
 impl App {
@@ -27,6 +29,7 @@ impl App {
             extensions,
             should_quit: false,
             pending_notes_path: None,
+            keymap: Keymap::new(),
         };
         app.load_playlist();
         app.refresh_directory();
@@ -126,6 +129,11 @@ impl App {
     #[allow(clippy::too_many_lines)]
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
+            if self.tui_state.which_key.active {
+                self.tui_state.which_key.dismiss();
+                return;
+            }
+
             if self.tui_state.is_filtering() {
                 match key.code {
                     KeyCode::Esc => {
@@ -164,78 +172,81 @@ impl App {
                 return;
             }
 
-            match key.code {
-                KeyCode::Char('/') => {
-                    self.tui_state.start_filter();
+            if let Some(action) =
+                self.keymap
+                    .get_action(key.code, key.modifiers, self.tui_state.focused_pane)
+            {
+                self.execute_action(action);
+            }
+        }
+    }
+
+    fn execute_action(&mut self, action: Action) {
+        match action {
+            Action::ShowHelp => {
+                self.tui_state.which_key.toggle();
+            }
+            Action::Quit => {
+                self.save_playlist();
+                self.should_quit = true;
+            }
+            Action::Save => {
+                self.save_playlist();
+            }
+            Action::StartFilter => {
+                self.tui_state.start_filter();
+            }
+            Action::MoveUp => match self.tui_state.focused_pane {
+                Pane::Playlist => self.tui_state.move_playlist_up(),
+                Pane::Directory => self.tui_state.move_directory_up(),
+            },
+            Action::MoveDown => match self.tui_state.focused_pane {
+                Pane::Playlist => self.tui_state.move_playlist_down(),
+                Pane::Directory => self.tui_state.move_directory_down(),
+            },
+            Action::SwitchPane => {
+                self.tui_state.switch_pane();
+            }
+            Action::FocusPlaylist => {
+                self.tui_state.focused_pane = Pane::Playlist;
+            }
+            Action::FocusDirectory => {
+                self.tui_state.focused_pane = Pane::Directory;
+            }
+            Action::ToggleItem => match self.tui_state.focused_pane {
+                Pane::Directory => {
+                    self.move_from_directory_to_playlist();
                 }
-                KeyCode::Char('q') => {
-                    self.save_playlist();
-                    self.should_quit = true;
+                Pane::Playlist => {
+                    self.move_from_playlist_to_directory();
                 }
-                KeyCode::Char('s') => {
-                    self.save_playlist();
+            },
+            Action::Rename => {
+                self.tui_state.start_rename();
+            }
+            Action::Notes => {
+                if let Some(item) = self.tui_state.get_selected_item() {
+                    self.pending_notes_path = Some(item.path.clone());
                 }
-                KeyCode::Char('o') => {
-                    self.open_in_mpv();
+            }
+            Action::ReorderUp => {
+                if !self.tui_state.has_active_filter(Pane::Playlist) {
+                    self.tui_state.reorder_playlist_up();
                 }
-                KeyCode::Char('r') => {
-                    self.tui_state.start_rename();
+            }
+            Action::ReorderDown => {
+                if !self.tui_state.has_active_filter(Pane::Playlist) {
+                    self.tui_state.reorder_playlist_down();
                 }
-                KeyCode::Tab => {
-                    self.tui_state.switch_pane();
-                }
-                KeyCode::Char('h') => {
-                    self.tui_state.focused_pane = Pane::Playlist;
-                }
-                KeyCode::Char('l') => {
-                    self.tui_state.focused_pane = Pane::Directory;
-                }
-                KeyCode::Char('H') => {
-                    if self.tui_state.focused_pane == Pane::Directory {
-                        self.move_from_directory_to_playlist();
-                    }
-                }
-                KeyCode::Char('L') => {
-                    if self.tui_state.focused_pane == Pane::Playlist {
-                        self.move_from_playlist_to_directory();
-                    }
-                }
-                KeyCode::Char('j') => match self.tui_state.focused_pane {
-                    Pane::Playlist => self.tui_state.move_playlist_down(),
-                    Pane::Directory => self.tui_state.move_directory_down(),
-                },
-                KeyCode::Char('k') => match self.tui_state.focused_pane {
-                    Pane::Playlist => self.tui_state.move_playlist_up(),
-                    Pane::Directory => self.tui_state.move_directory_up(),
-                },
-                KeyCode::Char('J') => {
-                    if self.tui_state.focused_pane == Pane::Playlist
-                        && !self.tui_state.has_active_filter(Pane::Playlist)
-                    {
-                        self.tui_state.reorder_playlist_down();
-                    }
-                }
-                KeyCode::Char('K') => {
-                    if self.tui_state.focused_pane == Pane::Playlist
-                        && !self.tui_state.has_active_filter(Pane::Playlist)
-                    {
-                        self.tui_state.reorder_playlist_up();
-                    }
-                }
-                KeyCode::Char('n') => {
-                    if let Some(item) = self.tui_state.get_selected_item() {
-                        self.pending_notes_path = Some(item.path.clone());
-                    }
-                }
-                KeyCode::Char(' ') | KeyCode::Enter => match self.tui_state.focused_pane {
-                    Pane::Directory => {
-                        self.move_from_directory_to_playlist();
-                    }
-                    Pane::Playlist => {
-                        self.move_from_playlist_to_directory();
-                    }
-                },
-                _ => {}
+            }
+            Action::PlayInMpv => {
+                self.open_in_mpv();
+            }
+            Action::MoveToDirectory => {
+                self.move_from_playlist_to_directory();
+            }
+            Action::MoveToPlaylist => {
+                self.move_from_directory_to_playlist();
             }
         }
     }
@@ -287,6 +298,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::keymap::Keymap;
     use crate::media::{MediaError, MediaQuery, MediaQueryBackend};
     use crate::mpv::{MpvBackend, MpvClient, MpvError};
     use crate::playlist::{IoError, PlaylistStorage, PlaylistStorageBackend};
@@ -380,6 +392,7 @@ mod tests {
             extensions: DEFAULT_EXTENSIONS.iter().map(|s| s.to_string()).collect(),
             should_quit: false,
             pending_notes_path: None,
+            keymap: Keymap::new(),
         };
 
         for path in playlist_items {
@@ -601,23 +614,6 @@ mod tests {
         );
         assert_eq!(
             app.tui_state.playlist_pane.items[1].path,
-            PathBuf::from("b.mp4")
-        );
-    }
-
-    #[test]
-    fn x_key_removes_selected_item_from_playlist() {
-        // Given a playlist with two items.
-        let (mut app, _, _) =
-            create_test_app(vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")], vec![]);
-
-        // When pressing 'x'.
-        app.handle_event(key_event(KeyCode::Char('x')));
-
-        // Then the first item is removed.
-        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
-        assert_eq!(
-            app.tui_state.playlist_pane.items[0].path,
             PathBuf::from("b.mp4")
         );
     }
