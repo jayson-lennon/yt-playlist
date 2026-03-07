@@ -69,6 +69,7 @@ impl KeyBinding {
 
     pub fn key_display(&self) -> String {
         match &self.key {
+            KeyCode::Char(' ') => "Space".to_string(),
             KeyCode::Char(c) => c.to_string(),
             KeyCode::Tab => "Tab".to_string(),
             KeyCode::Enter => "Enter".to_string(),

@@ -1,7 +1,8 @@
 use crate::keymap::{KeyBinding, KeyCategory, Keymap};
 use ratatui::{
-    layout::{Constraint, Flex, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, Padding, Paragraph},
     Frame,
 };
@@ -36,6 +37,18 @@ pub struct WhichKey {
     pub config: WhichKeyConfig,
 }
 
+struct ColumnData<'a> {
+    categories: Vec<(&'a str, Vec<&'a KeyBinding>)>,
+    max_key_width: usize,
+    max_desc_width: usize,
+}
+
+impl ColumnData<'_> {
+    fn content_width(&self) -> usize {
+        self.max_key_width + 1 + self.max_desc_width
+    }
+}
+
 impl WhichKey {
     pub fn new(config: WhichKeyConfig) -> Self {
         Self {
@@ -62,8 +75,8 @@ impl WhichKey {
             .max_height
             .min((f32::from(frame.area().height) * 0.3).ceil() as u16);
 
-        let (popup_area, content_width) =
-            self.calculate_popup_area(frame.area(), &categories, max_height);
+        let columns = Self::build_columns(&categories, max_height);
+        let popup_area = self.calculate_popup_area(frame.area(), &columns, max_height);
 
         frame.render_widget(Clear, popup_area);
 
@@ -75,13 +88,10 @@ impl WhichKey {
         let inner_area = block.inner(popup_area);
         frame.render_widget(block, popup_area);
 
-        let columns = Self::layout_columns(&categories, max_height, content_width, inner_area);
+        let column_areas = Self::layout_columns(&columns, inner_area);
 
-        for (col_area, col_bindings) in columns
-            .iter()
-            .zip(Self::column_bindings(&categories, max_height).iter())
-        {
-            Self::render_column(frame, *col_area, col_bindings);
+        for (col_area, col_data) in column_areas.iter().zip(columns.iter()) {
+            Self::render_column(frame, *col_area, col_data);
         }
     }
 
@@ -125,46 +135,71 @@ impl WhichKey {
         }
     }
 
+    fn build_columns<'a>(
+        categories: &'a [(KeyCategory, Vec<&'a KeyBinding>)],
+        max_height: u16,
+    ) -> Vec<ColumnData<'a>> {
+        let rows_per_column = max_height.saturating_sub(2) as usize;
+        let mut columns: Vec<ColumnData<'a>> = Vec::new();
+        let mut current_categories: Vec<(&'a str, Vec<&'a KeyBinding>)> = Vec::new();
+        let mut current_rows = 0usize;
+
+        for (category, items) in categories {
+            let category_name = Self::category_name(*category);
+            let category_rows = items.len() + 1;
+
+            if current_rows + category_rows > rows_per_column && current_rows > 0 {
+                columns.push(Self::build_column_data(current_categories));
+                current_categories = Vec::new();
+                current_rows = 0;
+            }
+
+            current_categories.push((category_name, items.clone()));
+            current_rows += category_rows;
+        }
+
+        if !current_categories.is_empty() {
+            columns.push(Self::build_column_data(current_categories));
+        }
+
+        columns
+    }
+
+    fn build_column_data<'a>(categories: Vec<(&'a str, Vec<&'a KeyBinding>)>) -> ColumnData<'a> {
+        let max_key_width = categories
+            .iter()
+            .flat_map(|(_, bindings)| bindings.iter())
+            .map(|b| b.key_display().len())
+            .max()
+            .unwrap_or(5);
+
+        let max_desc_width = categories
+            .iter()
+            .flat_map(|(_, bindings)| bindings.iter())
+            .map(|b| b.description.len())
+            .max()
+            .unwrap_or(10);
+
+        ColumnData {
+            categories,
+            max_key_width,
+            max_desc_width,
+        }
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     fn calculate_popup_area(
         &self,
         frame_area: Rect,
-        categories: &[(KeyCategory, Vec<&KeyBinding>)],
+        columns: &[ColumnData<'_>],
         max_height: u16,
-    ) -> (Rect, u16) {
-        let total_bindings: usize = categories
-            .iter()
-            .map(|(_, items): &(_, Vec<&KeyBinding>)| items.len())
-            .sum();
-        let category_count = categories.len();
+    ) -> Rect {
+        let column_gap = 1u16;
+        let total_content_width: u16 = columns.iter().map(|c| c.content_width() as u16).sum();
+        let total_gap = column_gap * columns.len().saturating_sub(1) as u16;
 
-        let longest_key = categories
-            .iter()
-            .flat_map(|(_, items): &(_, Vec<&KeyBinding>)| items.iter())
-            .map(|b: &&KeyBinding| b.key_display().len())
-            .max()
-            .unwrap_or(5);
-
-        let longest_desc = categories
-            .iter()
-            .flat_map(|(_, items): &(_, Vec<&KeyBinding>)| items.iter())
-            .map(|b: &&KeyBinding| b.description.len())
-            .max()
-            .unwrap_or(10);
-
-        let content_width = (longest_key + longest_desc + 7) as u16;
-        let column_gap = 2u16;
-
-        let rows_per_column = max_height.saturating_sub(2);
-        let items_per_column = rows_per_column as usize;
-
-        let total_rows = total_bindings + category_count;
-        let num_columns = ((total_rows + items_per_column - 1) / items_per_column.max(1)).max(1);
-
-        let popup_width = (num_columns as u16 * content_width
-            + (num_columns.saturating_sub(1) as u16) * column_gap
-            + 4)
-        .min(frame_area.width.saturating_sub(2));
+        let popup_width =
+            (total_content_width + total_gap + 4).min(frame_area.width.saturating_sub(2));
         let popup_height = max_height.min(frame_area.height.saturating_sub(2));
 
         let x = match self.config.position {
@@ -179,83 +214,28 @@ impl WhichKey {
             .saturating_sub(popup_height)
             .saturating_sub(1);
 
-        (Rect::new(x, y, popup_width, popup_height), content_width)
+        Rect::new(x, y, popup_width, popup_height)
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    fn layout_columns(
-        categories: &[(KeyCategory, Vec<&KeyBinding>)],
-        max_height: u16,
-        _content_width: u16,
-        inner_area: Rect,
-    ) -> Vec<Rect> {
-        let rows_per_column = max_height.saturating_sub(2) as usize;
-        let mut column_count = 0usize;
-        let mut current_rows = 0usize;
-
-        for (_, items) in categories {
-            let category_rows = items.len() + 1;
-            if current_rows + category_rows > rows_per_column && current_rows > 0 {
-                column_count += 1;
-                current_rows = category_rows;
-            } else {
-                current_rows += category_rows;
-            }
-        }
-        if current_rows > 0 {
-            column_count += 1;
-        }
-
+    fn layout_columns(columns: &[ColumnData<'_>], inner_area: Rect) -> Vec<Rect> {
         let column_gap = 1u16;
-        let total_gap = column_gap * column_count.saturating_sub(1) as u16;
-        let available_width = inner_area.width.saturating_sub(total_gap);
-        let col_width = available_width / column_count.max(1) as u16;
+        let mut result = Vec::with_capacity(columns.len());
+        let mut x = inner_area.x;
 
-        let constraints: Vec<Constraint> = (0..column_count)
-            .map(|_| Constraint::Length(col_width))
-            .collect();
-
-        let layout = Layout::horizontal(constraints)
-            .flex(Flex::Start)
-            .split(inner_area);
-
-        layout.to_vec()
-    }
-
-    fn column_bindings<'a>(
-        categories: &'a [(KeyCategory, Vec<&'a KeyBinding>)],
-        max_height: u16,
-    ) -> Vec<Vec<(&'a str, Vec<&'a KeyBinding>)>> {
-        let rows_per_column = max_height.saturating_sub(2) as usize;
-        let mut columns: Vec<Vec<(&'a str, Vec<&'a KeyBinding>)>> = Vec::new();
-        let mut current_column: Vec<(&'a str, Vec<&'a KeyBinding>)> = Vec::new();
-        let mut current_rows = 0usize;
-
-        for (category, items) in categories {
-            let category_name = Self::category_name(*category);
-            let category_rows = items.len() + 1;
-
-            if current_rows + category_rows > rows_per_column && current_rows > 0 {
-                columns.push(current_column);
-                current_column = Vec::new();
-                current_rows = 0;
-            }
-
-            current_column.push((category_name, items.clone()));
-            current_rows += category_rows;
+        for column_data in columns {
+            let width = column_data.content_width() as u16;
+            result.push(Rect::new(x, inner_area.y, width, inner_area.height));
+            x += width + column_gap;
         }
 
-        if !current_column.is_empty() {
-            columns.push(current_column);
-        }
-
-        columns
+        result
     }
 
-    fn render_column(frame: &mut Frame, area: Rect, column_data: &[(&str, Vec<&KeyBinding>)]) {
+    fn render_column(frame: &mut Frame, area: Rect, column_data: &ColumnData<'_>) {
         let mut y = area.y;
 
-        for (category_name, bindings) in column_data {
+        for (category_name, bindings) in &column_data.categories {
             if y >= area.bottom() {
                 break;
             }
@@ -274,8 +254,13 @@ impl WhichKey {
                 }
 
                 let key = binding.key_display();
-                let text = format!("{:<4} {}", key, binding.description);
-                let para = Paragraph::new(text).style(Style::default().fg(Color::White));
+                let key_span = Span::styled(
+                    format!("{:>width$}", key, width = column_data.max_key_width),
+                    Style::default().fg(Color::Cyan),
+                );
+                let desc_span = Span::raw(format!(" {}", binding.description));
+                let line = Line::from(vec![key_span, desc_span]);
+                let para = Paragraph::new(line);
                 frame.render_widget(para, Rect::new(area.x, y, area.width, 1));
                 y += 1;
             }
