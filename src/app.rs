@@ -2,20 +2,17 @@ use std::path::PathBuf;
 
 use crossterm::event::{Event, KeyCode};
 
+use crate::config::Config;
 use crate::keymap::{Action, Keymap};
 use crate::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui_state::TuiState;
 use crate::ui::{Pane, PlaylistItem};
 
-pub const DEFAULT_EXTENSIONS: &[&str] = &[
-    "mp4", "mkv", "avi", "webm", "mov", "flv", "wmv", "mp3", "flac", "wav", "ogg", "m4a", "aac",
-];
-
 pub struct App {
     pub services: Services,
     pub tui_state: TuiState,
-    pub extensions: Vec<String>,
+    pub config: Config,
     pub should_quit: bool,
     pub pending_notes_path: Option<PathBuf>,
     pub keymap: Keymap,
@@ -23,11 +20,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(services: Services, extensions: Vec<String>, socket_path: String) -> Self {
+    pub fn new(services: Services, config: Config, socket_path: String) -> Self {
         let mut app = Self {
             services,
             tui_state: TuiState::new(),
-            extensions,
+            config,
             should_quit: false,
             pending_notes_path: None,
             keymap: Keymap::new(),
@@ -122,18 +119,14 @@ impl App {
         if let Ok(read_dir) = std::fs::read_dir(".") {
             for entry in read_dir.flatten() {
                 let path = entry.path();
-                if path.is_file() {
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if self.extensions.contains(&ext.to_lowercase()) {
-                            let canonical = path.canonicalize().unwrap_or(path);
-                            let duration = self.services.media.get_duration(&canonical).ok();
-                            entries.push(PlaylistItem {
-                                path: canonical,
-                                duration,
-                                alias: None,
-                            });
-                        }
-                    }
+                if path.is_file() && self.config.is_allowed(&path) {
+                    let canonical = path.canonicalize().unwrap_or(path);
+                    let duration = self.services.media.get_duration(&canonical).ok();
+                    entries.push(PlaylistItem {
+                        path: canonical,
+                        duration,
+                        alias: None,
+                    });
                 }
             }
         }
@@ -530,7 +523,7 @@ mod tests {
             let mut app = App {
                 services,
                 tui_state: TuiState::new(),
-                extensions: DEFAULT_EXTENSIONS.iter().map(|s| s.to_string()).collect(),
+                config: Config::default(),
                 should_quit: false,
                 pending_notes_path: None,
                 keymap: Keymap::new(),

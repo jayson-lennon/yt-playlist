@@ -1,5 +1,5 @@
 [package]
-name = "mpv-playlist"
+name = "yt-playlist"
 version = "0.1.0"
 edition = "2024"
 
@@ -20,9 +20,11 @@ wildcard_imports = "allow"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
 derive_more = { version = "2", features = ["debug"] }
+dirs = "6"
 error-stack = { version = "0.6.0", features = ["serde"] }
 ffprobe = "0.4"
 futures-util = "0.3"
+infer = "0.16"
 mpvipc = "1.3"
 ratatui = "0.30.0"
 serde = { version = "1", features = ["derive"] }

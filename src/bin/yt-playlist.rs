@@ -9,9 +9,10 @@ use crossterm::{
 use error_stack::{fmt::ColorMode, Report};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use mpv_playlist::{
+use yt_playlist::{
     analysis,
-    app::{App, DEFAULT_EXTENSIONS},
+    app::App,
+    config::{load, Config},
     media::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
     mpv::{MpvBackend, MpvClient, MpvipcBackend, RealMpvLauncher},
     playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
@@ -20,7 +21,7 @@ use mpv_playlist::{
 };
 
 #[derive(Parser)]
-#[command(name = "mpv-playlist")]
+#[command(name = "yt-playlist")]
 #[command(about = "TUI playlist manager for mpv")]
 struct Args {
     /// Playlist file path
@@ -30,28 +31,20 @@ struct Args {
     /// mpv socket path
     #[arg(long, default_value = "/tmp/mpvsocket")]
     socket: PathBuf,
-
-    /// Append extensions to common set (comma-separated)
-    #[arg(short = 'e', long)]
-    extend: Option<String>,
-
-    /// Replace extensions entirely (comma-separated)
-    #[arg(short = 'x', long)]
-    extensions: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Report::set_color_mode(ColorMode::None);
 
     let args = Args::parse();
-    let extensions = parse_extensions(&args);
+    let config = load()?;
 
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
         Arc::new(TomlBackend::new(args.playlist.clone()));
     let playlist_storage = PlaylistStorage::new(storage_backend.clone());
 
     let playlist_data = playlist_storage.load()?;
-    let all_files = collect_all_files(&playlist_data, &extensions);
+    let all_files = collect_all_files(&playlist_data, &config);
     let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
 
     let result =
@@ -74,11 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(
-        services,
-        extensions,
-        args.socket.to_string_lossy().into_owned(),
-    );
+    let mut app = App::new(services, config, args.socket.to_string_lossy().into_owned());
     let res = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;
@@ -96,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn collect_all_files(playlist_data: &PlaylistData, extensions: &[String]) -> Vec<PathBuf> {
+fn collect_all_files(playlist_data: &PlaylistData, config: &Config) -> Vec<PathBuf> {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
     for path in &playlist_data.playlist {
@@ -118,46 +107,17 @@ fn collect_all_files(playlist_data: &PlaylistData, extensions: &[String]) -> Vec
     if let Ok(read_dir) = std::fs::read_dir(".") {
         for entry in read_dir.flatten() {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if extensions.contains(&ext.to_lowercase()) {
-                        if let Ok(canonical) = path.canonicalize() {
-                            files.insert(canonical);
-                        } else {
-                            files.insert(path);
-                        }
-                    }
+            if path.is_file() && config.is_allowed(&path) {
+                if let Ok(canonical) = path.canonicalize() {
+                    files.insert(canonical);
+                } else {
+                    files.insert(path);
                 }
             }
         }
     }
 
     files.into_iter().collect()
-}
-
-fn parse_extensions(args: &Args) -> Vec<String> {
-    match &args.extensions {
-        Some(exts) => exts
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect(),
-        None => {
-            let mut exts: Vec<String> = DEFAULT_EXTENSIONS
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect();
-            if let Some(extra) = &args.extend {
-                for e in extra.split(',') {
-                    let e = e.trim().to_lowercase();
-                    if !e.is_empty() && !exts.contains(&e) {
-                        exts.push(e);
-                    }
-                }
-            }
-            exts
-        }
-    }
 }
 
 fn build_services(args: &Args, media_backend: Arc<dyn MediaQueryBackend>) -> Services {
