@@ -114,7 +114,10 @@ impl PlaylistPane {
         filter_items(
             &self.items,
             self.filter.input(),
-            self.filter.applied().map(|s| s.to_string()).as_ref(),
+            self.filter
+                .applied()
+                .map(std::string::ToString::to_string)
+                .as_ref(),
         )
     }
 

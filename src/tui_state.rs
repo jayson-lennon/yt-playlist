@@ -82,10 +82,17 @@ impl TuiState {
     }
 
     pub fn switch_pane(&mut self) {
-        self.focused_pane = match self.focused_pane {
+        let target = match self.focused_pane {
             Pane::Playlist => Pane::Directory,
             Pane::Directory => Pane::Playlist,
         };
+        let is_empty = match target {
+            Pane::Playlist => self.playlist_pane.items.is_empty(),
+            Pane::Directory => self.directory_pane.items.is_empty(),
+        };
+        if !is_empty {
+            self.focused_pane = target;
+        }
     }
 
     pub fn is_renaming(&self) -> bool {

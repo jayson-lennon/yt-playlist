@@ -33,7 +33,18 @@ impl App {
         };
         app.load_playlist();
         app.refresh_directory();
+        app.set_initial_focus();
         app
+    }
+
+    fn set_initial_focus(&mut self) {
+        let playlist_empty = self.tui_state.playlist_pane.items.is_empty();
+        let directory_empty = self.tui_state.directory_pane.items.is_empty();
+        if playlist_empty && !directory_empty {
+            self.tui_state.focused_pane = Pane::Directory;
+        } else if directory_empty && !playlist_empty {
+            self.tui_state.focused_pane = Pane::Playlist;
+        }
     }
 
     pub fn load_playlist(&mut self) {
@@ -208,10 +219,14 @@ impl App {
                 self.tui_state.switch_pane();
             }
             Action::FocusPlaylist => {
-                self.tui_state.focused_pane = Pane::Playlist;
+                if !self.tui_state.playlist_pane.items.is_empty() {
+                    self.tui_state.focused_pane = Pane::Playlist;
+                }
             }
             Action::FocusDirectory => {
-                self.tui_state.focused_pane = Pane::Directory;
+                if !self.tui_state.directory_pane.items.is_empty() {
+                    self.tui_state.focused_pane = Pane::Directory;
+                }
             }
             Action::ToggleItem => match self.tui_state.focused_pane {
                 Pane::Directory => {
@@ -256,6 +271,9 @@ impl App {
             self.tui_state
                 .add_to_playlist(item.path, item.duration, item.alias);
             self.tui_state.remove_from_directory();
+            if self.tui_state.directory_pane.items.is_empty() {
+                self.tui_state.focused_pane = Pane::Playlist;
+            }
         }
     }
 
@@ -267,6 +285,9 @@ impl App {
                 .items
                 .sort_by(|a, b| a.path.cmp(&b.path));
             self.tui_state.remove_from_playlist();
+            if self.tui_state.playlist_pane.items.is_empty() {
+                self.tui_state.focused_pane = Pane::Directory;
+            }
         }
     }
 
@@ -413,6 +434,8 @@ mod tests {
             });
         }
 
+        app.set_initial_focus();
+
         (app, mpv_backend, storage_backend)
     }
 
@@ -447,8 +470,11 @@ mod tests {
 
     #[test]
     fn tab_key_toggles_between_panes() {
-        // Given an app focused on the playlist pane.
-        let (mut app, _, _) = create_test_app(vec![], vec![]);
+        // Given an app focused on the playlist pane with items in both panes.
+        let (mut app, _, _) = create_test_app(
+            vec![PathBuf::from("playlist.mp4")],
+            vec![PathBuf::from("directory.mp4")],
+        );
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
         // When pressing Tab.
@@ -466,8 +492,11 @@ mod tests {
 
     #[test]
     fn h_key_switches_to_playlist_pane() {
-        // Given an app focused on the directory pane.
-        let (mut app, _, _) = create_test_app(vec![], vec![]);
+        // Given an app focused on the directory pane with items in both panes.
+        let (mut app, _, _) = create_test_app(
+            vec![PathBuf::from("playlist.mp4")],
+            vec![PathBuf::from("directory.mp4")],
+        );
         app.tui_state.focused_pane = Pane::Directory;
 
         // When pressing 'h'.
@@ -479,8 +508,11 @@ mod tests {
 
     #[test]
     fn l_key_switches_to_directory_pane() {
-        // Given an app focused on the playlist pane.
-        let (mut app, _, _) = create_test_app(vec![], vec![]);
+        // Given an app focused on the playlist pane with items in both panes.
+        let (mut app, _, _) = create_test_app(
+            vec![PathBuf::from("playlist.mp4")],
+            vec![PathBuf::from("directory.mp4")],
+        );
 
         // When pressing 'l'.
         app.handle_event(key_event(KeyCode::Char('l')));
@@ -708,5 +740,170 @@ mod tests {
             .as_ref()
             .unwrap()
             .contains("Playing"));
+    }
+
+    #[test]
+    fn tab_does_not_switch_to_empty_directory() {
+        // Given a playlist with items and empty directory.
+        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+
+        // When pressing Tab.
+        app.handle_event(key_event(KeyCode::Tab));
+
+        // Then focus stays on playlist.
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn tab_does_not_switch_to_empty_playlist() {
+        // Given an empty playlist and directory with items.
+        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+
+        // When pressing Tab.
+        app.handle_event(key_event(KeyCode::Tab));
+
+        // Then focus stays on directory.
+        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+    }
+
+    #[test]
+    fn h_does_not_switch_to_empty_playlist() {
+        // Given an empty playlist and directory with items, focused on directory.
+        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        app.tui_state.focused_pane = Pane::Directory;
+
+        // When pressing 'h'.
+        app.handle_event(key_event(KeyCode::Char('h')));
+
+        // Then focus stays on directory.
+        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+    }
+
+    #[test]
+    fn l_does_not_switch_to_empty_directory() {
+        // Given a playlist with items and empty directory, focused on playlist.
+        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+
+        // When pressing 'l'.
+        app.handle_event(key_event(KeyCode::Char('l')));
+
+        // Then focus stays on playlist.
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn initial_focus_directory_when_playlist_empty() {
+        // Given an empty playlist and directory with items.
+        let (app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+
+        // Then focus is on directory.
+        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+    }
+
+    #[test]
+    fn initial_focus_playlist_when_directory_empty() {
+        // Given a playlist with items and empty directory.
+        let (app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+
+        // Then focus is on playlist.
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn initial_focus_playlist_when_both_have_items() {
+        // Given both panes with items.
+        let (app, _, _) =
+            create_test_app(vec![PathBuf::from("a.mp4")], vec![PathBuf::from("b.mp4")]);
+
+        // Then focus is on playlist (default).
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn initial_focus_playlist_when_both_empty() {
+        // Given both panes empty.
+        let (app, _, _) = create_test_app(vec![], vec![]);
+
+        // Then focus is on playlist (default).
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn move_last_directory_item_switches_focus_to_playlist() {
+        // Given directory with 1 item and playlist with items, focused on directory.
+        let (mut app, _, _) = create_test_app(
+            vec![PathBuf::from("playlist.mp4")],
+            vec![PathBuf::from("directory.mp4")],
+        );
+        app.tui_state.focused_pane = Pane::Directory;
+
+        // When moving item to playlist.
+        app.handle_event(key_event(KeyCode::Enter));
+
+        // Then focus switches to playlist.
+        assert!(app.tui_state.directory_pane.items.is_empty());
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn move_last_playlist_item_switches_focus_to_directory() {
+        // Given playlist with 1 item and directory with items, focused on playlist.
+        let (mut app, _, _) = create_test_app(
+            vec![PathBuf::from("playlist.mp4")],
+            vec![PathBuf::from("directory.mp4")],
+        );
+        app.tui_state.focused_pane = Pane::Playlist;
+
+        // When moving item to directory.
+        app.handle_event(key_event(KeyCode::Enter));
+
+        // Then focus switches to directory.
+        assert!(app.tui_state.playlist_pane.items.is_empty());
+        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+    }
+
+    #[test]
+    fn move_item_keeps_focus_when_pane_not_empty() {
+        // Given playlist with 2 items and directory with items, focused on playlist.
+        let (mut app, _, _) = create_test_app(
+            vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")],
+            vec![PathBuf::from("c.mp4")],
+        );
+        app.tui_state.focused_pane = Pane::Playlist;
+
+        // When moving item to directory.
+        app.handle_event(key_event(KeyCode::Enter));
+
+        // Then focus stays on playlist.
+        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn move_to_empty_directory_switches_focus() {
+        // Given playlist with 1 item and empty directory, focused on playlist.
+        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        app.tui_state.focused_pane = Pane::Playlist;
+
+        // When moving item to directory.
+        app.handle_event(key_event(KeyCode::Enter));
+
+        // Then focus switches to directory.
+        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+    }
+
+    #[test]
+    fn move_to_empty_playlist_switches_focus() {
+        // Given directory with 1 item and empty playlist, focused on directory.
+        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        app.tui_state.focused_pane = Pane::Directory;
+
+        // When moving item to playlist.
+        app.handle_event(key_event(KeyCode::Enter));
+
+        // Then focus switches to playlist.
+        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 }
