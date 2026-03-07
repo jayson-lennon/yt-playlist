@@ -288,6 +288,9 @@ impl App {
             Action::PlayInMpv => {
                 self.open_in_mpv();
             }
+            Action::LoadPlaylist => {
+                self.load_playlist_in_mpv();
+            }
             Action::MoveToDirectory => {
                 self.move_from_playlist_to_directory();
             }
@@ -342,6 +345,30 @@ impl App {
         }
     }
 
+    fn load_playlist_in_mpv(&mut self) {
+        let paths: Vec<PathBuf> = self
+            .tui_state
+            .playlist_pane
+            .items
+            .iter()
+            .map(|item| item.path.clone())
+            .collect();
+        if paths.is_empty() {
+            self.tui_state.show_error("Playlist is empty".to_string());
+            return;
+        }
+        match self.services.mpv.load_playlist(&paths) {
+            Ok(()) => {
+                self.tui_state.status_message =
+                    Some(format!("Loaded {} items into mpv", paths.len()));
+            }
+            Err(e) => {
+                self.tui_state
+                    .show_error(format!("Failed to load playlist in mpv: {e:?}"));
+            }
+        }
+    }
+
     fn launch_mpv(&mut self) {
         if self.services.mpv_launcher.is_running(&self.socket_path) {
             self.tui_state.status_message = Some("MPV already running".to_string());
@@ -380,6 +407,10 @@ mod tests {
         }
 
         fn load_file(&self, _path: &Path) -> Result<(), Report<MpvError>> {
+            Ok(())
+        }
+
+        fn load_playlist(&self, _paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
             Ok(())
         }
     }
@@ -821,6 +852,36 @@ mod tests {
 
         // Then a playing status message is shown.
         assert!(app.tui_state.status_message.unwrap().contains("Playing"));
+    }
+
+    #[test]
+    fn load_playlist_shows_status_message() {
+        // Given a playlist with items.
+        let mut app = TestAppBuilder::new()
+            .playlist_items(vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")])
+            .build();
+
+        // When executing LoadPlaylist action.
+        app.execute_action(Action::LoadPlaylist);
+
+        // Then a loaded status message is shown.
+        assert!(app
+            .tui_state
+            .status_message
+            .unwrap()
+            .contains("Loaded 2 items"));
+    }
+
+    #[test]
+    fn load_playlist_shows_error_when_empty() {
+        // Given an empty playlist.
+        let mut app = TestAppBuilder::new().build();
+
+        // When executing LoadPlaylist action.
+        app.execute_action(Action::LoadPlaylist);
+
+        // Then an error is shown.
+        assert!(app.tui_state.is_showing_error());
     }
 
     #[test]

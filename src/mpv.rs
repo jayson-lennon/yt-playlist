@@ -1,5 +1,7 @@
 use std::{
-    path::Path,
+    fs::File,
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
 };
@@ -18,6 +20,7 @@ pub struct MpvError;
 pub trait MpvBackend: Send + Sync {
     fn name(&self) -> &'static str;
     fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>>;
+    fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>>;
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +37,10 @@ impl MpvClient {
 
     pub fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>> {
         self.backend.load_file(path)
+    }
+
+    pub fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
+        self.backend.load_playlist(paths)
     }
 }
 
@@ -66,8 +73,33 @@ impl MpvBackend for MpvipcBackend {
         .change_context(MpvError)?;
         Ok(())
     }
+
+    fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
+        let temp_dir = std::env::temp_dir();
+        let playlist_path = temp_dir.join("mpv-playlist-temp.m3u");
+        let file = File::create(&playlist_path)
+            .change_context(MpvError)
+            .attach("failed to create temp playlist file")?;
+        let mut writer = BufWriter::new(file);
+        for path in paths {
+            writeln!(writer, "{}", path.to_string_lossy())
+                .change_context(MpvError)
+                .attach("failed to write to temp playlist file")?;
+        }
+        writer.flush().change_context(MpvError)?;
+        let mpv = Mpv::connect(&self.socket_path)
+            .change_context(MpvError)
+            .attach("failed to connect to mpv")?;
+        mpv.run_command(MpvCommand::LoadList {
+            file: playlist_path.to_string_lossy().into_owned(),
+            option: PlaylistAddOptions::Replace,
+        })
+        .change_context(MpvError)?;
+        Ok(())
+    }
 }
 
+#[allow(clippy::missing_errors_doc)]
 pub trait MpvLauncher: Send + Sync {
     fn is_running(&self, socket_path: &str) -> bool;
     fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>>;
