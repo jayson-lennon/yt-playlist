@@ -21,6 +21,7 @@ pub enum Action {
     PlayInMpv,
     MoveToDirectory,
     MoveToPlaylist,
+    LaunchMpv,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

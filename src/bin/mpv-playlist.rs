@@ -74,7 +74,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(services, extensions);
+    let mut app = App::new(
+        services,
+        extensions,
+        args.socket.to_string_lossy().into_owned(),
+    );
     let res = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;

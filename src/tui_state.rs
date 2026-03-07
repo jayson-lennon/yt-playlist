@@ -11,6 +11,7 @@ pub struct TuiState {
     pub which_key: WhichKey,
     pub needs_clear: bool,
     pub error_popup: ErrorPopup,
+    pub pending_key: Option<char>,
 }
 
 impl TuiState {
@@ -24,6 +25,7 @@ impl TuiState {
             which_key: WhichKey::default(),
             needs_clear: false,
             error_popup: ErrorPopup::new(),
+            pending_key: None,
         }
     }
 

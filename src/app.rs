@@ -19,10 +19,11 @@ pub struct App {
     pub should_quit: bool,
     pub pending_notes_path: Option<PathBuf>,
     pub keymap: Keymap,
+    pub socket_path: String,
 }
 
 impl App {
-    pub fn new(services: Services, extensions: Vec<String>) -> Self {
+    pub fn new(services: Services, extensions: Vec<String>, socket_path: String) -> Self {
         let mut app = Self {
             services,
             tui_state: TuiState::new(),
@@ -30,6 +31,7 @@ impl App {
             should_quit: false,
             pending_notes_path: None,
             keymap: Keymap::new(),
+            socket_path,
         };
         app.load_playlist();
         app.refresh_directory();
@@ -191,6 +193,21 @@ impl App {
                 return;
             }
 
+            if let KeyCode::Char(c) = key.code {
+                if self.tui_state.pending_key == Some('g') {
+                    self.tui_state.pending_key = None;
+                    if c == 'm' {
+                        self.execute_action(Action::LaunchMpv);
+                        return;
+                    }
+                } else if c == 'g' {
+                    self.tui_state.pending_key = Some('g');
+                    return;
+                }
+            }
+
+            self.tui_state.pending_key = None;
+
             if let Some(action) =
                 self.keymap
                     .get_action(key.code, key.modifiers, self.tui_state.focused_pane)
@@ -271,6 +288,9 @@ impl App {
             Action::MoveToPlaylist => {
                 self.move_from_directory_to_playlist();
             }
+            Action::LaunchMpv => {
+                self.launch_mpv();
+            }
         }
     }
 
@@ -311,6 +331,22 @@ impl App {
                 Err(e) => {
                     self.tui_state
                         .show_error(format!("Failed to open in mpv: {e:?}"));
+                }
+            }
+        }
+    }
+
+    fn launch_mpv(&mut self) {
+        if crate::mpv::is_mpv_running_with_socket(&self.socket_path) {
+            self.tui_state.status_message = Some("MPV already running".to_string());
+        } else {
+            match crate::mpv::spawn_mpv(&self.socket_path) {
+                Ok(()) => {
+                    self.tui_state.status_message = Some("MPV launched".to_string());
+                }
+                Err(e) => {
+                    self.tui_state
+                        .show_error(format!("Failed to launch mpv: {e:?}"));
                 }
             }
         }
@@ -419,6 +455,7 @@ mod tests {
             should_quit: false,
             pending_notes_path: None,
             keymap: Keymap::new(),
+            socket_path: String::from("/tmp/mpvsocket"),
         };
 
         for path in playlist_items {
