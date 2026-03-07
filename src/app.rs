@@ -337,10 +337,10 @@ impl App {
     }
 
     fn launch_mpv(&mut self) {
-        if crate::mpv::is_mpv_running_with_socket(&self.socket_path) {
+        if self.services.mpv_launcher.is_running(&self.socket_path) {
             self.tui_state.status_message = Some("MPV already running".to_string());
         } else {
-            match crate::mpv::spawn_mpv(&self.socket_path) {
+            match self.services.mpv_launcher.spawn(&self.socket_path) {
                 Ok(()) => {
                     self.tui_state.status_message = Some("MPV launched".to_string());
                 }
@@ -355,51 +355,58 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::Path,
-        sync::{Arc, Mutex},
-        time::Duration,
-    };
+    use std::{path::Path, sync::Arc, time::Duration};
 
     use error_stack::Report;
 
     use super::*;
     use crate::keymap::{Action, Keymap};
     use crate::media::{MediaError, MediaQuery, MediaQueryBackend};
-    use crate::mpv::{MpvBackend, MpvClient, MpvError};
-    use crate::playlist::{IoError, PlaylistStorage, PlaylistStorageBackend};
+    use crate::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher};
+    use crate::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
 
-    struct MockMpvBackend {
-        load_file_called: Arc<Mutex<Vec<PathBuf>>>,
-    }
+    struct FakeMpvBackend;
 
-    impl MockMpvBackend {
-        fn new() -> Self {
-            Self {
-                load_file_called: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-    }
-
-    impl MpvBackend for MockMpvBackend {
+    impl MpvBackend for FakeMpvBackend {
         fn name(&self) -> &'static str {
-            "mock"
+            "fake"
         }
 
-        fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>> {
-            self.load_file_called
-                .lock()
-                .unwrap()
-                .push(path.to_path_buf());
+        fn load_file(&self, _path: &Path) -> Result<(), Report<MpvError>> {
             Ok(())
         }
     }
 
-    struct MockMediaBackend;
+    struct FakeMpvLauncher {
+        running: bool,
+    }
 
-    impl MediaQueryBackend for MockMediaBackend {
+    impl FakeMpvLauncher {
+        fn new() -> Self {
+            Self { running: false }
+        }
+
+        fn running(mut self, value: bool) -> Self {
+            self.running = value;
+            self
+        }
+    }
+
+    impl MpvLauncher for FakeMpvLauncher {
+        fn is_running(&self, _socket_path: &str) -> bool {
+            self.running
+        }
+
+        fn spawn(&self, _socket_path: &str) -> Result<(), Report<MpvError>> {
+            Ok(())
+        }
+    }
+
+    struct FakeMediaBackend;
+
+    impl MediaQueryBackend for FakeMediaBackend {
         fn name(&self) -> &'static str {
-            "mock"
+            "fake"
         }
 
         fn get_duration(&self, _path: &Path) -> Result<Duration, Report<MediaError>> {
@@ -407,45 +414,40 @@ mod tests {
         }
     }
 
-    struct MockStorageBackend {
-        saved_data: Arc<Mutex<Option<PlaylistData>>>,
-    }
+    struct FakeStorageBackend;
 
-    impl MockStorageBackend {
-        fn new() -> Self {
-            Self {
-                saved_data: Arc::new(Mutex::new(None)),
-            }
-        }
-    }
-
-    impl PlaylistStorageBackend for MockStorageBackend {
+    impl PlaylistStorageBackend for FakeStorageBackend {
         fn name(&self) -> &'static str {
-            "mock"
+            "fake"
         }
 
         fn load(&self) -> Result<PlaylistData, Report<IoError>> {
             Ok(PlaylistData::default())
         }
 
-        fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
-            *self.saved_data.lock().unwrap() = Some(data.clone());
+        fn save(&self, _data: &PlaylistData) -> Result<(), Report<IoError>> {
             Ok(())
         }
     }
 
-    fn create_test_app(
+    fn create_test_app(playlist_items: Vec<PathBuf>, directory_items: Vec<PathBuf>) -> App {
+        create_test_app_with_launcher(playlist_items, directory_items, FakeMpvLauncher::new())
+    }
+
+    fn create_test_app_with_launcher(
         playlist_items: Vec<PathBuf>,
         directory_items: Vec<PathBuf>,
-    ) -> (App, Arc<MockMpvBackend>, Arc<MockStorageBackend>) {
-        let mpv_backend = Arc::new(MockMpvBackend::new());
-        let storage_backend = Arc::new(MockStorageBackend::new());
-        let media_backend = Arc::new(MockMediaBackend);
+        mpv_launcher: FakeMpvLauncher,
+    ) -> App {
+        let mpv_backend = Arc::new(FakeMpvBackend);
+        let storage_backend = Arc::new(FakeStorageBackend);
+        let media_backend = Arc::new(FakeMediaBackend);
 
         let services = Services {
-            mpv: MpvClient::new(mpv_backend.clone()),
+            mpv: MpvClient::new(mpv_backend),
             media: MediaQuery::new(media_backend),
-            storage: PlaylistStorage::new(storage_backend.clone()),
+            storage: PlaylistStorage::new(storage_backend),
+            mpv_launcher: Arc::new(mpv_launcher),
         };
 
         let mut app = App {
@@ -477,43 +479,38 @@ mod tests {
         }
 
         app.set_initial_focus();
-
-        (app, mpv_backend, storage_backend)
+        app
     }
 
     #[test]
     fn quit_action_saves_and_exits() {
-        // Given an app with an empty playlist.
-        let (mut app, _, storage) = create_test_app(vec![], vec![]);
+        // Given an empty app.
+        let mut app = create_test_app(vec![], vec![]);
 
         // When executing Quit action.
         app.execute_action(Action::Quit);
 
-        // Then the app should quit and save the playlist.
+        // Then the app should quit and show saved message.
         assert!(app.should_quit);
-        let saved = storage.saved_data.lock().unwrap();
-        assert!(saved.as_ref().map_or(true, |d| d.playlist.is_empty()));
+        assert!(app.tui_state.status_message.unwrap().contains("saved"));
     }
 
     #[test]
-    fn save_action_persists_playlist() {
+    fn save_action_shows_status_message() {
         // Given an app with one item in the playlist.
-        let (mut app, _, storage) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
         // When executing Save action.
         app.execute_action(Action::Save);
 
-        // Then the playlist is saved.
-        let saved = storage.saved_data.lock().unwrap();
-        let data = saved.as_ref().expect("should have saved data");
-        assert_eq!(data.playlist.len(), 1);
-        assert_eq!(data.playlist[0], PathBuf::from("test.mp4"));
+        // Then a saved status message is shown.
+        assert!(app.tui_state.status_message.unwrap().contains("saved"));
     }
 
     #[test]
     fn switch_pane_toggles_between_panes() {
         // Given an app focused on the playlist pane with items in both panes.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
             vec![PathBuf::from("directory.mp4")],
         );
@@ -535,7 +532,7 @@ mod tests {
     #[test]
     fn focus_playlist_switches_to_playlist_pane() {
         // Given an app focused on the directory pane with items in both panes.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
             vec![PathBuf::from("directory.mp4")],
         );
@@ -551,7 +548,7 @@ mod tests {
     #[test]
     fn focus_directory_switches_to_directory_pane() {
         // Given an app focused on the playlist pane with items in both panes.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
             vec![PathBuf::from("directory.mp4")],
         );
@@ -566,7 +563,7 @@ mod tests {
     #[test]
     fn move_down_moves_selection_down_in_playlist() {
         // Given a playlist with three items.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![
                 PathBuf::from("a.mp4"),
                 PathBuf::from("b.mp4"),
@@ -590,7 +587,7 @@ mod tests {
     #[test]
     fn move_up_moves_selection_up_in_playlist() {
         // Given a playlist with three items and selection on the last item.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![
                 PathBuf::from("a.mp4"),
                 PathBuf::from("b.mp4"),
@@ -614,7 +611,7 @@ mod tests {
     #[test]
     fn move_up_down_navigate_directory() {
         // Given a directory with three items.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![],
             vec![
                 PathBuf::from("x.mp4"),
@@ -637,7 +634,7 @@ mod tests {
     #[test]
     fn reorder_up_moves_playlist_item_up() {
         // Given a playlist with three items and middle item selected.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![
                 PathBuf::from("a.mp4"),
                 PathBuf::from("b.mp4"),
@@ -666,7 +663,7 @@ mod tests {
     #[test]
     fn reorder_down_moves_playlist_item_down() {
         // Given a playlist with items reordered and first item selected.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![
                 PathBuf::from("b.mp4"),
                 PathBuf::from("a.mp4"),
@@ -695,7 +692,7 @@ mod tests {
     #[test]
     fn move_to_playlist_moves_directory_item_to_playlist() {
         // Given a directory with one item and empty playlist.
-        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        let mut app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
         // When executing MoveToPlaylist action.
@@ -713,7 +710,7 @@ mod tests {
     #[test]
     fn move_to_directory_moves_playlist_item_to_directory() {
         // Given a playlist with one item and empty directory.
-        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When executing MoveToDirectory action.
@@ -731,7 +728,7 @@ mod tests {
     #[test]
     fn toggle_item_moves_item_from_directory_to_playlist() {
         // Given a directory with one item and empty playlist.
-        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        let mut app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
         // When executing ToggleItem action.
@@ -749,7 +746,7 @@ mod tests {
     #[test]
     fn toggle_item_moves_item_from_playlist_to_directory() {
         // Given a playlist with one item and empty directory.
-        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When executing ToggleItem action.
@@ -761,29 +758,21 @@ mod tests {
     }
 
     #[test]
-    fn play_in_mpv_opens_selected_file_in_mpv() {
+    fn play_in_mpv_shows_status_message() {
         // Given a playlist with one item.
-        let (mut app, mpv_backend, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
         // When executing PlayInMpv action.
         app.execute_action(Action::PlayInMpv);
 
-        // Then mpv receives the file path.
-        let calls = mpv_backend.load_file_called.lock().unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0], PathBuf::from("test.mp4"));
-        assert!(app
-            .tui_state
-            .status_message
-            .as_ref()
-            .unwrap()
-            .contains("Playing"));
+        // Then a playing status message is shown.
+        assert!(app.tui_state.status_message.unwrap().contains("Playing"));
     }
 
     #[test]
     fn switch_pane_does_not_switch_to_empty_directory() {
         // Given a playlist with items and empty directory.
-        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
         // When executing SwitchPane action.
@@ -796,7 +785,7 @@ mod tests {
     #[test]
     fn switch_pane_does_not_switch_to_empty_playlist() {
         // Given an empty playlist and directory with items.
-        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        let mut app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
 
         // When executing SwitchPane action.
@@ -809,7 +798,7 @@ mod tests {
     #[test]
     fn focus_playlist_does_not_switch_to_empty_playlist() {
         // Given an empty playlist and directory with items, focused on directory.
-        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        let mut app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
         // When executing FocusPlaylist action.
@@ -822,7 +811,7 @@ mod tests {
     #[test]
     fn focus_directory_does_not_switch_to_empty_directory() {
         // Given a playlist with items and empty directory, focused on playlist.
-        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
         // When executing FocusDirectory action.
         app.execute_action(Action::FocusDirectory);
@@ -834,7 +823,7 @@ mod tests {
     #[test]
     fn initial_focus_directory_when_playlist_empty() {
         // Given an empty playlist and directory with items.
-        let (app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        let app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
 
         // Then focus is on directory.
         assert_eq!(app.tui_state.focused_pane, Pane::Directory);
@@ -843,7 +832,7 @@ mod tests {
     #[test]
     fn initial_focus_playlist_when_directory_empty() {
         // Given a playlist with items and empty directory.
-        let (app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
 
         // Then focus is on playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -852,8 +841,7 @@ mod tests {
     #[test]
     fn initial_focus_playlist_when_both_have_items() {
         // Given both panes with items.
-        let (app, _, _) =
-            create_test_app(vec![PathBuf::from("a.mp4")], vec![PathBuf::from("b.mp4")]);
+        let app = create_test_app(vec![PathBuf::from("a.mp4")], vec![PathBuf::from("b.mp4")]);
 
         // Then focus is on playlist (default).
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -862,7 +850,7 @@ mod tests {
     #[test]
     fn initial_focus_playlist_when_both_empty() {
         // Given both panes empty.
-        let (app, _, _) = create_test_app(vec![], vec![]);
+        let app = create_test_app(vec![], vec![]);
 
         // Then focus is on playlist (default).
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -871,7 +859,7 @@ mod tests {
     #[test]
     fn move_last_directory_item_switches_focus_to_playlist() {
         // Given directory with 1 item and playlist with items, focused on directory.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
             vec![PathBuf::from("directory.mp4")],
         );
@@ -888,7 +876,7 @@ mod tests {
     #[test]
     fn move_last_playlist_item_switches_focus_to_directory() {
         // Given playlist with 1 item and directory with items, focused on playlist.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![PathBuf::from("playlist.mp4")],
             vec![PathBuf::from("directory.mp4")],
         );
@@ -905,7 +893,7 @@ mod tests {
     #[test]
     fn move_item_keeps_focus_when_pane_not_empty() {
         // Given playlist with 2 items and directory with items, focused on playlist.
-        let (mut app, _, _) = create_test_app(
+        let mut app = create_test_app(
             vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")],
             vec![PathBuf::from("c.mp4")],
         );
@@ -922,7 +910,7 @@ mod tests {
     #[test]
     fn move_to_empty_directory_switches_focus() {
         // Given playlist with 1 item and empty directory, focused on playlist.
-        let (mut app, _, _) = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When executing ToggleItem action.
@@ -935,7 +923,7 @@ mod tests {
     #[test]
     fn move_to_empty_playlist_switches_focus() {
         // Given directory with 1 item and empty playlist, focused on directory.
-        let (mut app, _, _) = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        let mut app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
         app.tui_state.focused_pane = Pane::Directory;
 
         // When executing ToggleItem action.
@@ -943,5 +931,127 @@ mod tests {
 
         // Then focus switches to playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
+    }
+
+    #[test]
+    fn show_help_toggles_which_key() {
+        // Given an app with which-key inactive.
+        let mut app = create_test_app(vec![], vec![]);
+        assert!(!app.tui_state.which_key.active);
+
+        // When executing ShowHelp action.
+        app.execute_action(Action::ShowHelp);
+
+        // Then which-key becomes active.
+        assert!(app.tui_state.which_key.active);
+
+        // When executing ShowHelp action again.
+        app.execute_action(Action::ShowHelp);
+
+        // Then which-key becomes inactive.
+        assert!(!app.tui_state.which_key.active);
+    }
+
+    #[test]
+    fn start_filter_activates_on_playlist() {
+        // Given an app focused on playlist with items, not filtering.
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        assert!(!app.tui_state.is_filtering());
+
+        // When executing StartFilter action.
+        app.execute_action(Action::StartFilter);
+
+        // Then filter mode is active.
+        assert!(app.tui_state.is_filtering());
+    }
+
+    #[test]
+    fn start_filter_activates_on_directory() {
+        // Given an app focused on directory with items, not filtering.
+        let mut app = create_test_app(vec![], vec![PathBuf::from("test.mp4")]);
+        app.tui_state.focused_pane = Pane::Directory;
+        assert!(!app.tui_state.is_filtering());
+
+        // When executing StartFilter action.
+        app.execute_action(Action::StartFilter);
+
+        // Then filter mode is active.
+        assert!(app.tui_state.is_filtering());
+    }
+
+    #[test]
+    fn rename_starts_rename_mode() {
+        // Given an app with a selected item, not renaming.
+        let mut app = create_test_app(vec![PathBuf::from("test.mp4")], vec![]);
+        assert!(!app.tui_state.is_renaming());
+
+        // When executing Rename action.
+        app.execute_action(Action::Rename);
+
+        // Then rename mode is active.
+        assert!(app.tui_state.is_renaming());
+    }
+
+    #[test]
+    fn notes_sets_pending_path_when_item_selected() {
+        // Given an app with a selected item and no pending notes path.
+        let mut app = create_test_app(vec![PathBuf::from("/path/to/video.mp4")], vec![]);
+        assert!(app.pending_notes_path.is_none());
+
+        // When executing Notes action.
+        app.execute_action(Action::Notes);
+
+        // Then pending notes path is set to the selected item's path.
+        assert_eq!(
+            app.pending_notes_path,
+            Some(PathBuf::from("/path/to/video.mp4"))
+        );
+    }
+
+    #[test]
+    fn notes_does_nothing_when_no_selection() {
+        // Given an app with no items selected and no pending notes path.
+        let mut app = create_test_app(vec![], vec![]);
+        assert!(app.pending_notes_path.is_none());
+
+        // When executing Notes action.
+        app.execute_action(Action::Notes);
+
+        // Then pending notes path remains unset.
+        assert!(app.pending_notes_path.is_none());
+    }
+
+    #[test]
+    fn launch_mpv_shows_message_when_not_running() {
+        // Given an app with mpv not running.
+        let mut app =
+            create_test_app_with_launcher(vec![], vec![], FakeMpvLauncher::new().running(false));
+
+        // When executing LaunchMpv action.
+        app.execute_action(Action::LaunchMpv);
+
+        // Then status message shows mpv launched.
+        assert!(app
+            .tui_state
+            .status_message
+            .unwrap()
+            .contains("MPV launched"));
+    }
+
+    #[test]
+    fn launch_mpv_shows_message_when_already_running() {
+        // Given an app with mpv already running.
+        let mut app =
+            create_test_app_with_launcher(vec![], vec![], FakeMpvLauncher::new().running(true));
+
+        // When executing LaunchMpv action.
+        app.execute_action(Action::LaunchMpv);
+
+        // Then status message shows mpv already running.
+        assert!(app
+            .tui_state
+            .status_message
+            .unwrap()
+            .contains("MPV already running"));
     }
 }

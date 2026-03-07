@@ -68,7 +68,24 @@ impl MpvBackend for MpvipcBackend {
     }
 }
 
-pub fn is_mpv_running_with_socket(socket_path: &str) -> bool {
+pub trait MpvLauncher: Send + Sync {
+    fn is_running(&self, socket_path: &str) -> bool;
+    fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>>;
+}
+
+pub struct RealMpvLauncher;
+
+impl MpvLauncher for RealMpvLauncher {
+    fn is_running(&self, socket_path: &str) -> bool {
+        is_mpv_running_with_socket(socket_path)
+    }
+
+    fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>> {
+        spawn_mpv(socket_path)
+    }
+}
+
+fn is_mpv_running_with_socket(socket_path: &str) -> bool {
     let mut sys = System::new_all();
     sys.refresh_all();
 
@@ -86,12 +103,7 @@ pub fn is_mpv_running_with_socket(socket_path: &str) -> bool {
     false
 }
 
-/// Spawns a new MPV process with the given socket path.
-///
-/// # Errors
-///
-/// Returns an error if the MPV process fails to spawn.
-pub fn spawn_mpv(socket_path: &str) -> Result<(), Report<MpvError>> {
+fn spawn_mpv(socket_path: &str) -> Result<(), Report<MpvError>> {
     Command::new("mpv")
         .args([
             "--keep-open=yes",

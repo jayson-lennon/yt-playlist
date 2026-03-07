@@ -13,7 +13,7 @@ use mpv_playlist::{
     analysis,
     app::{App, DEFAULT_EXTENSIONS},
     media::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
-    mpv::{MpvBackend, MpvClient, MpvipcBackend},
+    mpv::{MpvBackend, MpvClient, MpvipcBackend, RealMpvLauncher},
     playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
     ui,
@@ -169,6 +169,7 @@ fn build_services(args: &Args, media_backend: Arc<dyn MediaQueryBackend>) -> Ser
         mpv: MpvClient::new(mpv_backend),
         media: MediaQuery::new(media_backend),
         storage: PlaylistStorage::new(storage_backend),
+        mpv_launcher: Arc::new(RealMpvLauncher),
     }
 }
 
