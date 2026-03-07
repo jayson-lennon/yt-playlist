@@ -61,3 +61,100 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let [area] = horizontal.areas(area);
     area
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_inactive_popup() {
+        // Given a new error popup.
+        let popup = ErrorPopup::new();
+
+        // Then it is inactive with empty message.
+        assert!(!popup.is_active());
+        assert!(popup.message.is_empty());
+    }
+
+    #[test]
+    fn default_creates_inactive_popup() {
+        // Given a default error popup.
+        let popup = ErrorPopup::default();
+
+        // Then it is inactive.
+        assert!(!popup.is_active());
+    }
+
+    #[test]
+    fn show_sets_message_and_activates() {
+        // Given an inactive popup.
+        let mut popup = ErrorPopup::new();
+
+        // When showing an error.
+        popup.show("Something went wrong".to_string());
+
+        // Then it is active with the message.
+        assert!(popup.is_active());
+        assert_eq!(popup.message, "Something went wrong");
+    }
+
+    #[test]
+    fn dismiss_clears_message_and_deactivates() {
+        // Given an active popup with a message.
+        let mut popup = ErrorPopup::new();
+        popup.show("Error message".to_string());
+
+        // When dismissing.
+        popup.dismiss();
+
+        // Then it is inactive with empty message.
+        assert!(!popup.is_active());
+        assert!(popup.message.is_empty());
+    }
+
+    #[test]
+    fn show_replaces_existing_message() {
+        // Given an active popup with a message.
+        let mut popup = ErrorPopup::new();
+        popup.show("First error".to_string());
+
+        // When showing a new error.
+        popup.show("Second error".to_string());
+
+        // Then the message is replaced.
+        assert!(popup.is_active());
+        assert_eq!(popup.message, "Second error");
+    }
+
+    #[test]
+    fn dismiss_when_inactive_does_nothing() {
+        // Given an inactive popup.
+        let mut popup = ErrorPopup::new();
+
+        // When dismissing.
+        popup.dismiss();
+
+        // Then it remains inactive.
+        assert!(!popup.is_active());
+    }
+
+    #[test]
+    fn show_dismiss_cycle() {
+        // Given a popup.
+        let mut popup = ErrorPopup::new();
+
+        // When doing multiple show/dismiss cycles.
+        popup.show("Error 1".to_string());
+        assert!(popup.is_active());
+        popup.dismiss();
+        assert!(!popup.is_active());
+
+        popup.show("Error 2".to_string());
+        assert!(popup.is_active());
+        popup.dismiss();
+        assert!(!popup.is_active());
+
+        // Then state is clean.
+        assert!(popup.message.is_empty());
+    }
+}

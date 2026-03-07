@@ -299,3 +299,248 @@ impl Default for Keymap {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::Pane;
+
+    #[test]
+    fn key_display_shows_char() {
+        // Given a key binding with a character.
+        let binding = KeyBinding::new(
+            KeyCode::Char('a'),
+            Action::Quit,
+            "quit",
+            KeyCategory::General,
+            KeyContext::Global,
+        );
+
+        // When displaying the key.
+        let display = binding.key_display();
+
+        // Then the character is shown.
+        assert_eq!(display, "a");
+    }
+
+    #[test]
+    fn key_display_shows_space() {
+        // Given a key binding with space.
+        let binding = KeyBinding::new(
+            KeyCode::Char(' '),
+            Action::ToggleItem,
+            "toggle",
+            KeyCategory::ItemActions,
+            KeyContext::Global,
+        );
+
+        // When displaying the key.
+        let display = binding.key_display();
+
+        // Then "Space" is shown.
+        assert_eq!(display, "Space");
+    }
+
+    #[rstest::rstest]
+    #[case(KeyCode::Tab, "Tab")]
+    #[case(KeyCode::Enter, "Enter")]
+    #[case(KeyCode::Backspace, "Bksp")]
+    #[case(KeyCode::Esc, "Esc")]
+    #[case(KeyCode::Up, "Up")]
+    #[case(KeyCode::Down, "Down")]
+    #[case(KeyCode::Left, "Left")]
+    #[case(KeyCode::Right, "Right")]
+    #[case(KeyCode::Home, "Home")]
+    #[case(KeyCode::End, "End")]
+    #[case(KeyCode::PageUp, "PgUp")]
+    #[case(KeyCode::PageDown, "PgDn")]
+    fn key_display_special_keys(#[case] key: KeyCode, #[case] expected: &str) {
+        let binding = KeyBinding::new(
+            key,
+            Action::Quit,
+            "test",
+            KeyCategory::General,
+            KeyContext::Global,
+        );
+        assert_eq!(binding.key_display(), expected);
+    }
+
+    #[test]
+    fn get_action_returns_action_for_global_context() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for a global key.
+        let action = keymap.get_action(KeyCode::Char('q'), KeyModifiers::empty(), Pane::Playlist);
+
+        // Then the action is returned.
+        assert_eq!(action, Some(Action::Quit));
+    }
+
+    #[test]
+    fn get_action_returns_action_in_directory_pane() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for a global key in directory pane.
+        let action = keymap.get_action(KeyCode::Char('q'), KeyModifiers::empty(), Pane::Directory);
+
+        // Then the action is returned.
+        assert_eq!(action, Some(Action::Quit));
+    }
+
+    #[test]
+    fn get_action_respects_playlist_context() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for a playlist-only key in playlist pane.
+        let action = keymap.get_action(KeyCode::Char('J'), KeyModifiers::empty(), Pane::Playlist);
+
+        // Then the action is returned.
+        assert_eq!(action, Some(Action::ReorderDown));
+    }
+
+    #[test]
+    fn get_action_blocks_playlist_context_in_directory() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for a playlist-only key in directory pane.
+        let action = keymap.get_action(KeyCode::Char('J'), KeyModifiers::empty(), Pane::Directory);
+
+        // Then no action is returned.
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn get_action_respects_directory_context() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for a directory-only key in directory pane.
+        let action = keymap.get_action(KeyCode::Char('H'), KeyModifiers::empty(), Pane::Directory);
+
+        // Then the action is returned.
+        assert_eq!(action, Some(Action::MoveToPlaylist));
+    }
+
+    #[test]
+    fn get_action_blocks_directory_context_in_playlist() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for a directory-only key in playlist pane.
+        let action = keymap.get_action(KeyCode::Char('H'), KeyModifiers::empty(), Pane::Playlist);
+
+        // Then no action is returned.
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn get_action_returns_none_for_unbound_key() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting action for an unbound key.
+        let action = keymap.get_action(KeyCode::Char('x'), KeyModifiers::empty(), Pane::Playlist);
+
+        // Then no action is returned.
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn get_bindings_for_pane_includes_global_bindings() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting bindings for playlist pane.
+        let bindings = keymap.get_bindings_for_pane(Pane::Playlist);
+
+        // Then global bindings are included.
+        assert!(bindings.iter().any(|b| b.action == Action::Quit));
+    }
+
+    #[test]
+    fn get_bindings_for_playlist_pane_includes_playlist_bindings() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting bindings for playlist pane.
+        let bindings = keymap.get_bindings_for_pane(Pane::Playlist);
+
+        // Then playlist-specific bindings are included.
+        assert!(bindings.iter().any(|b| b.action == Action::ReorderUp));
+    }
+
+    #[test]
+    fn get_bindings_for_directory_pane_excludes_playlist_bindings() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting bindings for directory pane.
+        let bindings = keymap.get_bindings_for_pane(Pane::Directory);
+
+        // Then playlist-specific bindings are excluded.
+        assert!(!bindings.iter().any(|b| b.action == Action::ReorderUp));
+    }
+
+    #[test]
+    fn get_bindings_for_directory_pane_includes_directory_bindings() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting bindings for directory pane.
+        let bindings = keymap.get_bindings_for_pane(Pane::Directory);
+
+        // Then directory-specific bindings are included.
+        assert!(bindings.iter().any(|b| b.action == Action::MoveToPlaylist));
+    }
+
+    #[test]
+    fn get_prefix_binding_returns_binding() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting prefix binding for 'g'.
+        let binding = keymap.get_prefix_binding('g');
+
+        // Then the binding is returned.
+        assert!(binding.is_some());
+        assert_eq!(binding.unwrap().prefix, 'g');
+    }
+
+    #[test]
+    fn get_prefix_binding_returns_none_for_unknown() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting prefix binding for unknown prefix.
+        let binding = keymap.get_prefix_binding('x');
+
+        // Then none is returned.
+        assert!(binding.is_none());
+    }
+
+    #[test]
+    fn get_prefix_bindings_returns_all() {
+        // Given a keymap.
+        let keymap = Keymap::new();
+
+        // When getting all prefix bindings.
+        let bindings = keymap.get_prefix_bindings();
+
+        // Then at least one binding exists.
+        assert!(!bindings.is_empty());
+    }
+
+    #[test]
+    fn default_creates_keymap() {
+        // Given a default keymap.
+        let keymap = Keymap::default();
+
+        // Then it has bindings.
+        let bindings = keymap.get_bindings_for_pane(Pane::Playlist);
+        assert!(!bindings.is_empty());
+    }
+}

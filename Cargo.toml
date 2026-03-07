@@ -35,3 +35,4 @@ sysinfo = "0.38"
 
 [dev-dependencies]
 rstest = "0.24"
+tempfile = "3.26.0"

@@ -217,3 +217,379 @@ impl Default for PlaylistPane {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn item(path: &str) -> PlaylistItem {
+        PlaylistItem {
+            path: PathBuf::from(path),
+            duration: None,
+            alias: None,
+        }
+    }
+
+    fn item_with_alias(path: &str, alias: &str) -> PlaylistItem {
+        PlaylistItem {
+            path: PathBuf::from(path),
+            duration: None,
+            alias: Some(alias.to_string()),
+        }
+    }
+
+    #[test]
+    fn new_creates_empty_pane() {
+        // Given a new playlist pane.
+        let pane = PlaylistPane::new();
+
+        // Then it is empty with selection at 0.
+        assert!(pane.items.is_empty());
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn move_up_decrements_selection() {
+        // Given a pane with 3 items, selection at index 1.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 1;
+
+        // When moving up.
+        pane.move_up();
+
+        // Then selection decrements.
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn move_up_stays_at_first_item() {
+        // Given a pane with selection at first item.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.selected = 0;
+
+        // When moving up.
+        pane.move_up();
+
+        // Then selection stays at 0.
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn move_down_increments_selection() {
+        // Given a pane with 3 items, selection at index 0.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 0;
+
+        // When moving down.
+        pane.move_down();
+
+        // Then selection increments.
+        assert_eq!(pane.selected, 1);
+    }
+
+    #[test]
+    fn move_down_stays_at_last_item() {
+        // Given a pane with selection at last item.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.selected = 1;
+
+        // When moving down.
+        pane.move_down();
+
+        // Then selection stays at last index.
+        assert_eq!(pane.selected, 1);
+    }
+
+    #[test]
+    fn move_up_with_filter_navigates_filtered_list() {
+        // Given a pane with filter applied.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.filter.applied = Some("ap".to_string());
+        pane.selected = 1;
+
+        // When moving up.
+        pane.move_up();
+
+        // Then selection moves within filtered results.
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn move_down_with_filter_navigates_filtered_list() {
+        // Given a pane with filter applied.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.filter.applied = Some("ap".to_string());
+        pane.selected = 0;
+
+        // When moving down.
+        pane.move_down();
+
+        // Then selection moves within filtered results.
+        assert_eq!(pane.selected, 1);
+    }
+
+    #[test]
+    fn reorder_up_swaps_with_previous_item() {
+        // Given a pane with 3 items, middle selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 1;
+
+        // When reordering up.
+        pane.reorder_up();
+
+        // Then items are swapped and selection follows.
+        assert_eq!(pane.selected, 0);
+        assert_eq!(pane.items[0].path, PathBuf::from("b.mp4"));
+        assert_eq!(pane.items[1].path, PathBuf::from("a.mp4"));
+    }
+
+    #[test]
+    fn reorder_up_does_nothing_at_first_item() {
+        // Given a pane with first item selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.selected = 0;
+
+        // When reordering up.
+        pane.reorder_up();
+
+        // Then nothing changes.
+        assert_eq!(pane.selected, 0);
+        assert_eq!(pane.items[0].path, PathBuf::from("a.mp4"));
+    }
+
+    #[test]
+    fn reorder_down_swaps_with_next_item() {
+        // Given a pane with 3 items, first selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 0;
+
+        // When reordering down.
+        pane.reorder_down();
+
+        // Then items are swapped and selection follows.
+        assert_eq!(pane.selected, 1);
+        assert_eq!(pane.items[0].path, PathBuf::from("b.mp4"));
+        assert_eq!(pane.items[1].path, PathBuf::from("a.mp4"));
+    }
+
+    #[test]
+    fn reorder_down_does_nothing_at_last_item() {
+        // Given a pane with last item selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.selected = 1;
+
+        // When reordering down.
+        pane.reorder_down();
+
+        // Then nothing changes.
+        assert_eq!(pane.selected, 1);
+        assert_eq!(pane.items[1].path, PathBuf::from("b.mp4"));
+    }
+
+    #[test]
+    fn add_appends_new_item() {
+        // Given an empty pane.
+        let mut pane = PlaylistPane::new();
+
+        // When adding an item.
+        pane.add(item("test.mp4"));
+
+        // Then item is added.
+        assert_eq!(pane.items.len(), 1);
+        assert_eq!(pane.items[0].path, PathBuf::from("test.mp4"));
+    }
+
+    #[test]
+    fn add_prevents_duplicates() {
+        // Given a pane with one item.
+        let mut pane = PlaylistPane::new();
+        pane.add(item("test.mp4"));
+
+        // When adding the same item again.
+        pane.add(item("test.mp4"));
+
+        // Then item is not duplicated.
+        assert_eq!(pane.items.len(), 1);
+    }
+
+    #[test]
+    fn add_allows_different_paths() {
+        // Given a pane with one item.
+        let mut pane = PlaylistPane::new();
+        pane.add(item("a.mp4"));
+
+        // When adding a different item.
+        pane.add(item("b.mp4"));
+
+        // Then both items exist.
+        assert_eq!(pane.items.len(), 2);
+    }
+
+    #[test]
+    fn remove_deletes_selected_item() {
+        // Given a pane with 3 items, middle selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 1;
+
+        // When removing.
+        pane.remove();
+
+        // Then selected item is removed.
+        assert_eq!(pane.items.len(), 2);
+        assert_eq!(pane.items[0].path, PathBuf::from("a.mp4"));
+        assert_eq!(pane.items[1].path, PathBuf::from("c.mp4"));
+    }
+
+    #[test]
+    fn remove_adjusts_selection_when_at_end() {
+        // Given a pane with 2 items, last selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.selected = 1;
+
+        // When removing.
+        pane.remove();
+
+        // Then selection is adjusted.
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn remove_with_filter_removes_correct_item() {
+        // Given a pane with filter applied.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.filter.applied = Some("ap".to_string());
+        pane.selected = 1;
+
+        // When removing (should remove apricot, index 2 in original).
+        pane.remove();
+
+        // Then correct item is removed.
+        assert_eq!(pane.items.len(), 2);
+        assert!(pane
+            .items
+            .iter()
+            .all(|i| i.path != PathBuf::from("apricot.mp4")));
+    }
+
+    #[test]
+    fn selected_item_returns_current_selection() {
+        // Given a pane with items.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.selected = 1;
+
+        // When getting selected item.
+        let selected = pane.selected_item();
+
+        // Then correct item is returned.
+        assert_eq!(selected.unwrap().path, PathBuf::from("b.mp4"));
+    }
+
+    #[test]
+    fn selected_item_returns_none_when_empty() {
+        // Given an empty pane.
+        let pane = PlaylistPane::new();
+
+        // When getting selected item.
+        let selected = pane.selected_item();
+
+        // Then none is returned.
+        assert!(selected.is_none());
+    }
+
+    #[test]
+    fn selected_item_with_filter_returns_filtered_item() {
+        // Given a pane with filter applied.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.filter.applied = Some("ap".to_string());
+        pane.selected = 0;
+
+        // When getting selected item.
+        let selected = pane.selected_item();
+
+        // Then first filtered item is returned (apple or apricot depending on score).
+        assert!(selected.is_some());
+    }
+
+    #[test]
+    fn selected_item_mut_allows_modification() {
+        // Given a pane with items.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("test.mp4")];
+
+        // When modifying selected item.
+        if let Some(item) = pane.selected_item_mut() {
+            item.alias = Some("My Alias".to_string());
+        }
+
+        // Then item is modified.
+        assert_eq!(pane.items[0].alias, Some("My Alias".to_string()));
+    }
+
+    #[test]
+    fn paths_returns_all_paths() {
+        // Given a pane with items.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+
+        // When getting paths.
+        let paths = pane.paths();
+
+        // Then all paths are returned.
+        assert_eq!(paths.len(), 2);
+        assert_eq!(*paths[0], PathBuf::from("a.mp4"));
+        assert_eq!(*paths[1], PathBuf::from("b.mp4"));
+    }
+
+    #[test]
+    fn get_filtered_returns_all_when_no_filter() {
+        // Given a pane without filter.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4")];
+
+        // When getting filtered.
+        let filtered = pane.get_filtered();
+
+        // Then all items are returned.
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn get_filtered_filters_by_pattern() {
+        // Given a pane with filter applied.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("cherry.mp4")];
+        pane.filter.applied = Some("an".to_string());
+
+        // When getting filtered.
+        let filtered = pane.get_filtered();
+
+        // Then only matching items are returned.
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].1.path, PathBuf::from("banana.mp4"));
+    }
+
+    #[test]
+    fn default_creates_empty_pane() {
+        // Given a default pane.
+        let pane = PlaylistPane::default();
+
+        // Then it is empty.
+        assert!(pane.items.is_empty());
+    }
+}
