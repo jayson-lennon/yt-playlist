@@ -170,6 +170,10 @@ fn run_app(
     app: &mut App,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
+        if app.tui_state.needs_clear {
+            terminal.clear()?;
+            app.tui_state.needs_clear = false;
+        }
         let keymap = app.keymap.clone();
         terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
 

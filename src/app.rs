@@ -274,6 +274,7 @@ impl App {
             if self.tui_state.directory_pane.items.is_empty() {
                 self.tui_state.focused_pane = Pane::Playlist;
             }
+            self.tui_state.needs_clear = true;
         }
     }
 
@@ -288,6 +289,7 @@ impl App {
             if self.tui_state.playlist_pane.items.is_empty() {
                 self.tui_state.focused_pane = Pane::Directory;
             }
+            self.tui_state.needs_clear = true;
         }
     }
 

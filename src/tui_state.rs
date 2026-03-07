@@ -9,6 +9,7 @@ pub struct TuiState {
     pub status_message: Option<String>,
     pub rename: Rename,
     pub which_key: WhichKey,
+    pub needs_clear: bool,
 }
 
 impl TuiState {
@@ -20,6 +21,7 @@ impl TuiState {
             status_message: None,
             rename: Rename::new(),
             which_key: WhichKey::default(),
+            needs_clear: false,
         }
     }
 
