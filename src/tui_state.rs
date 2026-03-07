@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::ui::{DirectoryPane, Pane, PlaylistItem, PlaylistPane, Rename, WhichKey};
+use crate::ui::{DirectoryPane, ErrorPopup, Pane, PlaylistItem, PlaylistPane, Rename, WhichKey};
 
 pub struct TuiState {
     pub playlist_pane: PlaylistPane,
@@ -10,6 +10,7 @@ pub struct TuiState {
     pub rename: Rename,
     pub which_key: WhichKey,
     pub needs_clear: bool,
+    pub error_popup: ErrorPopup,
 }
 
 impl TuiState {
@@ -22,6 +23,7 @@ impl TuiState {
             rename: Rename::new(),
             which_key: WhichKey::default(),
             needs_clear: false,
+            error_popup: ErrorPopup::new(),
         }
     }
 
@@ -206,6 +208,18 @@ impl TuiState {
 
     pub fn get_filtered_directory(&self) -> Vec<(usize, &PlaylistItem)> {
         self.directory_pane.get_filtered()
+    }
+
+    pub fn show_error(&mut self, message: String) {
+        self.error_popup.show(message);
+    }
+
+    pub fn dismiss_error(&mut self) {
+        self.error_popup.dismiss();
+    }
+
+    pub fn is_showing_error(&self) -> bool {
+        self.error_popup.is_active()
     }
 }
 

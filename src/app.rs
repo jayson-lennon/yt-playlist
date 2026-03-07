@@ -67,7 +67,8 @@ impl App {
                 self.refresh_directory();
             }
             Err(e) => {
-                self.tui_state.status_message = Some(format!("Failed to load playlist: {e:?}"));
+                self.tui_state
+                    .show_error(format!("Failed to load playlist: {e:?}"));
             }
         }
     }
@@ -108,7 +109,8 @@ impl App {
                 self.tui_state.status_message = Some("Playlist saved".to_string());
             }
             Err(e) => {
-                self.tui_state.status_message = Some(format!("Failed to save playlist: {e:?}"));
+                self.tui_state
+                    .show_error(format!("Failed to save playlist: {e:?}"));
             }
         }
     }
@@ -140,8 +142,14 @@ impl App {
     #[allow(clippy::too_many_lines)]
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
+            self.tui_state.status_message = None;
             if self.tui_state.which_key.active {
                 self.tui_state.which_key.dismiss();
+                return;
+            }
+
+            if self.tui_state.is_showing_error() {
+                self.tui_state.dismiss_error();
                 return;
             }
 
@@ -301,7 +309,8 @@ impl App {
                         Some(format!("Playing: {}", item.path.display()));
                 }
                 Err(e) => {
-                    self.tui_state.status_message = Some(format!("Failed to open in mpv: {e:?}"));
+                    self.tui_state
+                        .show_error(format!("Failed to open in mpv: {e:?}"));
                 }
             }
         }

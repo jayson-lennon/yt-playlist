@@ -1,5 +1,6 @@
 mod common;
 mod directory_pane;
+mod error_popup;
 mod filter;
 mod playlist_pane;
 mod rename;
@@ -15,6 +16,7 @@ use ratatui::{
 
 pub use common::{Pane, PlaylistItem};
 pub use directory_pane::DirectoryPane;
+pub use error_popup::ErrorPopup;
 pub use filter::Filter;
 pub use playlist_pane::PlaylistPane;
 pub use rename::Rename;
@@ -51,5 +53,9 @@ pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState, keymap: &Ke
 
     if state.which_key.active {
         state.which_key.render(frame, keymap, state.focused_pane);
+    }
+
+    if state.is_showing_error() {
+        state.error_popup.render(frame);
     }
 }

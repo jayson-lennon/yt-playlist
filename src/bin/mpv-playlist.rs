@@ -6,6 +6,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use error_stack::{fmt::ColorMode, Report};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 use mpv_playlist::{
@@ -40,6 +41,8 @@ struct Args {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Report::set_color_mode(ColorMode::None);
+
     let args = Args::parse();
     let extensions = parse_extensions(&args);
 
