@@ -1555,6 +1555,7 @@ dependencies = [
  "shell-escape",
  "sysinfo",
  "tempfile",
+ "temptree",
  "tokio",
  "toml",
  "wherror",
@@ -1699,6 +1700,15 @@ dependencies = [
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "temptree"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fda94d8251b40088cb769576f436da19ac1d1ae792c97d0afe1cadc890c8630"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]

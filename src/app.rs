@@ -1620,4 +1620,139 @@ mod tests {
         assert!(app.tui_state.playlist_pane.items.is_empty());
         assert!(app.tui_state.library_pane.items.is_empty());
     }
+
+    #[test]
+    fn refresh_library_preserves_virtual_items() {
+        // Given a temp directory with one file and an app with a virtual item.
+        let tree = temptree::temptree! {
+            "real.mp4": "video content",
+        };
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(tree.path()).unwrap();
+
+        let mut app = TestAppBuilder::new().build();
+        let url = PathBuf::from("https://example.com/video.mp4");
+        app.tui_state.library_pane.items.push(PlaylistItem {
+            path: url.clone(),
+            duration: None,
+            alias: None,
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        });
+
+        // When refreshing the library.
+        app.refresh_library();
+
+        // Then both the virtual item and real file are present.
+        assert_eq!(app.tui_state.library_pane.items.len(), 2);
+        assert!(app
+            .tui_state
+            .library_pane
+            .items
+            .iter()
+            .any(|i| i.path == url && i.is_virtual));
+        assert!(app
+            .tui_state
+            .library_pane
+            .items
+            .iter()
+            .any(|i| i.path.file_name().unwrap() == "real.mp4" && !i.is_virtual));
+
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn refresh_library_removes_missing_non_virtual_items() {
+        // Given a temp directory with no files and an app with a non-virtual item.
+        let tree = temptree::temptree! {};
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(tree.path()).unwrap();
+
+        let mut app = TestAppBuilder::new().build();
+        app.tui_state.library_pane.items.push(PlaylistItem {
+            path: PathBuf::from("/nonexistent/file.mp4"),
+            duration: None,
+            alias: None,
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+        });
+
+        // When refreshing the library.
+        app.refresh_library();
+
+        // Then the missing non-virtual item is removed.
+        assert!(app.tui_state.library_pane.items.is_empty());
+
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn delete_action_removes_virtual_item_from_library() {
+        // Given an app with a virtual item in the library.
+        let mut app = TestAppBuilder::new().build();
+        let url = PathBuf::from("https://example.com/video.mp4");
+        app.tui_state.library_pane.items.push(PlaylistItem {
+            path: url.clone(),
+            duration: None,
+            alias: None,
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        });
+        app.tui_state.focused_pane = Pane::Library;
+
+        // When executing Delete action.
+        app.execute_action(Action::Delete);
+
+        // Then the virtual item is removed.
+        assert!(app.tui_state.library_pane.items.is_empty());
+    }
+
+    #[test]
+    fn delete_action_rejected_for_non_virtual_items() {
+        // Given an app with a non-virtual item in the library.
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path().to_path_buf();
+        let mut app = TestAppBuilder::new()
+            .library_items(vec![temp_path.clone()])
+            .build();
+        app.tui_state.focused_pane = Pane::Library;
+
+        // When executing Delete action.
+        app.execute_action(Action::Delete);
+
+        // Then the item is NOT removed (only virtual items can be deleted).
+        assert_eq!(app.tui_state.library_pane.items.len(), 1);
+        assert!(app
+            .tui_state
+            .status_message
+            .clone()
+            .unwrap()
+            .contains("virtual"));
+    }
+
+    #[test]
+    fn toggle_item_preserves_virtual_when_moving_to_playlist() {
+        // Given a library with a virtual item.
+        let mut app = TestAppBuilder::new().build();
+        let url = PathBuf::from("https://youtube.com/watch?v=test");
+        app.tui_state.library_pane.items.push(PlaylistItem {
+            path: url.clone(),
+            duration: Some(std::time::Duration::from_secs(180)),
+            alias: Some("Test Video".to_string()),
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        });
+        app.tui_state.focused_pane = Pane::Library;
+
+        // When toggling (moving to playlist).
+        app.execute_action(Action::ToggleItem);
+
+        // Then the virtual item is in the playlist with all properties.
+        assert!(app.tui_state.library_pane.items.is_empty());
+        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
+        let item = &app.tui_state.playlist_pane.items[0];
+        assert_eq!(item.path, url);
+        assert!(item.is_virtual);
+        assert_eq!(item.alias, Some("Test Video".to_string()));
+    }
 }
