@@ -26,10 +26,17 @@ pub struct App {
     pub keymap: Keymap,
     /// Path to mpv's IPC socket for remote control communication.
     pub socket_path: String,
+    /// Directory path for scanning library files.
+    pub library_path: PathBuf,
 }
 
 impl App {
-    pub fn new(services: Services, config: Config, socket_path: String) -> Self {
+    pub fn new(
+        services: Services,
+        config: Config,
+        socket_path: String,
+        library_path: PathBuf,
+    ) -> Self {
         let mut app = Self {
             services,
             tui_state: TuiState::new(),
@@ -39,6 +46,7 @@ impl App {
             pending_fuzzy_notes: false,
             keymap: Keymap::new(),
             socket_path,
+            library_path,
         };
         app.load_playlist();
         app.refresh_library();
@@ -169,7 +177,7 @@ impl App {
 
     pub fn refresh_library(&mut self) {
         let mut entries = Vec::new();
-        if let Ok(read_dir) = std::fs::read_dir(".") {
+        if let Ok(read_dir) = std::fs::read_dir(&self.library_path) {
             for entry in read_dir.flatten() {
                 let path = entry.path();
                 if path.is_file() {
@@ -636,6 +644,7 @@ mod tests {
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
         library_items: Vec<PathBuf>,
+        library_path: PathBuf,
         mpv_launcher: FakeMpvLauncher,
         mpv_backend: FakeMpvBackend,
         media_backend: FakeMediaBackend,
@@ -648,6 +657,7 @@ mod tests {
             Self {
                 playlist_items: vec![],
                 library_items: vec![],
+                library_path: PathBuf::from("."),
                 mpv_launcher: FakeMpvLauncher::new(),
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
@@ -663,6 +673,11 @@ mod tests {
 
         fn library_items(mut self, items: Vec<PathBuf>) -> Self {
             self.library_items = items;
+            self
+        }
+
+        fn library_path(mut self, path: PathBuf) -> Self {
+            self.library_path = path;
             self
         }
 
@@ -705,6 +720,7 @@ mod tests {
                 pending_fuzzy_notes: false,
                 keymap: Keymap::new(),
                 socket_path: String::from("/tmp/mpvsocket"),
+                library_path: self.library_path,
             };
 
             for path in self.playlist_items {
@@ -1635,10 +1651,10 @@ mod tests {
         let tree = temptree::temptree! {
             "real.mp4": "video content",
         };
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(tree.path()).unwrap();
 
-        let mut app = TestAppBuilder::new().build();
+        let mut app = TestAppBuilder::new()
+            .library_path(tree.path().to_path_buf())
+            .build();
         let url = PathBuf::from("https://example.com/video.mp4");
         app.tui_state.library_pane.items.push(PlaylistItem {
             path: url.clone(),
@@ -1665,18 +1681,16 @@ mod tests {
             .items
             .iter()
             .any(|i| i.path.file_name().unwrap() == "real.mp4" && !i.is_virtual));
-
-        std::env::set_current_dir(original_dir).unwrap();
     }
 
     #[test]
     fn refresh_library_removes_missing_non_virtual_items() {
         // Given a temp directory with no files and an app with a non-virtual item.
         let tree = temptree::temptree! {};
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(tree.path()).unwrap();
 
-        let mut app = TestAppBuilder::new().build();
+        let mut app = TestAppBuilder::new()
+            .library_path(tree.path().to_path_buf())
+            .build();
         app.tui_state.library_pane.items.push(PlaylistItem {
             path: PathBuf::from("/nonexistent/file.mp4"),
             duration: None,
@@ -1690,8 +1704,6 @@ mod tests {
 
         // Then the missing non-virtual item is removed.
         assert!(app.tui_state.library_pane.items.is_empty());
-
-        std::env::set_current_dir(original_dir).unwrap();
     }
 
     #[test]

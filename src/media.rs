@@ -166,20 +166,19 @@ mod tests {
     #[test]
     fn cached_backend_uses_canonical_path_for_lookup() {
         // Given a cached backend with canonical path in cache.
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let canonical_path = temp_file.path().canonicalize().unwrap();
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
-        cache.insert(
-            std::fs::canonicalize(".").unwrap().join("test.mp4"),
-            Duration::from_secs(60),
-        );
+        cache.insert(canonical_path.clone(), Duration::from_secs(60));
         let cached = CachedMediaBackend::new(cache, fake.clone());
 
-        // When getting duration with relative path.
-        let result = cached.get_duration(&path("test.mp4"));
+        // When getting duration with the same path (canonicalized internally).
+        let result = cached.get_duration(&canonical_path);
 
-        // Then cache is used if canonical path matches.
-        // Note: This test may hit fallback if file doesn't exist
-        let _ = result;
+        // Then cached value is returned without calling fallback.
+        assert_eq!(result.unwrap(), Duration::from_secs(60));
+        assert_eq!(fake.call_count.load(Ordering::SeqCst), 0);
     }
 
     #[test]

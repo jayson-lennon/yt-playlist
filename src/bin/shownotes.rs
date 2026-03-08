@@ -52,6 +52,10 @@ enum Commands {
         /// mpv socket path
         #[arg(long, default_value = "/tmp/mpvsocket")]
         socket: PathBuf,
+
+        /// Directory path for library scanning
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
     },
 
     /// Perform an action on a file
@@ -128,8 +132,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match args.command.unwrap_or(Commands::Tui {
         playlist: PathBuf::from("shownotes.toml"),
         socket: PathBuf::from("/tmp/mpvsocket"),
+        path: PathBuf::from("."),
     }) {
-        Commands::Tui { playlist, socket } => run_tui(playlist, socket, &args.db_path),
+        Commands::Tui { playlist, socket, path } => run_tui(playlist, socket, &args.db_path, path),
         Commands::Action { action } => match action {
             ActionCommands::Mpv { path, socket } => run_action_mpv(&path, &socket),
         },
@@ -364,6 +369,7 @@ fn run_tui(
     playlist: PathBuf,
     socket: PathBuf,
     db_path: &Path,
+    library_path: PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = load()?;
 
@@ -372,7 +378,7 @@ fn run_tui(
     let playlist_storage = PlaylistStorage::new(storage_backend.clone());
 
     let playlist_data = playlist_storage.load()?;
-    let all_files = collect_all_files(&playlist_data, &config);
+    let all_files = collect_all_files(&playlist_data, &config, &library_path);
     let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
 
     let result =
@@ -399,7 +405,7 @@ fn run_tui(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(services, config, socket.to_string_lossy().into_owned());
+    let mut app = App::new(services, config, socket.to_string_lossy().into_owned(), library_path);
     let res = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;
@@ -417,7 +423,7 @@ fn run_tui(
     Ok(())
 }
 
-fn collect_all_files(playlist_data: &PlaylistData, config: &Config) -> Vec<PathBuf> {
+fn collect_all_files(playlist_data: &PlaylistData, config: &Config, library_path: &Path) -> Vec<PathBuf> {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
     for path in &playlist_data.playlist {
@@ -440,7 +446,7 @@ fn collect_all_files(playlist_data: &PlaylistData, config: &Config) -> Vec<PathB
         }
     }
 
-    if let Ok(read_dir) = std::fs::read_dir(".") {
+    if let Ok(read_dir) = std::fs::read_dir(library_path) {
         for entry in read_dir.flatten() {
             let path = entry.path();
             if path.is_file() && config.is_video_or_audio(&path) {
