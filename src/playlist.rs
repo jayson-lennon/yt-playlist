@@ -55,10 +55,17 @@ pub struct PlaylistData {
     pub files: HashMap<PathBuf, FileMetadata>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 pub trait PlaylistStorageBackend: Send + Sync {
     fn name(&self) -> &'static str;
+
+    /// # Errors
+    ///
+    /// Returns an error if the playlist data cannot be loaded from storage.
     fn load(&self) -> Result<PlaylistData, Report<IoError>>;
+
+    /// # Errors
+    ///
+    /// Returns an error if the playlist data cannot be saved to storage.
     fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>>;
 }
 
@@ -68,16 +75,21 @@ pub struct PlaylistStorage {
     backend: Arc<dyn PlaylistStorageBackend>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl PlaylistStorage {
     pub fn new(backend: Arc<dyn PlaylistStorageBackend>) -> Self {
         Self { backend }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the playlist data cannot be loaded from the backend.
     pub fn load(&self) -> Result<PlaylistData, Report<IoError>> {
         self.backend.load()
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the playlist data cannot be saved to the backend.
     pub fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
         self.backend.save(data)
     }

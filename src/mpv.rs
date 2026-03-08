@@ -16,10 +16,17 @@ use wherror::Error;
 #[error(debug)]
 pub struct MpvError;
 
-#[allow(clippy::missing_errors_doc)]
 pub trait MpvBackend: Send + Sync {
     fn name(&self) -> &'static str;
+
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be loaded into mpv.
     fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>>;
+
+    /// # Errors
+    ///
+    /// Returns an error if the playlist cannot be loaded into mpv.
     fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>>;
 }
 
@@ -29,16 +36,21 @@ pub struct MpvClient {
     backend: Arc<dyn MpvBackend>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl MpvClient {
     pub fn new(backend: Arc<dyn MpvBackend>) -> Self {
         Self { backend }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be loaded by the backend.
     pub fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>> {
         self.backend.load_file(path)
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the playlist cannot be loaded by the backend.
     pub fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
         self.backend.load_playlist(paths)
     }
@@ -99,10 +111,13 @@ impl MpvBackend for MpvipcBackend {
     }
 }
 
-#[allow(clippy::missing_errors_doc)]
 pub trait MpvLauncher: Send + Sync {
     fn name(&self) -> &'static str;
     fn is_running(&self, socket_path: &str) -> bool;
+
+    /// # Errors
+    ///
+    /// Returns an error if mpv cannot be spawned.
     fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>>;
 }
 
@@ -112,7 +127,6 @@ pub struct MpvLauncherService {
     backend: Arc<dyn MpvLauncher>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl MpvLauncherService {
     pub fn new(backend: Arc<dyn MpvLauncher>) -> Self {
         Self { backend }
@@ -122,6 +136,9 @@ impl MpvLauncherService {
         self.backend.is_running(socket_path)
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if mpv cannot be spawned by the backend.
     pub fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>> {
         self.backend.spawn(socket_path)
     }

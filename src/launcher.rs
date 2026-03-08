@@ -18,9 +18,13 @@ pub struct LaunchResult {
     pub used_default_opener: bool,
 }
 
-#[allow(clippy::missing_errors_doc)]
 pub trait Launcher: Send + Sync {
     fn name(&self) -> &'static str;
+
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be launched, either due to command
+    /// execution failure or if the command exits with a non-zero status.
     fn launch(
         &self,
         path: &Path,
@@ -35,12 +39,14 @@ pub struct LauncherService {
     backend: Arc<dyn Launcher>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl LauncherService {
     pub fn new(backend: Arc<dyn Launcher>) -> Self {
         Self { backend }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be launched by the backend.
     pub fn launch(
         &self,
         path: &Path,

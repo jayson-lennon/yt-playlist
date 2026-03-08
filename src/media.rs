@@ -13,9 +13,12 @@ use wherror::Error;
 #[error(debug)]
 pub struct MediaError;
 
-#[allow(clippy::missing_errors_doc)]
 pub trait MediaQueryBackend: Send + Sync {
     fn name(&self) -> &'static str;
+
+    /// # Errors
+    ///
+    /// Returns an error if the media duration cannot be determined.
     fn get_duration(&self, path: &Path) -> Result<Duration, Report<MediaError>>;
 }
 
@@ -25,12 +28,14 @@ pub struct MediaQuery {
     backend: Arc<dyn MediaQueryBackend>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl MediaQuery {
     pub fn new(backend: Arc<dyn MediaQueryBackend>) -> Self {
         Self { backend }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the media duration cannot be determined by the backend.
     pub fn get_duration(&self, path: &Path) -> Result<Duration, Report<MediaError>> {
         self.backend.get_duration(path)
     }
