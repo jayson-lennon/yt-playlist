@@ -64,7 +64,7 @@ impl App {
                     .into_iter()
                     .map(|path| {
                         let metadata = data.files.get(&path);
-                        let is_virtual = metadata.map(|m| m.is_virtual).unwrap_or(false);
+                        let is_virtual = metadata.is_some_and(|m| m.is_virtual);
                         let duration = metadata.and_then(|m| m.duration);
                         let alias = metadata.and_then(|m| m.alias.clone());
                         let mime_type = metadata
