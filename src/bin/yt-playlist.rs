@@ -134,29 +134,33 @@ fn run_tui(playlist: PathBuf, socket: PathBuf) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-fn collect_all_files(playlist_data: &PlaylistData, _config: &Config) -> Vec<PathBuf> {
+fn collect_all_files(playlist_data: &PlaylistData, config: &Config) -> Vec<PathBuf> {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
     for path in &playlist_data.playlist {
-        if let Ok(canonical) = path.canonicalize() {
-            files.insert(canonical);
-        } else {
-            files.insert(path.clone());
+        if config.is_video_or_audio(path) {
+            if let Ok(canonical) = path.canonicalize() {
+                files.insert(canonical);
+            } else {
+                files.insert(path.clone());
+            }
         }
     }
 
     for path in playlist_data.files.keys() {
-        if let Ok(canonical) = path.canonicalize() {
-            files.insert(canonical);
-        } else {
-            files.insert(path.clone());
+        if config.is_video_or_audio(path) {
+            if let Ok(canonical) = path.canonicalize() {
+                files.insert(canonical);
+            } else {
+                files.insert(path.clone());
+            }
         }
     }
 
     if let Ok(read_dir) = std::fs::read_dir(".") {
         for entry in read_dir.flatten() {
             let path = entry.path();
-            if path.is_file() {
+            if path.is_file() && config.is_video_or_audio(&path) {
                 if let Ok(canonical) = path.canonicalize() {
                     files.insert(canonical);
                 } else {
