@@ -10,12 +10,19 @@ use crate::tui_state::TuiState;
 use crate::ui::{get_mime_type, Pane, PlaylistItem};
 
 pub struct App {
+    /// External service dependencies (mpv client, media query, playlist storage, mpv launcher, file launcher).
     pub services: Services,
+    /// All UI state for the terminal interface (panes, focus, popups, filters, etc.).
     pub tui_state: TuiState,
+    /// User configuration settings (file opener commands, video/audio extensions, etc.).
     pub config: Config,
+    /// Flag signaling the main loop should exit.
     pub should_quit: bool,
+    /// Path to file for which to open notes; signals the main loop to spawn an editor.
     pub pending_notes_path: Option<PathBuf>,
+    /// Key bindings mapping key combinations to actions.
     pub keymap: Keymap,
+    /// Path to mpv's IPC socket for remote control communication.
     pub socket_path: String,
 }
 
@@ -303,11 +310,13 @@ impl App {
             Action::ReorderUp => {
                 if !self.tui_state.has_active_filter(Pane::Playlist) {
                     self.tui_state.reorder_playlist_up();
+                    self.tui_state.needs_clear = true;
                 }
             }
             Action::ReorderDown => {
                 if !self.tui_state.has_active_filter(Pane::Playlist) {
                     self.tui_state.reorder_playlist_down();
+                    self.tui_state.needs_clear = true;
                 }
             }
             Action::LaunchFile => {
