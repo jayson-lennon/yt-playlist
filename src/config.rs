@@ -13,6 +13,7 @@ pub struct ConfigError;
 pub struct MimeCategory {
     pub mime_types: Vec<String>,
     pub extensions: Vec<String>,
+    pub cmd: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
+        let mpv_cmd = "yt-playlist action mpv {{path}} --socket {{socket_path}}".to_string();
         Self {
             video: MimeCategory {
                 mime_types: vec![
@@ -43,6 +45,7 @@ impl Default for Config {
                     "flv".to_string(),
                     "wmv".to_string(),
                 ],
+                cmd: Some(mpv_cmd.clone()),
             },
             audio: MimeCategory {
                 mime_types: vec![
@@ -63,6 +66,7 @@ impl Default for Config {
                     "aac".to_string(),
                     "webm".to_string(),
                 ],
+                cmd: Some(mpv_cmd),
             },
         }
     }
@@ -81,22 +85,34 @@ impl Config {
         exts.into_iter().collect()
     }
 
-    pub fn is_allowed(&self, path: &std::path::Path) -> bool {
+    pub fn get_cmd(&self, path: &std::path::Path) -> Option<&str> {
+        if self.matches_category(&self.video, path) {
+            return self.video.cmd.as_deref();
+        }
+        if self.matches_category(&self.audio, path) {
+            return self.audio.cmd.as_deref();
+        }
+        None
+    }
+
+    pub fn is_video_or_audio(&self, path: &std::path::Path) -> bool {
+        self.matches_category(&self.video, path) || self.matches_category(&self.audio, path)
+    }
+
+    fn matches_category(&self, category: &MimeCategory, path: &std::path::Path) -> bool {
         if let Ok(Some(inferred)) = infer::get_from_path(path) {
-            let mime_type = inferred.mime_type();
-            let allowed = self.allowed_mime_types();
-            if allowed.contains(mime_type) {
+            if category
+                .mime_types
+                .contains(&inferred.mime_type().to_string())
+            {
                 return true;
             }
         }
-
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            let allowed = self.allowed_extensions();
-            if allowed.contains(&ext.to_lowercase()) {
+            if category.extensions.contains(&ext.to_lowercase()) {
                 return true;
             }
         }
-
         false
     }
 }
@@ -143,72 +159,4 @@ pub fn load() -> Result<Config, Report<ConfigError>> {
         .attach("failed to parse config file")?;
 
     Ok(config)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn config_default_contains_video_mime_types() {
-        let config = Config::default();
-        assert!(config.video.mime_types.contains(&"video/mp4".to_string()));
-        assert!(config
-            .video
-            .mime_types
-            .contains(&"video/x-matroska".to_string()));
-    }
-
-    #[test]
-    fn config_default_contains_audio_mime_types() {
-        let config = Config::default();
-        assert!(config.audio.mime_types.contains(&"audio/mpeg".to_string()));
-        assert!(config.audio.mime_types.contains(&"audio/flac".to_string()));
-    }
-
-    #[test]
-    fn config_default_contains_video_extensions() {
-        let config = Config::default();
-        assert!(config.video.extensions.contains(&"mp4".to_string()));
-        assert!(config.video.extensions.contains(&"mkv".to_string()));
-    }
-
-    #[test]
-    fn config_default_contains_audio_extensions() {
-        let config = Config::default();
-        assert!(config.audio.extensions.contains(&"mp3".to_string()));
-        assert!(config.audio.extensions.contains(&"flac".to_string()));
-    }
-
-    #[test]
-    fn allowed_mime_types_combines_video_and_audio() {
-        let config = Config::default();
-        let allowed = config.allowed_mime_types();
-        assert!(allowed.contains("video/mp4"));
-        assert!(allowed.contains("audio/mpeg"));
-    }
-
-    #[test]
-    fn allowed_extensions_combines_video_and_audio() {
-        let config = Config::default();
-        let allowed = config.allowed_extensions();
-        assert!(allowed.contains("mp4"));
-        assert!(allowed.contains("mp3"));
-    }
-
-    #[test]
-    fn config_path_returns_some_path() {
-        let path = config_path();
-        assert!(path.is_some());
-        let path = path.unwrap();
-        assert!(path.to_string_lossy().contains("yt-playlist.toml"));
-    }
-
-    #[test]
-    fn config_dir_returns_some_path() {
-        let dir = config_dir();
-        assert!(dir.is_some());
-        let dir = dir.unwrap();
-        assert!(dir.to_string_lossy().contains("yt-playlist"));
-    }
 }

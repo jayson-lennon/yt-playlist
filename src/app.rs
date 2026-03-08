@@ -119,7 +119,7 @@ impl App {
         if let Ok(read_dir) = std::fs::read_dir(".") {
             for entry in read_dir.flatten() {
                 let path = entry.path();
-                if path.is_file() && self.config.is_allowed(&path) {
+                if path.is_file() {
                     let canonical = path.canonicalize().unwrap_or(path);
                     let duration = self.services.media.get_duration(&canonical).ok();
                     entries.push(PlaylistItem {
@@ -278,8 +278,8 @@ impl App {
                     self.tui_state.reorder_playlist_down();
                 }
             }
-            Action::PlayInMpv => {
-                self.open_in_mpv();
+            Action::LaunchFile => {
+                self.launch_file();
             }
             Action::LoadPlaylist => {
                 self.load_playlist_in_mpv();
@@ -323,16 +323,28 @@ impl App {
         }
     }
 
-    fn open_in_mpv(&mut self) {
+    fn launch_file(&mut self) {
         if let Some(item) = self.tui_state.selected_playlist_item() {
-            match self.services.mpv.load_file(&item.path) {
-                Ok(()) => {
-                    self.tui_state.status_message =
-                        Some(format!("Playing: {}", item.path.display()));
+            let cmd = self.config.get_cmd(&item.path);
+            match self
+                .services
+                .file_launcher
+                .launch(&item.path, cmd, &self.socket_path)
+            {
+                Ok(result) => {
+                    if result.used_default_opener {
+                        self.tui_state.status_message = Some(format!(
+                            "Opening with default opener: {}",
+                            item.path.display()
+                        ));
+                    } else {
+                        self.tui_state.status_message =
+                            Some(format!("Opening: {}", item.path.display()));
+                    }
                 }
                 Err(e) => {
                     self.tui_state
-                        .show_error(format!("Failed to open in mpv: {e:?}"));
+                        .show_error(format!("Failed to open file: {e:?}"));
                 }
             }
         }
@@ -344,10 +356,12 @@ impl App {
             .playlist_pane
             .items
             .iter()
+            .filter(|item| self.config.is_video_or_audio(&item.path))
             .map(|item| item.path.clone())
             .collect();
         if paths.is_empty() {
-            self.tui_state.show_error("Playlist is empty".to_string());
+            self.tui_state
+                .show_error("No video or audio files in playlist".to_string());
             return;
         }
         match self.services.mpv.load_playlist(&paths) {
@@ -388,6 +402,7 @@ mod tests {
 
     use super::*;
     use crate::keymap::{Action, Keymap};
+    use crate::launcher::{LaunchResult, Launcher};
     use crate::media::{MediaError, MediaQuery, MediaQueryBackend};
     use crate::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher};
     use crate::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
@@ -461,6 +476,21 @@ mod tests {
         }
     }
 
+    struct FakeLauncher;
+
+    impl Launcher for FakeLauncher {
+        fn launch(
+            &self,
+            _path: &Path,
+            _command: Option<&str>,
+            _socket_path: &str,
+        ) -> Result<LaunchResult, Report<crate::launcher::LaunchError>> {
+            Ok(LaunchResult {
+                used_default_opener: false,
+            })
+        }
+    }
+
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
         directory_items: Vec<PathBuf>,
@@ -468,6 +498,7 @@ mod tests {
         mpv_backend: FakeMpvBackend,
         media_backend: FakeMediaBackend,
         storage_backend: FakeStorageBackend,
+        file_launcher: FakeLauncher,
     }
 
     impl TestAppBuilder {
@@ -479,6 +510,7 @@ mod tests {
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
                 storage_backend: FakeStorageBackend,
+                file_launcher: FakeLauncher,
             }
         }
 
@@ -518,6 +550,7 @@ mod tests {
                 media: MediaQuery::new(Arc::new(self.media_backend)),
                 storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
                 mpv_launcher: Arc::new(self.mpv_launcher),
+                file_launcher: Arc::new(self.file_launcher),
             };
 
             let mut app = App {
@@ -834,17 +867,17 @@ mod tests {
     }
 
     #[test]
-    fn play_in_mpv_shows_status_message() {
+    fn launch_file_shows_status_message() {
         // Given a playlist with one item.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
 
-        // When executing PlayInMpv action.
-        app.execute_action(Action::PlayInMpv);
+        // When executing LaunchFile action.
+        app.execute_action(Action::LaunchFile);
 
-        // Then a playing status message is shown.
-        assert!(app.tui_state.status_message.unwrap().contains("Playing"));
+        // Then an opening status message is shown.
+        assert!(app.tui_state.status_message.unwrap().contains("Opening"));
     }
 
     #[test]
