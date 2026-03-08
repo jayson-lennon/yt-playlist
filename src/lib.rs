@@ -21,4 +21,4 @@ pub use playlist::{
 };
 pub use services::Services;
 pub use tui_state::TuiState;
-pub use ui::{DirectoryPane, Filter, Pane, PlaylistItem, PlaylistPane, Rename};
+pub use ui::{Filter, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename};

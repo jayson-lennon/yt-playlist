@@ -12,7 +12,7 @@ pub enum Action {
     MoveDown,
     SwitchPane,
     FocusPlaylist,
-    FocusDirectory,
+    FocusLibrary,
     ToggleItem,
     Rename,
     Notes,
@@ -20,9 +20,11 @@ pub enum Action {
     ReorderDown,
     LaunchFile,
     LoadPlaylist,
-    MoveToDirectory,
+    MoveToLibrary,
     MoveToPlaylist,
     LaunchMpv,
+    AddUrl,
+    Delete,
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +54,7 @@ pub enum KeyCategory {
 pub enum KeyContext {
     Global,
     Playlist,
-    Directory,
+    Library,
 }
 
 #[derive(Debug, Clone)]
@@ -119,15 +121,26 @@ impl Keymap {
     }
 
     fn default_prefix_bindings() -> Vec<PrefixKeyBinding> {
-        vec![PrefixKeyBinding {
-            prefix: 'g',
-            description: "general",
-            followups: vec![FollowupKey {
-                key: 'm',
-                action: Action::LaunchMpv,
-                description: "launch mpv",
-            }],
-        }]
+        vec![
+            PrefixKeyBinding {
+                prefix: 'g',
+                description: "general",
+                followups: vec![FollowupKey {
+                    key: 'm',
+                    action: Action::LaunchMpv,
+                    description: "launch mpv",
+                }],
+            },
+            PrefixKeyBinding {
+                prefix: 'a',
+                description: "add",
+                followups: vec![FollowupKey {
+                    key: 'u',
+                    action: Action::AddUrl,
+                    description: "add url",
+                }],
+            },
+        ]
     }
 
     pub fn get_prefix_binding(&self, prefix: char) -> Option<&PrefixKeyBinding> {
@@ -199,8 +212,8 @@ impl Keymap {
             ),
             KeyBinding::new(
                 KeyCode::Char('l'),
-                Action::FocusDirectory,
-                "focus directory",
+                Action::FocusLibrary,
+                "focus library",
                 KeyCategory::PaneSwitch,
                 KeyContext::Global,
             ),
@@ -255,8 +268,8 @@ impl Keymap {
             ),
             KeyBinding::new(
                 KeyCode::Char('L'),
-                Action::MoveToDirectory,
-                "to directory",
+                Action::MoveToLibrary,
+                "to library",
                 KeyCategory::ItemActions,
                 KeyContext::Playlist,
             ),
@@ -265,7 +278,14 @@ impl Keymap {
                 Action::MoveToPlaylist,
                 "to playlist",
                 KeyCategory::ItemActions,
-                KeyContext::Directory,
+                KeyContext::Library,
+            ),
+            KeyBinding::new(
+                KeyCode::Char('x'),
+                Action::Delete,
+                "delete",
+                KeyCategory::ItemActions,
+                KeyContext::Library,
             ),
         ]
     }
@@ -280,7 +300,7 @@ impl Keymap {
                 let context_matches = match binding.context {
                     KeyContext::Global => true,
                     KeyContext::Playlist => pane == Pane::Playlist,
-                    KeyContext::Directory => pane == Pane::Directory,
+                    KeyContext::Library => pane == Pane::Library,
                 };
                 if context_matches {
                     return Some(binding.action);
@@ -296,7 +316,7 @@ impl Keymap {
             .filter(|b| match b.context {
                 KeyContext::Global => true,
                 KeyContext::Playlist => pane == Pane::Playlist,
-                KeyContext::Directory => pane == Pane::Directory,
+                KeyContext::Library => pane == Pane::Library,
             })
             .collect()
     }
@@ -386,12 +406,12 @@ mod tests {
     }
 
     #[test]
-    fn get_action_returns_action_in_directory_pane() {
+    fn get_action_returns_action_in_library_pane() {
         // Given a keymap.
         let keymap = Keymap::new();
 
-        // When getting action for a global key in directory pane.
-        let action = keymap.get_action(KeyCode::Char('q'), KeyModifiers::empty(), Pane::Directory);
+        // When getting action for a global key in library pane.
+        let action = keymap.get_action(KeyCode::Char('q'), KeyModifiers::empty(), Pane::Library);
 
         // Then the action is returned.
         assert_eq!(action, Some(Action::Quit));
@@ -410,35 +430,35 @@ mod tests {
     }
 
     #[test]
-    fn get_action_blocks_playlist_context_in_directory() {
+    fn get_action_blocks_playlist_context_in_library() {
         // Given a keymap.
         let keymap = Keymap::new();
 
-        // When getting action for a playlist-only key in directory pane.
-        let action = keymap.get_action(KeyCode::Char('J'), KeyModifiers::empty(), Pane::Directory);
+        // When getting action for a playlist-only key in library pane.
+        let action = keymap.get_action(KeyCode::Char('J'), KeyModifiers::empty(), Pane::Library);
 
         // Then no action is returned.
         assert!(action.is_none());
     }
 
     #[test]
-    fn get_action_respects_directory_context() {
+    fn get_action_respects_library_context() {
         // Given a keymap.
         let keymap = Keymap::new();
 
-        // When getting action for a directory-only key in directory pane.
-        let action = keymap.get_action(KeyCode::Char('H'), KeyModifiers::empty(), Pane::Directory);
+        // When getting action for a library-only key in library pane.
+        let action = keymap.get_action(KeyCode::Char('H'), KeyModifiers::empty(), Pane::Library);
 
         // Then the action is returned.
         assert_eq!(action, Some(Action::MoveToPlaylist));
     }
 
     #[test]
-    fn get_action_blocks_directory_context_in_playlist() {
+    fn get_action_blocks_library_context_in_playlist() {
         // Given a keymap.
         let keymap = Keymap::new();
 
-        // When getting action for a directory-only key in playlist pane.
+        // When getting action for a library-only key in playlist pane.
         let action = keymap.get_action(KeyCode::Char('H'), KeyModifiers::empty(), Pane::Playlist);
 
         // Then no action is returned.
@@ -482,26 +502,26 @@ mod tests {
     }
 
     #[test]
-    fn get_bindings_for_directory_pane_excludes_playlist_bindings() {
+    fn get_bindings_for_library_pane_excludes_playlist_bindings() {
         // Given a keymap.
         let keymap = Keymap::new();
 
-        // When getting bindings for directory pane.
-        let bindings = keymap.get_bindings_for_pane(Pane::Directory);
+        // When getting bindings for library pane.
+        let bindings = keymap.get_bindings_for_pane(Pane::Library);
 
         // Then playlist-specific bindings are excluded.
         assert!(!bindings.iter().any(|b| b.action == Action::ReorderUp));
     }
 
     #[test]
-    fn get_bindings_for_directory_pane_includes_directory_bindings() {
+    fn get_bindings_for_library_pane_includes_library_bindings() {
         // Given a keymap.
         let keymap = Keymap::new();
 
-        // When getting bindings for directory pane.
-        let bindings = keymap.get_bindings_for_pane(Pane::Directory);
+        // When getting bindings for library pane.
+        let bindings = keymap.get_bindings_for_pane(Pane::Library);
 
-        // Then directory-specific bindings are included.
+        // Then library-specific bindings are included.
         assert!(bindings.iter().any(|b| b.action == Action::MoveToPlaylist));
     }
 

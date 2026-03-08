@@ -14,6 +14,10 @@ struct FileEntry {
     path: String,
     duration: Option<f64>,
     alias: Option<String>,
+    #[serde(default)]
+    is_virtual: bool,
+    #[serde(default)]
+    deleted: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +42,8 @@ impl Default for PlaylistToml {
 pub struct FileMetadata {
     pub duration: Option<Duration>,
     pub alias: Option<String>,
+    pub is_virtual: bool,
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -116,7 +122,11 @@ impl PlaylistStorageBackend for TomlBackend {
             .into_iter()
             .map(|entry| {
                 let path = PathBuf::from(&entry.path);
-                let canonical = path.canonicalize().ok().unwrap_or(path);
+                let canonical = if entry.is_virtual {
+                    path
+                } else {
+                    path.canonicalize().ok().unwrap_or(path)
+                };
                 let duration = entry
                     .duration
                     .filter(|&d| d.is_finite() && d > 0.0)
@@ -126,6 +136,8 @@ impl PlaylistStorageBackend for TomlBackend {
                     FileMetadata {
                         duration,
                         alias: entry.alias,
+                        is_virtual: entry.is_virtual,
+                        deleted: entry.deleted,
                     },
                 )
             })
@@ -142,6 +154,8 @@ impl PlaylistStorageBackend for TomlBackend {
                 path: k.to_string_lossy().into_owned(),
                 duration: v.duration.map(|d| d.as_secs_f64()),
                 alias: v.alias.clone(),
+                is_virtual: v.is_virtual,
+                deleted: v.deleted,
             })
             .collect();
 
@@ -343,6 +357,8 @@ playlist = ["video.mp4"]
             FileMetadata {
                 duration: Some(Duration::from_secs(120)),
                 alias: Some("My Video".to_string()),
+                is_virtual: false,
+                deleted: false,
             },
         );
 
@@ -365,6 +381,8 @@ playlist = ["video.mp4"]
             FileMetadata {
                 duration: Some(Duration::from_secs(120)),
                 alias: Some("My Video".to_string()),
+                is_virtual: false,
+                deleted: false,
             },
         );
 
@@ -422,6 +440,8 @@ playlist = ["video.mp4"]
         let metadata = FileMetadata {
             duration: Some(Duration::from_secs(120)),
             alias: Some("test".to_string()),
+            is_virtual: false,
+            deleted: false,
         };
 
         // When cloning.

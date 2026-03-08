@@ -31,17 +31,17 @@ impl App {
             socket_path,
         };
         app.load_playlist();
-        app.refresh_directory();
+        app.refresh_library();
         app.set_initial_focus();
         app
     }
 
     fn set_initial_focus(&mut self) {
         let playlist_empty = self.tui_state.playlist_pane.items.is_empty();
-        let directory_empty = self.tui_state.directory_pane.items.is_empty();
-        if playlist_empty && !directory_empty {
-            self.tui_state.focused_pane = Pane::Directory;
-        } else if directory_empty && !playlist_empty {
+        let library_empty = self.tui_state.library_pane.items.is_empty();
+        if playlist_empty && !library_empty {
+            self.tui_state.focused_pane = Pane::Library;
+        } else if library_empty && !playlist_empty {
             self.tui_state.focused_pane = Pane::Playlist;
         }
     }
@@ -62,10 +62,11 @@ impl App {
                             duration,
                             alias,
                             mime_type,
+                            is_virtual: false,
                         }
                     })
                     .collect();
-                self.refresh_directory();
+                self.refresh_library();
             }
             Err(e) => {
                 self.tui_state
@@ -82,15 +83,19 @@ impl App {
                 crate::playlist::FileMetadata {
                     duration: item.duration,
                     alias: item.alias.clone(),
+                    is_virtual: item.is_virtual,
+                    deleted: false,
                 },
             );
         }
-        for item in &self.tui_state.directory_pane.items {
+        for item in &self.tui_state.library_pane.items {
             files.insert(
                 item.path.clone(),
                 crate::playlist::FileMetadata {
                     duration: item.duration,
                     alias: item.alias.clone(),
+                    is_virtual: item.is_virtual,
+                    deleted: false,
                 },
             );
         }
@@ -116,7 +121,7 @@ impl App {
         }
     }
 
-    pub fn refresh_directory(&mut self) {
+    pub fn refresh_library(&mut self) {
         let mut entries = Vec::new();
         if let Ok(read_dir) = std::fs::read_dir(".") {
             for entry in read_dir.flatten() {
@@ -130,12 +135,13 @@ impl App {
                         duration,
                         alias: None,
                         mime_type,
+                        is_virtual: false,
                     });
                 }
             }
         }
         entries.sort_by(|a, b| a.path.cmp(&b.path));
-        self.tui_state.refresh_directory(entries);
+        self.tui_state.refresh_library(entries);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -191,17 +197,39 @@ impl App {
                 return;
             }
 
+            if self.tui_state.is_url_input() {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.tui_state.cancel_url_input();
+                    }
+                    KeyCode::Enter => {
+                        self.submit_url_input();
+                    }
+                    KeyCode::Backspace => {
+                        self.tui_state.pop_url_char();
+                    }
+                    KeyCode::Char(c) => {
+                        self.tui_state.push_url_char(c);
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
             if let KeyCode::Char(c) = key.code {
-                if self.tui_state.pending_key == Some('g') {
+                if let Some(prefix) = self.tui_state.pending_key {
                     self.tui_state.pending_key = None;
                     self.tui_state.which_key.dismiss();
-                    if c == 'm' {
-                        self.execute_action(Action::LaunchMpv);
-                        return;
+                    if let Some(prefix_binding) = self.keymap.get_prefix_binding(prefix) {
+                        if let Some(followup) = prefix_binding.followups.iter().find(|f| f.key == c)
+                        {
+                            self.execute_action(followup.action);
+                            return;
+                        }
                     }
-                } else if c == 'g' {
-                    self.tui_state.pending_key = Some('g');
-                    self.tui_state.which_key.show_followup('g');
+                } else if self.keymap.get_prefix_binding(c).is_some() {
+                    self.tui_state.pending_key = Some(c);
+                    self.tui_state.which_key.show_followup(c);
                     return;
                 }
             }
@@ -237,11 +265,11 @@ impl App {
             }
             Action::MoveUp => match self.tui_state.focused_pane {
                 Pane::Playlist => self.tui_state.move_playlist_up(),
-                Pane::Directory => self.tui_state.move_directory_up(),
+                Pane::Library => self.tui_state.move_library_up(),
             },
             Action::MoveDown => match self.tui_state.focused_pane {
                 Pane::Playlist => self.tui_state.move_playlist_down(),
-                Pane::Directory => self.tui_state.move_directory_down(),
+                Pane::Library => self.tui_state.move_library_down(),
             },
             Action::SwitchPane => {
                 self.tui_state.switch_pane();
@@ -251,17 +279,17 @@ impl App {
                     self.tui_state.focused_pane = Pane::Playlist;
                 }
             }
-            Action::FocusDirectory => {
-                if !self.tui_state.directory_pane.items.is_empty() {
-                    self.tui_state.focused_pane = Pane::Directory;
+            Action::FocusLibrary => {
+                if !self.tui_state.library_pane.items.is_empty() {
+                    self.tui_state.focused_pane = Pane::Library;
                 }
             }
             Action::ToggleItem => match self.tui_state.focused_pane {
-                Pane::Directory => {
-                    self.move_from_directory_to_playlist();
+                Pane::Library => {
+                    self.move_from_library_to_playlist();
                 }
                 Pane::Playlist => {
-                    self.move_from_playlist_to_directory();
+                    self.move_from_playlist_to_library();
                 }
             },
             Action::Rename => {
@@ -288,43 +316,80 @@ impl App {
             Action::LoadPlaylist => {
                 self.load_playlist_in_mpv();
             }
-            Action::MoveToDirectory => {
-                self.move_from_playlist_to_directory();
+            Action::MoveToLibrary => {
+                self.move_from_playlist_to_library();
             }
             Action::MoveToPlaylist => {
-                self.move_from_directory_to_playlist();
+                self.move_from_library_to_playlist();
             }
             Action::LaunchMpv => {
                 self.launch_mpv();
             }
+            Action::AddUrl => {
+                self.tui_state.start_url_input();
+            }
+            Action::Delete => {
+                self.delete_library_item();
+            }
         }
     }
 
-    fn move_from_directory_to_playlist(&mut self) {
-        if let Some(item) = self.tui_state.selected_directory_item().cloned() {
+    fn delete_library_item(&mut self) {
+        if let Some(item) = self.tui_state.selected_library_item_mut() {
+            item.mime_type = Some("deleted".to_string());
+        }
+        self.tui_state.status_message = Some("Item marked as deleted".to_string());
+    }
+
+    fn submit_url_input(&mut self) {
+        if let Some(url) = self.tui_state.submit_url_input() {
+            let path = PathBuf::from(url);
+            let item = PlaylistItem {
+                path,
+                duration: None,
+                alias: None,
+                mime_type: Some("url".to_string()),
+                is_virtual: true,
+            };
+            self.tui_state.library_pane.items.push(item);
             self.tui_state
-                .add_to_playlist(item.path, item.duration, item.alias, item.mime_type);
-            self.tui_state.remove_from_directory();
-            if self.tui_state.directory_pane.items.is_empty() {
+                .library_pane
+                .items
+                .sort_by(|a, b| a.path.cmp(&b.path));
+            self.tui_state.status_message = Some("URL added to library".to_string());
+        }
+    }
+
+    fn move_from_library_to_playlist(&mut self) {
+        if let Some(item) = self.tui_state.selected_library_item().cloned() {
+            self.tui_state.add_to_playlist(
+                item.path,
+                item.duration,
+                item.alias,
+                item.mime_type,
+                item.is_virtual,
+            );
+            self.tui_state.remove_from_library();
+            if self.tui_state.library_pane.items.is_empty() {
                 self.tui_state.focused_pane = Pane::Playlist;
             }
             self.tui_state.needs_clear = true;
         }
     }
 
-    fn move_from_playlist_to_directory(&mut self) {
+    fn move_from_playlist_to_library(&mut self) {
         if let Some(item) = self.tui_state.selected_playlist_item().cloned() {
-            let file_missing = !item.path.exists();
+            let file_missing = !item.path.exists() && !item.is_virtual;
             if !file_missing {
-                self.tui_state.directory_pane.items.push(item);
+                self.tui_state.library_pane.items.push(item);
                 self.tui_state
-                    .directory_pane
+                    .library_pane
                     .items
                     .sort_by(|a, b| a.path.cmp(&b.path));
             }
             self.tui_state.remove_from_playlist();
             if self.tui_state.playlist_pane.items.is_empty() {
-                self.tui_state.focused_pane = Pane::Directory;
+                self.tui_state.focused_pane = Pane::Library;
             }
             self.tui_state.needs_clear = true;
         }
@@ -500,7 +565,7 @@ mod tests {
 
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
-        directory_items: Vec<PathBuf>,
+        library_items: Vec<PathBuf>,
         mpv_launcher: FakeMpvLauncher,
         mpv_backend: FakeMpvBackend,
         media_backend: FakeMediaBackend,
@@ -512,7 +577,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 playlist_items: vec![],
-                directory_items: vec![],
+                library_items: vec![],
                 mpv_launcher: FakeMpvLauncher::new(),
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
@@ -526,8 +591,8 @@ mod tests {
             self
         }
 
-        fn directory_items(mut self, items: Vec<PathBuf>) -> Self {
-            self.directory_items = items;
+        fn library_items(mut self, items: Vec<PathBuf>) -> Self {
+            self.library_items = items;
             self
         }
 
@@ -578,17 +643,19 @@ mod tests {
                     duration,
                     alias: None,
                     mime_type,
+                    is_virtual: false,
                 });
             }
 
-            for path in self.directory_items {
+            for path in self.library_items {
                 let duration = app.services.media.get_duration(&path).ok();
                 let mime_type = get_mime_type(&path);
-                app.tui_state.directory_pane.items.push(PlaylistItem {
+                app.tui_state.library_pane.items.push(PlaylistItem {
                     path,
                     duration,
                     alias: None,
                     mime_type,
+                    is_virtual: false,
                 });
             }
 
@@ -629,15 +696,15 @@ mod tests {
         // Given an app focused on the playlist pane with items in both panes.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .directory_items(vec![PathBuf::from("directory.mp4")])
+            .library_items(vec![PathBuf::from("library.mp4")])
             .build();
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
         // When executing SwitchPane action.
         app.execute_action(Action::SwitchPane);
 
-        // Then focus switches to directory pane.
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        // Then focus switches to library pane.
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
 
         // When executing SwitchPane action again.
         app.execute_action(Action::SwitchPane);
@@ -648,12 +715,12 @@ mod tests {
 
     #[test]
     fn focus_playlist_switches_to_playlist_pane() {
-        // Given an app focused on the directory pane with items in both panes.
+        // Given an app focused on the library pane with items in both panes.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .directory_items(vec![PathBuf::from("directory.mp4")])
+            .library_items(vec![PathBuf::from("library.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When executing FocusPlaylist action.
         app.execute_action(Action::FocusPlaylist);
@@ -663,18 +730,18 @@ mod tests {
     }
 
     #[test]
-    fn focus_directory_switches_to_directory_pane() {
+    fn focus_library_switches_to_library_pane() {
         // Given an app focused on the playlist pane with items in both panes.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .directory_items(vec![PathBuf::from("directory.mp4")])
+            .library_items(vec![PathBuf::from("library.mp4")])
             .build();
 
-        // When executing FocusDirectory action.
-        app.execute_action(Action::FocusDirectory);
+        // When executing FocusLibrary action.
+        app.execute_action(Action::FocusLibrary);
 
-        // Then focus switches to directory pane.
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        // Then focus switches to library pane.
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
     }
 
     #[test]
@@ -724,25 +791,25 @@ mod tests {
     }
 
     #[test]
-    fn move_up_down_navigate_directory() {
-        // Given a directory with three items.
+    fn move_up_down_navigate_library() {
+        // Given a library with three items.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![
+            .library_items(vec![
                 PathBuf::from("x.mp4"),
                 PathBuf::from("y.mp4"),
                 PathBuf::from("z.mp4"),
             ])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When navigating with MoveDown/MoveUp.
-        assert_eq!(app.tui_state.directory_pane.selected, 0);
+        assert_eq!(app.tui_state.library_pane.selected, 0);
         app.execute_action(Action::MoveDown);
-        assert_eq!(app.tui_state.directory_pane.selected, 1);
+        assert_eq!(app.tui_state.library_pane.selected, 1);
         app.execute_action(Action::MoveUp);
 
         // Then selection moves correctly.
-        assert_eq!(app.tui_state.directory_pane.selected, 0);
+        assert_eq!(app.tui_state.library_pane.selected, 0);
     }
 
     #[test]
@@ -802,12 +869,12 @@ mod tests {
     }
 
     #[test]
-    fn move_to_playlist_moves_directory_item_to_playlist() {
-        // Given a directory with one item and empty playlist.
+    fn move_to_playlist_moves_library_item_to_playlist() {
+        // Given a library with one item and empty playlist.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When executing MoveToPlaylist action.
         app.execute_action(Action::MoveToPlaylist);
@@ -818,12 +885,12 @@ mod tests {
             app.tui_state.playlist_pane.items[0].path,
             PathBuf::from("test.mp4")
         );
-        assert!(app.tui_state.directory_pane.items.is_empty());
+        assert!(app.tui_state.library_pane.items.is_empty());
     }
 
     #[test]
-    fn move_to_directory_moves_playlist_item_to_directory() {
-        // Given a playlist with one item and empty directory.
+    fn move_to_library_moves_playlist_item_to_library() {
+        // Given a playlist with one item and empty library.
         let temp_file = tempfile::NamedTempFile::new().unwrap();
         let temp_path = temp_file.path().to_path_buf();
         let mut app = TestAppBuilder::new()
@@ -831,22 +898,22 @@ mod tests {
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
 
-        // When executing MoveToDirectory action.
-        app.execute_action(Action::MoveToDirectory);
+        // When executing MoveToLibrary action.
+        app.execute_action(Action::MoveToLibrary);
 
-        // Then the item moves to the directory.
+        // Then the item moves to the library.
         assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert_eq!(app.tui_state.directory_pane.items.len(), 1);
-        assert_eq!(app.tui_state.directory_pane.items[0].path, temp_path);
+        assert_eq!(app.tui_state.library_pane.items.len(), 1);
+        assert_eq!(app.tui_state.library_pane.items[0].path, temp_path);
     }
 
     #[test]
-    fn toggle_item_moves_item_from_directory_to_playlist() {
-        // Given a directory with one item and empty playlist.
+    fn toggle_item_moves_item_from_library_to_playlist() {
+        // Given a library with one item and empty playlist.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
@@ -857,12 +924,12 @@ mod tests {
             app.tui_state.playlist_pane.items[0].path,
             PathBuf::from("test.mp4")
         );
-        assert!(app.tui_state.directory_pane.items.is_empty());
+        assert!(app.tui_state.library_pane.items.is_empty());
     }
 
     #[test]
-    fn toggle_item_moves_item_from_playlist_to_directory() {
-        // Given a playlist with one item and empty directory.
+    fn toggle_item_moves_item_from_playlist_to_library() {
+        // Given a playlist with one item and empty library.
         let temp_file = tempfile::NamedTempFile::new().unwrap();
         let temp_path = temp_file.path().to_path_buf();
         let mut app = TestAppBuilder::new()
@@ -873,10 +940,10 @@ mod tests {
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
 
-        // Then the item moves to the directory.
+        // Then the item moves to the library.
         assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert_eq!(app.tui_state.directory_pane.items.len(), 1);
-        assert_eq!(app.tui_state.directory_pane.items[0].path, temp_path);
+        assert_eq!(app.tui_state.library_pane.items.len(), 1);
+        assert_eq!(app.tui_state.library_pane.items[0].path, temp_path);
     }
 
     #[test]
@@ -890,9 +957,9 @@ mod tests {
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
 
-        // Then the item is removed completely (not added to directory).
+        // Then the item is removed completely (not added to library).
         assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert!(app.tui_state.directory_pane.items.is_empty());
+        assert!(app.tui_state.library_pane.items.is_empty());
     }
 
     #[test]
@@ -940,8 +1007,8 @@ mod tests {
     }
 
     #[test]
-    fn switch_pane_does_not_switch_to_empty_directory() {
-        // Given a playlist with items and empty directory.
+    fn switch_pane_does_not_switch_to_empty_library() {
+        // Given a playlist with items and empty library.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
@@ -956,62 +1023,62 @@ mod tests {
 
     #[test]
     fn switch_pane_does_not_switch_to_empty_playlist() {
-        // Given an empty playlist and directory with items.
+        // Given an empty playlist and library with items.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
 
         // When executing SwitchPane action.
         app.execute_action(Action::SwitchPane);
 
-        // Then focus stays on directory.
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        // Then focus stays on library.
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
     }
 
     #[test]
     fn focus_playlist_does_not_switch_to_empty_playlist() {
-        // Given an empty playlist and directory with items, focused on directory.
+        // Given an empty playlist and library with items, focused on library.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When executing FocusPlaylist action.
         app.execute_action(Action::FocusPlaylist);
 
-        // Then focus stays on directory.
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        // Then focus stays on library.
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
     }
 
     #[test]
-    fn focus_directory_does_not_switch_to_empty_directory() {
-        // Given a playlist with items and empty directory, focused on playlist.
+    fn focus_library_does_not_switch_to_empty_library() {
+        // Given a playlist with items and empty library, focused on playlist.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
 
-        // When executing FocusDirectory action.
-        app.execute_action(Action::FocusDirectory);
+        // When executing FocusLibrary action.
+        app.execute_action(Action::FocusLibrary);
 
         // Then focus stays on playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
     #[test]
-    fn initial_focus_directory_when_playlist_empty() {
-        // Given an empty playlist and directory with items.
+    fn initial_focus_library_when_playlist_empty() {
+        // Given an empty playlist and library with items.
         let app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
 
-        // Then focus is on directory.
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        // Then focus is on library.
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
     }
 
     #[test]
-    fn initial_focus_playlist_when_directory_empty() {
-        // Given a playlist with items and empty directory.
+    fn initial_focus_playlist_when_library_empty() {
+        // Given a playlist with items and empty library.
         let app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
@@ -1025,7 +1092,7 @@ mod tests {
         // Given both panes with items.
         let app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("a.mp4")])
-            .directory_items(vec![PathBuf::from("b.mp4")])
+            .library_items(vec![PathBuf::from("b.mp4")])
             .build();
 
         // Then focus is on playlist (default).
@@ -1042,45 +1109,45 @@ mod tests {
     }
 
     #[test]
-    fn move_last_directory_item_switches_focus_to_playlist() {
-        // Given directory with 1 item and playlist with items, focused on directory.
+    fn move_last_library_item_switches_focus_to_playlist() {
+        // Given library with 1 item and playlist with items, focused on library.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .directory_items(vec![PathBuf::from("directory.mp4")])
+            .library_items(vec![PathBuf::from("library.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
 
         // Then focus switches to playlist.
-        assert!(app.tui_state.directory_pane.items.is_empty());
+        assert!(app.tui_state.library_pane.items.is_empty());
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
     #[test]
-    fn move_last_playlist_item_switches_focus_to_directory() {
-        // Given playlist with 1 item and directory with items, focused on playlist.
+    fn move_last_playlist_item_switches_focus_to_library() {
+        // Given playlist with 1 item and library with items, focused on playlist.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .directory_items(vec![PathBuf::from("directory.mp4")])
+            .library_items(vec![PathBuf::from("library.mp4")])
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
 
-        // Then focus switches to directory.
+        // Then focus switches to library.
         assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
     }
 
     #[test]
     fn move_item_keeps_focus_when_pane_not_empty() {
-        // Given playlist with 2 items and directory with items, focused on playlist.
+        // Given playlist with 2 items and library with items, focused on playlist.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")])
-            .directory_items(vec![PathBuf::from("c.mp4")])
+            .library_items(vec![PathBuf::from("c.mp4")])
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
 
@@ -1093,8 +1160,8 @@ mod tests {
     }
 
     #[test]
-    fn move_to_empty_directory_switches_focus() {
-        // Given playlist with 1 item and empty directory, focused on playlist.
+    fn move_to_empty_library_switches_focus() {
+        // Given playlist with 1 item and empty library, focused on playlist.
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
@@ -1103,17 +1170,17 @@ mod tests {
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
 
-        // Then focus switches to directory.
-        assert_eq!(app.tui_state.focused_pane, Pane::Directory);
+        // Then focus switches to library.
+        assert_eq!(app.tui_state.focused_pane, Pane::Library);
     }
 
     #[test]
     fn move_to_empty_playlist_switches_focus() {
-        // Given directory with 1 item and empty playlist, focused on directory.
+        // Given library with 1 item and empty playlist, focused on library.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
 
         // When executing ToggleItem action.
         app.execute_action(Action::ToggleItem);
@@ -1157,12 +1224,12 @@ mod tests {
     }
 
     #[test]
-    fn start_filter_activates_on_directory() {
-        // Given an app focused on directory with items, not filtering.
+    fn start_filter_activates_on_library() {
+        // Given an app focused on library with items, not filtering.
         let mut app = TestAppBuilder::new()
-            .directory_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        app.tui_state.focused_pane = Pane::Directory;
+        app.tui_state.focused_pane = Pane::Library;
         assert!(!app.tui_state.is_filtering());
 
         // When executing StartFilter action.
@@ -1319,5 +1386,174 @@ mod tests {
         // Then popup is dismissed without action.
         assert!(app.tui_state.pending_key.is_none());
         assert!(!app.tui_state.which_key.active);
+    }
+
+    #[test]
+    fn a_key_sets_pending_and_shows_followup() {
+        // Given an app.
+        let mut app = TestAppBuilder::new().build();
+        assert!(app.tui_state.pending_key.is_none());
+        assert!(!app.tui_state.which_key.active);
+
+        // When pressing 'a' key.
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('a'),
+            KeyModifiers::empty(),
+        )));
+
+        // Then pending_key is set and which_key shows followup.
+        assert_eq!(app.tui_state.pending_key, Some('a'));
+        assert!(app.tui_state.which_key.active);
+        assert_eq!(app.tui_state.which_key.pending_prefix, Some('a'));
+    }
+
+    #[test]
+    fn au_keys_starts_url_input() {
+        // Given an app.
+        let mut app = TestAppBuilder::new().build();
+        assert!(!app.tui_state.is_url_input());
+
+        // When pressing 'a' then 'u'.
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('a'),
+            KeyModifiers::empty(),
+        )));
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('u'),
+            KeyModifiers::empty(),
+        )));
+
+        // Then url input is active and popup is dismissed.
+        assert!(app.tui_state.is_url_input());
+        assert!(app.tui_state.pending_key.is_none());
+        assert!(!app.tui_state.which_key.active);
+    }
+
+    #[test]
+    fn a_then_invalid_key_dismisses_popup() {
+        // Given an app with 'a' pending.
+        let mut app = TestAppBuilder::new().build();
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('a'),
+            KeyModifiers::empty(),
+        )));
+        assert_eq!(app.tui_state.pending_key, Some('a'));
+
+        // When pressing a non-followup key.
+        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char('x'),
+            KeyModifiers::empty(),
+        )));
+
+        // Then popup is dismissed without action.
+        assert!(app.tui_state.pending_key.is_none());
+        assert!(!app.tui_state.which_key.active);
+        assert!(!app.tui_state.is_url_input());
+    }
+
+    #[test]
+    fn virtual_item_preserved_when_moved_from_library_to_playlist() {
+        // Given a library with a virtual URL item.
+        let mut app = TestAppBuilder::new().build();
+        let url = PathBuf::from("https://example.com/video.mp4");
+        app.tui_state.library_pane.items.push(PlaylistItem {
+            path: url.clone(),
+            duration: None,
+            alias: None,
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        });
+        app.tui_state.focused_pane = Pane::Library;
+
+        // When moving to playlist.
+        app.execute_action(Action::MoveToPlaylist);
+
+        // Then the item is in playlist with is_virtual preserved.
+        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
+        assert!(app.tui_state.library_pane.items.is_empty());
+        assert_eq!(app.tui_state.playlist_pane.items[0].path, url);
+        assert!(app.tui_state.playlist_pane.items[0].is_virtual);
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].mime_type,
+            Some("url".to_string())
+        );
+    }
+
+    #[test]
+    fn virtual_item_preserved_when_moved_from_playlist_to_library() {
+        // Given a playlist with a virtual URL item.
+        let mut app = TestAppBuilder::new().build();
+        let url = PathBuf::from("https://example.com/video.mp4");
+        app.tui_state.playlist_pane.items.push(PlaylistItem {
+            path: url.clone(),
+            duration: None,
+            alias: None,
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        });
+        app.tui_state.focused_pane = Pane::Playlist;
+
+        // When moving to library.
+        app.execute_action(Action::MoveToLibrary);
+
+        // Then the item is in library with is_virtual preserved.
+        assert!(app.tui_state.playlist_pane.items.is_empty());
+        assert_eq!(app.tui_state.library_pane.items.len(), 1);
+        assert_eq!(app.tui_state.library_pane.items[0].path, url);
+        assert!(app.tui_state.library_pane.items[0].is_virtual);
+        assert_eq!(
+            app.tui_state.library_pane.items[0].mime_type,
+            Some("url".to_string())
+        );
+    }
+
+    #[test]
+    fn virtual_item_roundtrip_preserves_all_properties() {
+        // Given a library with a virtual URL item with all properties.
+        let mut app = TestAppBuilder::new().build();
+        let url = PathBuf::from("https://youtube.com/watch?v=abc123");
+        app.tui_state.library_pane.items.push(PlaylistItem {
+            path: url.clone(),
+            duration: Some(std::time::Duration::from_secs(300)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        });
+        app.tui_state.focused_pane = Pane::Library;
+
+        // When moving library -> playlist -> library.
+        app.execute_action(Action::MoveToPlaylist);
+        app.tui_state.focused_pane = Pane::Playlist;
+        app.execute_action(Action::MoveToLibrary);
+
+        // Then all properties are preserved.
+        assert_eq!(app.tui_state.library_pane.items.len(), 1);
+        let item = &app.tui_state.library_pane.items[0];
+        assert_eq!(item.path, url);
+        assert!(item.is_virtual);
+        assert_eq!(item.mime_type, Some("url".to_string()));
+        assert_eq!(item.alias, Some("My Video".to_string()));
+        assert_eq!(item.duration, Some(std::time::Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn missing_file_removed_when_moved_from_playlist_to_library() {
+        // Given a playlist with a missing non-virtual file.
+        let mut app = TestAppBuilder::new().build();
+        app.tui_state.playlist_pane.items.push(PlaylistItem {
+            path: PathBuf::from("/nonexistent/file.mp4"),
+            duration: None,
+            alias: None,
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+        });
+        app.tui_state.focused_pane = Pane::Playlist;
+
+        // When moving to library.
+        app.execute_action(Action::MoveToLibrary);
+
+        // Then the item is removed (not added to library).
+        assert!(app.tui_state.playlist_pane.items.is_empty());
+        assert!(app.tui_state.library_pane.items.is_empty());
     }
 }

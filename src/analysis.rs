@@ -36,6 +36,8 @@ pub fn analyze_files(
                     FileMetadata {
                         duration: Some(duration),
                         alias,
+                        is_virtual: false,
+                        deleted: false,
                     },
                 );
             }
@@ -122,6 +124,8 @@ mod tests {
             FileMetadata {
                 duration: Some(Duration::from_secs(100)),
                 alias: None,
+                is_virtual: false,
+                deleted: false,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("b.mp4", Duration::from_secs(60));
@@ -146,6 +150,8 @@ mod tests {
             FileMetadata {
                 duration: None,
                 alias: Some("My Video".to_string()),
+                is_virtual: false,
+                deleted: false,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
@@ -169,6 +175,8 @@ mod tests {
             FileMetadata {
                 duration: None,
                 alias: Some("My Video".to_string()),
+                is_virtual: false,
+                deleted: false,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
@@ -223,6 +231,8 @@ mod tests {
             FileMetadata {
                 duration: Some(Duration::from_secs(100)),
                 alias: Some("Video A".to_string()),
+                is_virtual: false,
+                deleted: false,
             },
         );
         metadata.insert(
@@ -230,6 +240,8 @@ mod tests {
             FileMetadata {
                 duration: None,
                 alias: Some("Video B".to_string()),
+                is_virtual: false,
+                deleted: false,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("b.mp4", Duration::from_secs(60));

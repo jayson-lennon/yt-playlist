@@ -6,7 +6,7 @@ use fuzzy_matcher::FuzzyMatcher;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pane {
     Playlist,
-    Directory,
+    Library,
 }
 
 #[derive(Debug, Clone)]
@@ -15,6 +15,7 @@ pub struct PlaylistItem {
     pub duration: Option<Duration>,
     pub alias: Option<String>,
     pub mime_type: Option<String>,
+    pub is_virtual: bool,
 }
 
 pub fn format_duration(duration: Option<Duration>) -> String {
@@ -61,10 +62,14 @@ pub fn format_mime_type(mime: Option<&str>) -> String {
 
 pub fn format_item_line(item: &PlaylistItem) -> String {
     let mime_str = format_mime_type(item.mime_type.as_deref());
-    let name = item.path.file_stem().map_or_else(
-        || item.path.to_string_lossy().into_owned(),
-        |n| n.to_string_lossy().into_owned(),
-    );
+    let name = if item.is_virtual {
+        item.path.to_string_lossy().into_owned()
+    } else {
+        item.path.file_stem().map_or_else(
+            || item.path.to_string_lossy().into_owned(),
+            |n| n.to_string_lossy().into_owned(),
+        )
+    };
 
     match (item.duration, &item.alias) {
         (Some(_), Some(alias)) => {
@@ -129,6 +134,7 @@ mod tests {
             duration: None,
             alias: None,
             mime_type: None,
+            is_virtual: false,
         }
     }
 
@@ -138,6 +144,7 @@ mod tests {
             duration: None,
             alias: Some(alias.to_string()),
             mime_type: None,
+            is_virtual: false,
         }
     }
 
@@ -147,6 +154,7 @@ mod tests {
             duration: Some(Duration::from_secs(secs)),
             alias: None,
             mime_type: None,
+            is_virtual: false,
         }
     }
 
@@ -394,6 +402,7 @@ mod tests {
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
         };
 
         // When formatting.
@@ -411,6 +420,7 @@ mod tests {
             duration: Some(Duration::from_secs(65)),
             alias: None,
             mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
         };
 
         // When formatting.
@@ -428,6 +438,7 @@ mod tests {
             duration: None,
             alias: Some("My Doc".to_string()),
             mime_type: Some("application/pdf".to_string()),
+            is_virtual: false,
         };
 
         // When formatting.
@@ -445,6 +456,7 @@ mod tests {
             duration: None,
             alias: None,
             mime_type: Some("application/pdf".to_string()),
+            is_virtual: false,
         };
 
         // When formatting.
@@ -462,6 +474,7 @@ mod tests {
             duration: None,
             alias: None,
             mime_type: None,
+            is_virtual: false,
         };
 
         // When formatting.
@@ -469,5 +482,86 @@ mod tests {
 
         // Then unknown is used.
         assert_eq!(result, "[unknown] file");
+    }
+
+    #[test]
+    fn format_item_line_shows_full_url_for_virtual_items() {
+        // Given a virtual URL item.
+        let item = PlaylistItem {
+            path: PathBuf::from("https://youtube.com/watch?v=abc123"),
+            duration: None,
+            alias: None,
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then full URL is shown (not just filename stem).
+        assert_eq!(result, "[url] https://youtube.com/watch?v=abc123");
+    }
+
+    #[test]
+    fn format_item_line_shows_full_url_with_alias() {
+        // Given a virtual URL item with alias.
+        let item = PlaylistItem {
+            path: PathBuf::from("https://youtube.com/watch?v=abc123"),
+            duration: None,
+            alias: Some("My Video".to_string()),
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then full URL and alias are shown.
+        assert_eq!(
+            result,
+            "[url] https://youtube.com/watch?v=abc123 / My Video"
+        );
+    }
+
+    #[test]
+    fn format_item_line_shows_file_stem_for_non_virtual_items() {
+        // Given a non-virtual file item.
+        let item = PlaylistItem {
+            path: PathBuf::from("/path/to/video.mp4"),
+            duration: None,
+            alias: None,
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then only filename stem is shown (not full path or extension).
+        assert_eq!(result, "[video/mp4] video");
+    }
+
+    #[test]
+    fn format_mime_type_shows_url_without_extra_brackets() {
+        // Given a URL mime type (without brackets).
+        let mime = "url";
+
+        // When formatting.
+        let result = format_mime_type(Some(mime));
+
+        // Then url is returned as-is.
+        assert_eq!(result, "url");
+    }
+
+    #[test]
+    fn format_mime_type_shows_deleted_without_extra_brackets() {
+        // Given a deleted mime type (without brackets).
+        let mime = "deleted";
+
+        // When formatting.
+        let result = format_mime_type(Some(mime));
+
+        // Then deleted is returned as-is.
+        assert_eq!(result, "deleted");
     }
 }

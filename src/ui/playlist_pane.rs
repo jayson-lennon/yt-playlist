@@ -154,7 +154,7 @@ impl PlaylistPane {
             .enumerate()
             .map(|(display_idx, (_original_idx, item))| {
                 let is_selected = display_idx == self.selected && is_focused && !is_filtering;
-                let file_missing = !item.path.exists();
+                let file_missing = !item.path.exists() && !item.is_virtual;
                 let style = if is_selected {
                     if file_missing {
                         Style::default()
@@ -167,8 +167,6 @@ impl PlaylistPane {
                             .bg(Color::Yellow)
                             .add_modifier(Modifier::BOLD)
                     }
-                } else if file_missing {
-                    Style::default().fg(Color::Red)
                 } else {
                     Style::default()
                 };
@@ -237,6 +235,7 @@ mod tests {
             duration: None,
             alias: None,
             mime_type: None,
+            is_virtual: false,
         }
     }
 
@@ -246,6 +245,7 @@ mod tests {
             duration: None,
             alias: Some(alias.to_string()),
             mime_type: None,
+            is_virtual: false,
         }
     }
 

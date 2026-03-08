@@ -1,9 +1,10 @@
 mod common;
-mod directory_pane;
 mod error_popup;
 mod filter;
+mod library_pane;
 mod playlist_pane;
 mod rename;
+mod url_input;
 mod which_key;
 
 use crate::keymap::Keymap;
@@ -15,11 +16,12 @@ use ratatui::{
 };
 
 pub use common::{get_mime_type, Pane, PlaylistItem};
-pub use directory_pane::DirectoryPane;
 pub use error_popup::ErrorPopup;
 pub use filter::Filter;
+pub use library_pane::LibraryPane;
 pub use playlist_pane::PlaylistPane;
 pub use rename::Rename;
+pub use url_input::UrlInput;
 pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
 
 pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState, keymap: &Keymap) {
@@ -40,8 +42,8 @@ pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState, keymap: &Ke
         .playlist_pane
         .render(frame, chunks[0], state.focused_pane == Pane::Playlist);
     state
-        .directory_pane
-        .render(frame, chunks[1], state.focused_pane == Pane::Directory);
+        .library_pane
+        .render(frame, chunks[1], state.focused_pane == Pane::Library);
 
     let status_text = state.status_message.clone().unwrap_or_default();
     let status = Paragraph::new(status_text).style(Style::default().fg(Color::Yellow));
@@ -49,6 +51,10 @@ pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState, keymap: &Ke
 
     if state.is_renaming() {
         state.rename.render(frame, state.get_selected_item());
+    }
+
+    if state.is_url_input() {
+        state.url_input.render(frame);
     }
 
     if state.which_key.active {

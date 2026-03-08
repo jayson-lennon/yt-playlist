@@ -11,13 +11,13 @@ use super::common::{filter_items, format_duration, format_item_line, PlaylistIte
 use super::filter::Filter;
 
 #[derive(Debug, Clone)]
-pub struct DirectoryPane {
+pub struct LibraryPane {
     pub items: Vec<PlaylistItem>,
     pub selected: usize,
     pub filter: Filter,
 }
 
-impl DirectoryPane {
+impl LibraryPane {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
@@ -142,11 +142,19 @@ impl DirectoryPane {
             .enumerate()
             .map(|(display_idx, (_original_idx, item))| {
                 let is_selected = display_idx == self.selected && is_focused && !is_filtering;
+                let file_missing = !item.path.exists() && !item.is_virtual;
                 let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
+                    if file_missing {
+                        Style::default()
+                            .fg(Color::Red)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    }
                 } else {
                     Style::default()
                 };
@@ -157,14 +165,14 @@ impl DirectoryPane {
 
         let title = if has_filter {
             if is_focused {
-                " Directory [filtered] [*] "
+                " Library [filtered] [*] "
             } else {
-                " Directory [filtered] "
+                " Library [filtered] "
             }
         } else if is_focused {
-            " Directory [*] "
+            " Library [*] "
         } else {
-            " Directory "
+            " Library "
         };
 
         let list = List::new(items).block(
@@ -198,7 +206,7 @@ impl DirectoryPane {
     }
 }
 
-impl Default for DirectoryPane {
+impl Default for LibraryPane {
     fn default() -> Self {
         Self::new()
     }
@@ -214,13 +222,14 @@ mod tests {
             duration: None,
             alias: None,
             mime_type: None,
+            is_virtual: false,
         }
     }
 
     #[test]
     fn new_creates_empty_pane() {
-        // Given a new directory pane.
-        let pane = DirectoryPane::new();
+        // Given a new library pane.
+        let pane = LibraryPane::new();
 
         // Then it is empty with selection at 0.
         assert!(pane.items.is_empty());
@@ -230,7 +239,7 @@ mod tests {
     #[test]
     fn move_up_decrements_selection() {
         // Given a pane with 3 items, selection at index 1.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
         pane.selected = 1;
 
@@ -244,7 +253,7 @@ mod tests {
     #[test]
     fn move_up_stays_at_first_item() {
         // Given a pane with selection at first item.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4")];
         pane.selected = 0;
 
@@ -258,7 +267,7 @@ mod tests {
     #[test]
     fn move_down_increments_selection() {
         // Given a pane with 3 items, selection at index 0.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
         pane.selected = 0;
 
@@ -272,7 +281,7 @@ mod tests {
     #[test]
     fn move_down_stays_at_last_item() {
         // Given a pane with selection at last item.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4")];
         pane.selected = 1;
 
@@ -286,7 +295,7 @@ mod tests {
     #[test]
     fn move_up_with_filter_navigates_filtered_list() {
         // Given a pane with filter applied.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 1;
@@ -301,7 +310,7 @@ mod tests {
     #[test]
     fn move_down_with_filter_navigates_filtered_list() {
         // Given a pane with filter applied.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 0;
@@ -316,7 +325,7 @@ mod tests {
     #[test]
     fn remove_deletes_selected_item() {
         // Given a pane with 3 items, middle selected.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
         pane.selected = 1;
 
@@ -332,7 +341,7 @@ mod tests {
     #[test]
     fn remove_adjusts_selection_when_at_end() {
         // Given a pane with 2 items, last selected.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4")];
         pane.selected = 1;
 
@@ -346,7 +355,7 @@ mod tests {
     #[test]
     fn remove_with_filter_removes_correct_item() {
         // Given a pane with filter applied.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 1;
@@ -365,7 +374,7 @@ mod tests {
     #[test]
     fn selected_item_returns_current_selection() {
         // Given a pane with items.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4")];
         pane.selected = 1;
 
@@ -379,7 +388,7 @@ mod tests {
     #[test]
     fn selected_item_returns_none_when_empty() {
         // Given an empty pane.
-        let pane = DirectoryPane::new();
+        let pane = LibraryPane::new();
 
         // When getting selected item.
         let selected = pane.selected_item();
@@ -391,7 +400,7 @@ mod tests {
     #[test]
     fn selected_item_with_filter_returns_filtered_item() {
         // Given a pane with filter applied.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 0;
@@ -406,7 +415,7 @@ mod tests {
     #[test]
     fn selected_item_mut_allows_modification() {
         // Given a pane with items.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("test.mp4")];
 
         // When modifying selected item.
@@ -421,7 +430,7 @@ mod tests {
     #[test]
     fn refresh_resets_selection_when_empty() {
         // Given a pane.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.selected = 5;
 
         // When refreshing with empty entries.
@@ -434,7 +443,7 @@ mod tests {
     #[test]
     fn refresh_adjusts_selection_when_out_of_bounds() {
         // Given a pane with selection out of bounds.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.selected = 10;
 
         // When refreshing with fewer items.
@@ -447,7 +456,7 @@ mod tests {
     #[test]
     fn refresh_keeps_selection_when_valid() {
         // Given a pane with valid selection.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.selected = 1;
 
         // When refreshing with enough items.
@@ -460,7 +469,7 @@ mod tests {
     #[test]
     fn get_filtered_returns_all_when_no_filter() {
         // Given a pane without filter.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("a.mp4"), item("b.mp4")];
 
         // When getting filtered.
@@ -473,7 +482,7 @@ mod tests {
     #[test]
     fn get_filtered_filters_by_pattern() {
         // Given a pane with filter applied.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("cherry.mp4")];
         pane.filter.applied = Some("an".to_string());
 
@@ -488,7 +497,7 @@ mod tests {
     #[test]
     fn refresh_filters_out_playlist_items() {
         // Given a pane and playlist paths.
-        let mut pane = DirectoryPane::new();
+        let mut pane = LibraryPane::new();
         let entries = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
         let b_path = PathBuf::from("b.mp4");
         let playlist_paths: Vec<&PathBuf> = vec![&b_path];
