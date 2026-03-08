@@ -226,6 +226,7 @@ impl Default for LibraryPane {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     fn item(path: &str) -> PlaylistItem {
         PlaylistItem {
@@ -389,7 +390,7 @@ mod tests {
         assert!(pane
             .items
             .iter()
-            .all(|i| i.path != PathBuf::from("apricot.mp4")));
+            .all(|i| i.path != Path::new("apricot.mp4")));
     }
 
     #[test]
@@ -528,7 +529,7 @@ mod tests {
 
         // Then items in playlist are excluded.
         assert_eq!(pane.items.len(), 2);
-        assert!(pane.items.iter().all(|i| i.path != PathBuf::from("b.mp4")));
+        assert!(pane.items.iter().all(|i| i.path != Path::new("b.mp4")));
     }
 
     #[test]
@@ -549,15 +550,9 @@ mod tests {
         assert!(pane
             .items
             .iter()
-            .any(|i| i.path == PathBuf::from("https://example.com/video.mp4") && i.is_virtual));
-        assert!(pane
-            .items
-            .iter()
-            .any(|i| i.path == PathBuf::from("new.mp4")));
-        assert!(!pane
-            .items
-            .iter()
-            .any(|i| i.path == PathBuf::from("old.mp4")));
+            .any(|i| i.path == Path::new("https://example.com/video.mp4") && i.is_virtual));
+        assert!(pane.items.iter().any(|i| i.path == Path::new("new.mp4")));
+        assert!(!pane.items.iter().any(|i| i.path == Path::new("old.mp4")));
     }
 
     #[test]

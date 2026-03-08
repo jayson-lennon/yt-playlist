@@ -227,6 +227,7 @@ impl Default for PlaylistPane {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     fn item(path: &str) -> PlaylistItem {
         PlaylistItem {
@@ -492,7 +493,7 @@ mod tests {
         assert!(pane
             .items
             .iter()
-            .all(|i| i.path != PathBuf::from("apricot.mp4")));
+            .all(|i| i.path != Path::new("apricot.mp4")));
     }
 
     #[test]

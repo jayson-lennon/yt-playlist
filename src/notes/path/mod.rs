@@ -72,10 +72,10 @@ mod tests {
 
         // When resolving the symlink path.
         let resolver = SystemPathResolver;
-        let resolved = resolver.resolve(&symlink_path).await.unwrap();
+        let canonical = resolver.resolve(&symlink_path).await.unwrap();
 
         // Then it returns the canonical path of the real file.
-        assert_eq!(resolved, real_file.canonicalize().unwrap());
+        assert_eq!(canonical, real_file.canonicalize().unwrap());
     }
 
     #[tokio::test]
@@ -87,10 +87,10 @@ mod tests {
 
         // When resolving the file path.
         let resolver = SystemPathResolver;
-        let resolved = resolver.resolve(&real_file).await.unwrap();
+        let canonical = resolver.resolve(&real_file).await.unwrap();
 
         // Then it returns the canonical path.
-        assert_eq!(resolved, real_file.canonicalize().unwrap());
+        assert_eq!(canonical, real_file.canonicalize().unwrap());
     }
 
     #[tokio::test]
@@ -115,10 +115,10 @@ mod tests {
 
         // When resolving the final symlink in the chain.
         let resolver = SystemPathResolver;
-        let resolved = resolver.resolve(&symlink2).await.unwrap();
+        let canonical = resolver.resolve(&symlink2).await.unwrap();
 
         // Then it resolves to the real file's canonical path.
-        assert_eq!(resolved, real_file.canonicalize().unwrap());
+        assert_eq!(canonical, real_file.canonicalize().unwrap());
     }
 
     #[tokio::test]

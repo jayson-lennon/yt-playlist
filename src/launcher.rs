@@ -235,7 +235,7 @@ mod tests {
             command: Option<&str>,
             socket_path: &str,
         ) -> Result<LaunchResult, Report<LaunchError>> {
-            *self.last_command.lock().unwrap() = command.map(|s| s.to_string());
+            *self.last_command.lock().unwrap() = command.map(str::to_string);
             *self.last_path.lock().unwrap() = Some(path.to_path_buf());
             *self.last_socket_path.lock().unwrap() = Some(socket_path.to_string());
             Ok(LaunchResult {
