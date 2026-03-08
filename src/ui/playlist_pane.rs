@@ -227,7 +227,6 @@ impl Default for PlaylistPane {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     fn item(path: &str) -> PlaylistItem {
         PlaylistItem {
@@ -239,6 +238,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn item_with_alias(path: &str, alias: &str) -> PlaylistItem {
         PlaylistItem {
             path: PathBuf::from(path),

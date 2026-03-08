@@ -686,16 +686,19 @@ mod tests {
             self
         }
 
+        #[allow(dead_code)]
         fn mpv_backend(mut self, backend: FakeMpvBackend) -> Self {
             self.mpv_backend = backend;
             self
         }
 
+        #[allow(dead_code)]
         fn media_backend(mut self, backend: FakeMediaBackend) -> Self {
             self.media_backend = backend;
             self
         }
 
+        #[allow(dead_code)]
         fn storage_backend(mut self, backend: FakeStorageBackend) -> Self {
             self.storage_backend = backend;
             self

@@ -148,6 +148,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn item_with_duration(path: &str, secs: u64) -> PlaylistItem {
         PlaylistItem {
             path: PathBuf::from(path),
