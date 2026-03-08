@@ -310,11 +310,14 @@ impl App {
 
     fn move_from_playlist_to_directory(&mut self) {
         if let Some(item) = self.tui_state.selected_playlist_item().cloned() {
-            self.tui_state.directory_pane.items.push(item);
-            self.tui_state
-                .directory_pane
-                .items
-                .sort_by(|a, b| a.path.cmp(&b.path));
+            let file_missing = !item.path.exists();
+            if !file_missing {
+                self.tui_state.directory_pane.items.push(item);
+                self.tui_state
+                    .directory_pane
+                    .items
+                    .sort_by(|a, b| a.path.cmp(&b.path));
+            }
             self.tui_state.remove_from_playlist();
             if self.tui_state.playlist_pane.items.is_empty() {
                 self.tui_state.focused_pane = Pane::Directory;
@@ -813,8 +816,10 @@ mod tests {
     #[test]
     fn move_to_directory_moves_playlist_item_to_directory() {
         // Given a playlist with one item and empty directory.
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path().to_path_buf();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![temp_path.clone()])
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
 
@@ -824,10 +829,7 @@ mod tests {
         // Then the item moves to the directory.
         assert!(app.tui_state.playlist_pane.items.is_empty());
         assert_eq!(app.tui_state.directory_pane.items.len(), 1);
-        assert_eq!(
-            app.tui_state.directory_pane.items[0].path,
-            PathBuf::from("test.mp4")
-        );
+        assert_eq!(app.tui_state.directory_pane.items[0].path, temp_path);
     }
 
     #[test]
@@ -853,8 +855,10 @@ mod tests {
     #[test]
     fn toggle_item_moves_item_from_playlist_to_directory() {
         // Given a playlist with one item and empty directory.
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path().to_path_buf();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![temp_path.clone()])
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
 
@@ -864,6 +868,23 @@ mod tests {
         // Then the item moves to the directory.
         assert!(app.tui_state.playlist_pane.items.is_empty());
         assert_eq!(app.tui_state.directory_pane.items.len(), 1);
+        assert_eq!(app.tui_state.directory_pane.items[0].path, temp_path);
+    }
+
+    #[test]
+    fn toggle_item_removes_missing_file_from_playlist() {
+        // Given a playlist with a missing file.
+        let mut app = TestAppBuilder::new()
+            .playlist_items(vec![PathBuf::from("/nonexistent/file.mp4")])
+            .build();
+        app.tui_state.focused_pane = Pane::Playlist;
+
+        // When executing ToggleItem action.
+        app.execute_action(Action::ToggleItem);
+
+        // Then the item is removed completely (not added to directory).
+        assert!(app.tui_state.playlist_pane.items.is_empty());
+        assert!(app.tui_state.directory_pane.items.is_empty());
     }
 
     #[test]

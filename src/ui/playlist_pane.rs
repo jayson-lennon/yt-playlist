@@ -154,11 +154,21 @@ impl PlaylistPane {
             .enumerate()
             .map(|(display_idx, (_original_idx, item))| {
                 let is_selected = display_idx == self.selected && is_focused && !is_filtering;
+                let file_missing = !item.path.exists();
                 let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
+                    if file_missing {
+                        Style::default()
+                            .fg(Color::Red)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    }
+                } else if file_missing {
+                    Style::default().fg(Color::Red)
                 } else {
                     Style::default()
                 };
