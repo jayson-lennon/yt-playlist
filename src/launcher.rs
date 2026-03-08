@@ -19,8 +19,12 @@ pub struct LaunchResult {
 }
 
 pub trait Launcher: Send + Sync {
+    /// Returns the name identifier for this launcher implementation.
     fn name(&self) -> &'static str;
 
+    /// Opens a file using either a custom shell command or the system's default application.
+    /// The command template supports `{{path}}` and `{{socket_path}}` placeholders.
+    ///
     /// # Errors
     ///
     /// Returns an error if the file cannot be launched, either due to command

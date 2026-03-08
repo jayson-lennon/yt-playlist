@@ -17,13 +17,18 @@ use wherror::Error;
 pub struct MpvError;
 
 pub trait MpvBackend: Send + Sync {
+    /// Returns the name identifier for this backend implementation.
     fn name(&self) -> &'static str;
 
+    /// Loads a single media file into mpv, replacing the current playlist.
+    ///
     /// # Errors
     ///
     /// Returns an error if the file cannot be loaded into mpv.
     fn load_file(&self, path: &Path) -> Result<(), Report<MpvError>>;
 
+    /// Loads multiple media files as a playlist into mpv, replacing the current playlist.
+    ///
     /// # Errors
     ///
     /// Returns an error if the playlist cannot be loaded into mpv.
@@ -112,9 +117,14 @@ impl MpvBackend for MpvipcBackend {
 }
 
 pub trait MpvLauncher: Send + Sync {
+    /// Returns the name identifier for this launcher implementation.
     fn name(&self) -> &'static str;
+
+    /// Checks whether an mpv process is currently running with the specified socket path.
     fn is_running(&self, socket_path: &str) -> bool;
 
+    /// Spawns a new mpv process configured with the specified IPC socket path.
+    ///
     /// # Errors
     ///
     /// Returns an error if mpv cannot be spawned.

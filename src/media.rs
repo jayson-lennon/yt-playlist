@@ -14,8 +14,11 @@ use wherror::Error;
 pub struct MediaError;
 
 pub trait MediaQueryBackend: Send + Sync {
+    /// Returns the name identifier for this media query backend implementation.
     fn name(&self) -> &'static str;
 
+    /// Retrieves the duration of the media file at the specified path.
+    ///
     /// # Errors
     ///
     /// Returns an error if the media duration cannot be determined.

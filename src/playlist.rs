@@ -56,13 +56,18 @@ pub struct PlaylistData {
 }
 
 pub trait PlaylistStorageBackend: Send + Sync {
+    /// Returns the name identifier for this storage backend implementation.
     fn name(&self) -> &'static str;
 
+    /// Loads the playlist data from persistent storage, including the file list and metadata.
+    ///
     /// # Errors
     ///
     /// Returns an error if the playlist data cannot be loaded from storage.
     fn load(&self) -> Result<PlaylistData, Report<IoError>>;
 
+    /// Persists the playlist data to storage, including the file list and all metadata.
+    ///
     /// # Errors
     ///
     /// Returns an error if the playlist data cannot be saved to storage.
