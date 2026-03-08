@@ -18,6 +18,8 @@ struct FileEntry {
     is_virtual: bool,
     #[serde(default)]
     deleted: bool,
+    #[serde(default)]
+    mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +46,7 @@ pub struct FileMetadata {
     pub alias: Option<String>,
     pub is_virtual: bool,
     pub deleted: bool,
+    pub mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -106,7 +109,7 @@ impl PlaylistStorageBackend for TomlBackend {
 
         let toml: PlaylistToml = toml::from_str(&content)
             .change_context(IoError)
-            .attach("failed to parse playlist.toml")?;
+            .attach("failed to parse shownotes.toml")?;
 
         let playlist: Vec<PathBuf> = toml
             .playlist
@@ -138,6 +141,7 @@ impl PlaylistStorageBackend for TomlBackend {
                         alias: entry.alias,
                         is_virtual: entry.is_virtual,
                         deleted: entry.deleted,
+                        mime_type: entry.mime_type,
                     },
                 )
             })
@@ -156,6 +160,7 @@ impl PlaylistStorageBackend for TomlBackend {
                 alias: v.alias.clone(),
                 is_virtual: v.is_virtual,
                 deleted: v.deleted,
+                mime_type: v.mime_type.clone(),
             })
             .collect();
 
@@ -171,7 +176,7 @@ impl PlaylistStorageBackend for TomlBackend {
 
         let content = toml::to_string_pretty(&toml)
             .change_context(IoError)
-            .attach("failed to serialize playlist.toml")?;
+            .attach("failed to serialize shownotes.toml")?;
 
         std::fs::write(&self.path, content)
             .change_context(IoError)
@@ -359,6 +364,7 @@ playlist = ["video.mp4"]
                 alias: Some("My Video".to_string()),
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
 
@@ -383,6 +389,7 @@ playlist = ["video.mp4"]
                 alias: Some("My Video".to_string()),
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
 
@@ -442,6 +449,7 @@ playlist = ["video.mp4"]
             alias: Some("test".to_string()),
             is_virtual: false,
             deleted: false,
+            mime_type: None,
         };
 
         // When cloning.

@@ -1,6 +1,6 @@
 .opencode/
 /target
-playlist.toml
+shownotes.toml
 /.build
 *.zst
 /pkg

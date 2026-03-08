@@ -1,6 +1,7 @@
 use std::{
     path::Path,
     process::{Command, Stdio},
+    sync::Arc,
 };
 
 use derive_more::Debug;
@@ -19,12 +20,35 @@ pub struct LaunchResult {
 
 #[allow(clippy::missing_errors_doc)]
 pub trait Launcher: Send + Sync {
+    fn name(&self) -> &'static str;
     fn launch(
         &self,
         path: &Path,
         command: Option<&str>,
         socket_path: &str,
     ) -> Result<LaunchResult, Report<LaunchError>>;
+}
+
+#[derive(Debug, Clone)]
+pub struct LauncherService {
+    #[debug("backend<{}>", self.backend.name())]
+    backend: Arc<dyn Launcher>,
+}
+
+#[allow(clippy::missing_errors_doc)]
+impl LauncherService {
+    pub fn new(backend: Arc<dyn Launcher>) -> Self {
+        Self { backend }
+    }
+
+    pub fn launch(
+        &self,
+        path: &Path,
+        command: Option<&str>,
+        socket_path: &str,
+    ) -> Result<LaunchResult, Report<LaunchError>> {
+        self.backend.launch(path, command, socket_path)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +72,10 @@ impl Default for FileLauncher {
 }
 
 impl Launcher for FileLauncher {
+    fn name(&self) -> &'static str {
+        "file"
+    }
+
     fn launch(
         &self,
         path: &Path,
@@ -187,6 +215,10 @@ mod tests {
     }
 
     impl Launcher for FakeLauncher {
+        fn name(&self) -> &'static str {
+            "fake"
+        }
+
         fn launch(
             &self,
             path: &Path,

@@ -38,6 +38,7 @@ pub fn analyze_files(
                         alias,
                         is_virtual: false,
                         deleted: false,
+                        mime_type: None,
                     },
                 );
             }
@@ -126,6 +127,7 @@ mod tests {
                 alias: None,
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("b.mp4", Duration::from_secs(60));
@@ -152,6 +154,7 @@ mod tests {
                 alias: Some("My Video".to_string()),
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
@@ -177,6 +180,7 @@ mod tests {
                 alias: Some("My Video".to_string()),
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
@@ -233,6 +237,7 @@ mod tests {
                 alias: Some("Video A".to_string()),
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
         metadata.insert(
@@ -242,6 +247,7 @@ mod tests {
                 alias: Some("Video B".to_string()),
                 is_virtual: false,
                 deleted: false,
+                mime_type: None,
             },
         );
         let backend = FakeMediaBackend::new().with_duration("b.mp4", Duration::from_secs(60));

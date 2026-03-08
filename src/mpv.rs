@@ -101,13 +101,39 @@ impl MpvBackend for MpvipcBackend {
 
 #[allow(clippy::missing_errors_doc)]
 pub trait MpvLauncher: Send + Sync {
+    fn name(&self) -> &'static str;
     fn is_running(&self, socket_path: &str) -> bool;
     fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>>;
+}
+
+#[derive(Debug, Clone)]
+pub struct MpvLauncherService {
+    #[debug("backend<{}>", self.backend.name())]
+    backend: Arc<dyn MpvLauncher>,
+}
+
+#[allow(clippy::missing_errors_doc)]
+impl MpvLauncherService {
+    pub fn new(backend: Arc<dyn MpvLauncher>) -> Self {
+        Self { backend }
+    }
+
+    pub fn is_running(&self, socket_path: &str) -> bool {
+        self.backend.is_running(socket_path)
+    }
+
+    pub fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>> {
+        self.backend.spawn(socket_path)
+    }
 }
 
 pub struct RealMpvLauncher;
 
 impl MpvLauncher for RealMpvLauncher {
+    fn name(&self) -> &'static str {
+        "real"
+    }
+
     fn is_running(&self, socket_path: &str) -> bool {
         is_mpv_running_with_socket(socket_path)
     }

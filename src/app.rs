@@ -56,24 +56,58 @@ impl App {
     pub fn load_playlist(&mut self) {
         match self.services.storage.load() {
             Ok(data) => {
+                let playlist_paths: std::collections::HashSet<_> =
+                    data.playlist.iter().cloned().collect();
+
                 self.tui_state.playlist_pane.items = data
                     .playlist
                     .into_iter()
                     .map(|path| {
                         let metadata = data.files.get(&path);
+                        let is_virtual = metadata.map(|m| m.is_virtual).unwrap_or(false);
                         let duration = metadata.and_then(|m| m.duration);
                         let alias = metadata.and_then(|m| m.alias.clone());
-                        let mime_type = get_mime_type(&path);
+                        let mime_type = metadata
+                            .and_then(|m| m.mime_type.clone())
+                            .or_else(|| get_mime_type(&path));
                         PlaylistItem {
                             path,
                             duration,
                             alias,
                             mime_type,
-                            is_virtual: false,
+                            is_virtual,
                         }
                     })
                     .collect();
+
+                let mut virtual_library_items: Vec<PlaylistItem> = data
+                    .files
+                    .into_iter()
+                    .filter(|(path, metadata)| {
+                        metadata.is_virtual && !playlist_paths.contains(path)
+                    })
+                    .map(|(path, metadata)| {
+                        let mime_type = metadata.mime_type.or_else(|| get_mime_type(&path));
+                        PlaylistItem {
+                            path,
+                            duration: metadata.duration,
+                            alias: metadata.alias,
+                            mime_type,
+                            is_virtual: true,
+                        }
+                    })
+                    .collect();
+                virtual_library_items.sort_by(|a, b| a.path.cmp(&b.path));
+
                 self.refresh_library();
+
+                for item in virtual_library_items {
+                    self.tui_state.library_pane.items.push(item);
+                }
+                self.tui_state
+                    .library_pane
+                    .items
+                    .sort_by(|a, b| a.path.cmp(&b.path));
             }
             Err(e) => {
                 self.tui_state
@@ -92,6 +126,7 @@ impl App {
                     alias: item.alias.clone(),
                     is_virtual: item.is_virtual,
                     deleted: false,
+                    mime_type: item.mime_type.clone(),
                 },
             );
         }
@@ -103,6 +138,7 @@ impl App {
                     alias: item.alias.clone(),
                     is_virtual: item.is_virtual,
                     deleted: false,
+                    mime_type: item.mime_type.clone(),
                 },
             );
         }
@@ -344,10 +380,18 @@ impl App {
     }
 
     fn delete_library_item(&mut self) {
-        if let Some(item) = self.tui_state.selected_library_item_mut() {
-            item.mime_type = Some("deleted".to_string());
+        if let Some(item) = self.tui_state.selected_library_item() {
+            if item.is_virtual {
+                self.tui_state.library_pane.remove();
+                self.save_playlist();
+                self.tui_state.status_message = Some("Virtual entry deleted".to_string());
+            } else {
+                self.tui_state.status_message = Some(
+                    "Only virtual entries (URLs) can be deleted. Use 'd' to move to library."
+                        .to_string(),
+                );
+            }
         }
-        self.tui_state.status_message = Some("Item marked as deleted".to_string());
     }
 
     fn submit_url_input(&mut self) {
@@ -365,6 +409,7 @@ impl App {
                 .library_pane
                 .items
                 .sort_by(|a, b| a.path.cmp(&b.path));
+            self.save_playlist();
             self.tui_state.status_message = Some("URL added to library".to_string());
         }
     }
@@ -383,6 +428,7 @@ impl App {
                 self.tui_state.focused_pane = Pane::Playlist;
             }
             self.tui_state.needs_clear = true;
+            self.save_playlist();
         }
     }
 
@@ -401,6 +447,7 @@ impl App {
                 self.tui_state.focused_pane = Pane::Library;
             }
             self.tui_state.needs_clear = true;
+            self.save_playlist();
         }
     }
 
@@ -483,9 +530,9 @@ mod tests {
 
     use super::*;
     use crate::keymap::{Action, Keymap};
-    use crate::launcher::{LaunchResult, Launcher};
+    use crate::launcher::{LaunchResult, Launcher, LauncherService};
     use crate::media::{MediaError, MediaQuery, MediaQueryBackend};
-    use crate::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher};
+    use crate::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher, MpvLauncherService};
     use crate::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
 
     struct FakeMpvBackend;
@@ -520,6 +567,10 @@ mod tests {
     }
 
     impl MpvLauncher for FakeMpvLauncher {
+        fn name(&self) -> &'static str {
+            "fake"
+        }
+
         fn is_running(&self, _socket_path: &str) -> bool {
             self.running
         }
@@ -560,6 +611,10 @@ mod tests {
     struct FakeLauncher;
 
     impl Launcher for FakeLauncher {
+        fn name(&self) -> &'static str {
+            "fake"
+        }
+
         fn launch(
             &self,
             _path: &Path,
@@ -630,8 +685,8 @@ mod tests {
                 mpv: MpvClient::new(Arc::new(self.mpv_backend)),
                 media: MediaQuery::new(Arc::new(self.media_backend)),
                 storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
-                mpv_launcher: Arc::new(self.mpv_launcher),
-                file_launcher: Arc::new(self.file_launcher),
+                mpv_launcher: MpvLauncherService::new(Arc::new(self.mpv_launcher)),
+                file_launcher: LauncherService::new(Arc::new(self.file_launcher)),
             };
 
             let mut app = App {

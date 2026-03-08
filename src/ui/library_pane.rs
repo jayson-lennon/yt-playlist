@@ -71,10 +71,21 @@ impl LibraryPane {
     }
 
     pub fn refresh(&mut self, entries: Vec<PlaylistItem>, playlist_paths: &[&PathBuf]) {
-        self.items = entries
-            .into_iter()
-            .filter(|p| !playlist_paths.contains(&&p.path))
-            .collect();
+        use std::collections::HashSet;
+
+        let entry_paths: HashSet<_> = entries.iter().map(|e| &e.path).collect();
+
+        self.items
+            .retain(|item| item.is_virtual || entry_paths.contains(&item.path));
+
+        let existing_paths: HashSet<_> = self.items.iter().map(|i| i.path.clone()).collect();
+        for entry in entries {
+            if !playlist_paths.contains(&&entry.path) && !existing_paths.contains(&entry.path) {
+                self.items.push(entry);
+            }
+        }
+
+        self.items.sort_by(|a, b| a.path.cmp(&b.path));
         if self.items.is_empty() {
             self.selected = 0;
         } else if self.selected >= self.items.len() {
@@ -223,6 +234,16 @@ mod tests {
             alias: None,
             mime_type: None,
             is_virtual: false,
+        }
+    }
+
+    fn virtual_item(path: &str) -> PlaylistItem {
+        PlaylistItem {
+            path: PathBuf::from(path),
+            duration: None,
+            alias: None,
+            mime_type: None,
+            is_virtual: true,
         }
     }
 
@@ -508,5 +529,52 @@ mod tests {
         // Then items in playlist are excluded.
         assert_eq!(pane.items.len(), 2);
         assert!(pane.items.iter().all(|i| i.path != PathBuf::from("b.mp4")));
+    }
+
+    #[test]
+    fn refresh_preserves_virtual_items() {
+        // Given a pane with virtual items.
+        let mut pane = LibraryPane::new();
+        pane.items = vec![
+            virtual_item("https://example.com/video.mp4"),
+            item("old.mp4"),
+        ];
+
+        // When refreshing with new disk entries (old.mp4 no longer exists).
+        let entries = vec![item("new.mp4")];
+        pane.refresh(entries, &[]);
+
+        // Then virtual items are preserved, old non-virtual is removed, new is added.
+        assert_eq!(pane.items.len(), 2);
+        assert!(pane
+            .items
+            .iter()
+            .any(|i| i.path == PathBuf::from("https://example.com/video.mp4") && i.is_virtual));
+        assert!(pane
+            .items
+            .iter()
+            .any(|i| i.path == PathBuf::from("new.mp4")));
+        assert!(!pane
+            .items
+            .iter()
+            .any(|i| i.path == PathBuf::from("old.mp4")));
+    }
+
+    #[test]
+    fn refresh_preserves_virtual_items_not_in_disk_entries() {
+        // Given a pane with only virtual items.
+        let mut pane = LibraryPane::new();
+        pane.items = vec![virtual_item("https://youtube.com/watch?v=abc")];
+
+        // When refreshing with empty disk entries.
+        pane.refresh(vec![], &[]);
+
+        // Then virtual items are still present.
+        assert_eq!(pane.items.len(), 1);
+        assert_eq!(
+            pane.items[0].path,
+            PathBuf::from("https://youtube.com/watch?v=abc")
+        );
+        assert!(pane.items[0].is_virtual);
     }
 }

@@ -13,9 +13,9 @@ pub mod ui;
 pub use app::App;
 pub use config::{load, Config, ConfigError};
 pub use keymap::{Action, KeyBinding, KeyCategory, KeyContext, Keymap};
-pub use launcher::{FileLauncher, LaunchError, LaunchResult, Launcher};
+pub use launcher::{FileLauncher, LaunchError, LaunchResult, Launcher, LauncherService};
 pub use media::{CachedMediaBackend, MediaError, MediaQuery, MediaQueryBackend};
-pub use mpv::{MpvBackend, MpvClient, MpvError};
+pub use mpv::{MpvBackend, MpvClient, MpvError, MpvLauncherService};
 pub use playlist::{
     FileMetadata, IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend,
 };

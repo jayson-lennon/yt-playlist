@@ -17,9 +17,9 @@ use shownotes::{
     analysis,
     app::App,
     config::{load, Config},
-    launcher::FileLauncher,
+    launcher::{FileLauncher, LauncherService},
     media::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
-    mpv::{MpvBackend, MpvClient, MpvipcBackend, RealMpvLauncher},
+    mpv::{MpvBackend, MpvClient, MpvLauncherService, MpvipcBackend, RealMpvLauncher},
     playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
     ui,
@@ -38,7 +38,7 @@ enum Commands {
     /// Run the TUI (default when no command specified)
     Tui {
         /// Playlist file path
-        #[arg(short, long, default_value = "playlist.toml")]
+        #[arg(short, long, default_value = "shownotes.toml")]
         playlist: PathBuf,
 
         /// mpv socket path
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.command.unwrap_or(Commands::Tui {
-        playlist: PathBuf::from("playlist.toml"),
+        playlist: PathBuf::from("shownotes.toml"),
         socket: PathBuf::from("/tmp/mpvsocket"),
     }) {
         Commands::Tui { playlist, socket } => run_tui(playlist, socket),
@@ -190,8 +190,8 @@ fn build_services(
         mpv: MpvClient::new(mpv_backend),
         media: MediaQuery::new(media_backend),
         storage: PlaylistStorage::new(storage_backend),
-        mpv_launcher: Arc::new(RealMpvLauncher),
-        file_launcher: Arc::new(FileLauncher::new()),
+        mpv_launcher: MpvLauncherService::new(Arc::new(RealMpvLauncher)),
+        file_launcher: LauncherService::new(Arc::new(FileLauncher::new())),
     }
 }
 
