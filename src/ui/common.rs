@@ -14,6 +14,7 @@ pub struct PlaylistItem {
     pub path: PathBuf,
     pub duration: Option<Duration>,
     pub alias: Option<String>,
+    pub mime_type: Option<String>,
 }
 
 pub fn format_duration(duration: Option<Duration>) -> String {
@@ -31,11 +32,56 @@ pub fn format_duration(duration: Option<Duration>) -> String {
 
 pub fn get_display_name(item: &PlaylistItem) -> String {
     item.alias.clone().unwrap_or_else(|| {
-        item.path.file_name().map_or_else(
+        item.path.file_stem().map_or_else(
             || item.path.to_string_lossy().into_owned(),
             |n| n.to_string_lossy().into_owned(),
         )
     })
+}
+
+pub fn get_mime_type(path: &PathBuf) -> Option<String> {
+    infer::get_from_path(path)
+        .ok()
+        .flatten()
+        .map(|t| t.mime_type().to_string())
+}
+
+pub fn format_mime_type(mime: Option<&str>) -> String {
+    match mime {
+        Some(m) => {
+            if let Some(subtype) = m.strip_prefix("application/") {
+                subtype.to_string()
+            } else {
+                m.to_string()
+            }
+        }
+        None => "unknown".to_string(),
+    }
+}
+
+pub fn format_item_line(item: &PlaylistItem) -> String {
+    let mime_str = format_mime_type(item.mime_type.as_deref());
+    let name = item.path.file_stem().map_or_else(
+        || item.path.to_string_lossy().into_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+
+    match (item.duration, &item.alias) {
+        (Some(_), Some(alias)) => {
+            let duration_str = format_duration(item.duration);
+            format!("[{mime_str}] {duration_str} {name} / {alias}")
+        }
+        (Some(_), None) => {
+            let duration_str = format_duration(item.duration);
+            format!("[{mime_str}] {duration_str} {name}")
+        }
+        (None, Some(alias)) => {
+            format!("[{mime_str}] {name} / {alias}")
+        }
+        (None, None) => {
+            format!("[{mime_str}] {name}")
+        }
+    }
 }
 
 pub fn filter_items<'a>(
@@ -82,6 +128,7 @@ mod tests {
             path: PathBuf::from(path),
             duration: None,
             alias: None,
+            mime_type: None,
         }
     }
 
@@ -90,6 +137,7 @@ mod tests {
             path: PathBuf::from(path),
             duration: None,
             alias: Some(alias.to_string()),
+            mime_type: None,
         }
     }
 
@@ -98,6 +146,7 @@ mod tests {
             path: PathBuf::from(path),
             duration: Some(Duration::from_secs(secs)),
             alias: None,
+            mime_type: None,
         }
     }
 
@@ -179,8 +228,8 @@ mod tests {
         // When getting display name.
         let result = get_display_name(&item);
 
-        // Then filename is returned.
-        assert_eq!(result, "video.mp4");
+        // Then filename without extension is returned.
+        assert_eq!(result, "video");
     }
 
     #[test]
@@ -289,5 +338,136 @@ mod tests {
 
         // Then original index is preserved.
         assert_eq!(result[0].0, 2);
+    }
+
+    #[test]
+    fn format_mime_type_returns_full_mime_for_video() {
+        // Given a video mime type.
+        let mime = "video/mp4";
+
+        // When formatting.
+        let result = format_mime_type(Some(mime));
+
+        // Then full mime type is returned.
+        assert_eq!(result, "video/mp4");
+    }
+
+    #[test]
+    fn format_mime_type_returns_full_mime_for_audio() {
+        // Given an audio mime type.
+        let mime = "audio/mpeg";
+
+        // When formatting.
+        let result = format_mime_type(Some(mime));
+
+        // Then full mime type is returned.
+        assert_eq!(result, "audio/mpeg");
+    }
+
+    #[test]
+    fn format_mime_type_returns_subtype_for_application() {
+        // Given an application mime type.
+        let mime = "application/pdf";
+
+        // When formatting.
+        let result = format_mime_type(Some(mime));
+
+        // Then only subtype is returned.
+        assert_eq!(result, "pdf");
+    }
+
+    #[test]
+    fn format_mime_type_returns_unknown_for_none() {
+        // Given no mime type.
+        // When formatting.
+        let result = format_mime_type(None);
+
+        // Then unknown is returned.
+        assert_eq!(result, "unknown");
+    }
+
+    #[test]
+    fn format_item_line_formats_with_duration_and_alias() {
+        // Given an item with duration and alias.
+        let item = PlaylistItem {
+            path: PathBuf::from("/path/to/video.mp4"),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then line is formatted correctly.
+        assert_eq!(result, "[video/mp4] [00:01:05] video / My Video");
+    }
+
+    #[test]
+    fn format_item_line_formats_with_duration_no_alias() {
+        // Given an item with duration but no alias.
+        let item = PlaylistItem {
+            path: PathBuf::from("/path/to/video.mp4"),
+            duration: Some(Duration::from_secs(65)),
+            alias: None,
+            mime_type: Some("video/mp4".to_string()),
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then line is formatted correctly.
+        assert_eq!(result, "[video/mp4] [00:01:05] video");
+    }
+
+    #[test]
+    fn format_item_line_formats_without_duration_with_alias() {
+        // Given an item without duration but with alias.
+        let item = PlaylistItem {
+            path: PathBuf::from("/path/to/doc.pdf"),
+            duration: None,
+            alias: Some("My Doc".to_string()),
+            mime_type: Some("application/pdf".to_string()),
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then line is formatted correctly.
+        assert_eq!(result, "[pdf] doc / My Doc");
+    }
+
+    #[test]
+    fn format_item_line_formats_without_duration_or_alias() {
+        // Given an item without duration or alias.
+        let item = PlaylistItem {
+            path: PathBuf::from("/path/to/doc.pdf"),
+            duration: None,
+            alias: None,
+            mime_type: Some("application/pdf".to_string()),
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then line is formatted correctly.
+        assert_eq!(result, "[pdf] doc");
+    }
+
+    #[test]
+    fn format_item_line_uses_unknown_when_no_mime() {
+        // Given an item without mime type.
+        let item = PlaylistItem {
+            path: PathBuf::from("/path/to/file.xyz"),
+            duration: None,
+            alias: None,
+            mime_type: None,
+        };
+
+        // When formatting.
+        let result = format_item_line(&item);
+
+        // Then unknown is used.
+        assert_eq!(result, "[unknown] file");
     }
 }

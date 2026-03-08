@@ -66,11 +66,13 @@ impl TuiState {
         path: PathBuf,
         duration: Option<std::time::Duration>,
         alias: Option<String>,
+        mime_type: Option<String>,
     ) {
         self.playlist_pane.add(PlaylistItem {
             path,
             duration,
             alias,
+            mime_type,
         });
     }
 
@@ -241,6 +243,7 @@ mod tests {
             path: PathBuf::from(path),
             duration: None,
             alias: None,
+            mime_type: None,
         }
     }
 
@@ -381,6 +384,7 @@ mod tests {
             PathBuf::from("test.mp4"),
             Some(Duration::from_secs(120)),
             Some("alias".to_string()),
+            Some("video/mp4".to_string()),
         );
 
         // Then item is added.
@@ -483,6 +487,7 @@ mod tests {
             path: PathBuf::from("test.mp4"),
             duration: None,
             alias: Some("existing".to_string()),
+            mime_type: None,
         }];
 
         // When starting rename.
@@ -534,6 +539,7 @@ mod tests {
             path: PathBuf::from("test.mp4"),
             duration: None,
             alias: Some("old".to_string()),
+            mime_type: None,
         }];
         state.focused_pane = Pane::Playlist;
         state.rename.input = String::new();

@@ -7,7 +7,7 @@ use crate::keymap::{Action, Keymap};
 use crate::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui_state::TuiState;
-use crate::ui::{Pane, PlaylistItem};
+use crate::ui::{get_mime_type, Pane, PlaylistItem};
 
 pub struct App {
     pub services: Services,
@@ -56,10 +56,12 @@ impl App {
                         let metadata = data.files.get(&path);
                         let duration = metadata.and_then(|m| m.duration);
                         let alias = metadata.and_then(|m| m.alias.clone());
+                        let mime_type = get_mime_type(&path);
                         PlaylistItem {
                             path,
                             duration,
                             alias,
+                            mime_type,
                         }
                     })
                     .collect();
@@ -122,10 +124,12 @@ impl App {
                 if path.is_file() {
                     let canonical = path.canonicalize().unwrap_or(path);
                     let duration = self.services.media.get_duration(&canonical).ok();
+                    let mime_type = get_mime_type(&canonical);
                     entries.push(PlaylistItem {
                         path: canonical,
                         duration,
                         alias: None,
+                        mime_type,
                     });
                 }
             }
@@ -299,7 +303,7 @@ impl App {
     fn move_from_directory_to_playlist(&mut self) {
         if let Some(item) = self.tui_state.selected_directory_item().cloned() {
             self.tui_state
-                .add_to_playlist(item.path, item.duration, item.alias);
+                .add_to_playlist(item.path, item.duration, item.alias, item.mime_type);
             self.tui_state.remove_from_directory();
             if self.tui_state.directory_pane.items.is_empty() {
                 self.tui_state.focused_pane = Pane::Playlist;
@@ -568,19 +572,23 @@ mod tests {
 
             for path in self.playlist_items {
                 let duration = app.services.media.get_duration(&path).ok();
+                let mime_type = get_mime_type(&path);
                 app.tui_state.playlist_pane.items.push(PlaylistItem {
                     path,
                     duration,
                     alias: None,
+                    mime_type,
                 });
             }
 
             for path in self.directory_items {
                 let duration = app.services.media.get_duration(&path).ok();
+                let mime_type = get_mime_type(&path);
                 app.tui_state.directory_pane.items.push(PlaylistItem {
                     path,
                     duration,
                     alias: None,
+                    mime_type,
                 });
             }
 

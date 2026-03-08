@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use super::common::{filter_items, format_duration, get_display_name, PlaylistItem};
+use super::common::{filter_items, format_duration, format_item_line, PlaylistItem};
 use super::filter::Filter;
 
 #[derive(Debug, Clone)]
@@ -150,9 +150,7 @@ impl DirectoryPane {
                 } else {
                     Style::default()
                 };
-                let duration_str = format_duration(item.duration);
-                let name = get_display_name(item);
-                let text = format!("{duration_str} {name}");
+                let text = format_item_line(item);
                 ListItem::new(text).style(style)
             })
             .collect();
@@ -215,6 +213,7 @@ mod tests {
             path: PathBuf::from(path),
             duration: None,
             alias: None,
+            mime_type: None,
         }
     }
 
