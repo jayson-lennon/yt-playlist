@@ -20,6 +20,8 @@ pub struct App {
     pub should_quit: bool,
     /// Path to file for which to open notes; signals the main loop to spawn an editor.
     pub pending_notes_path: Option<PathBuf>,
+    /// Flag to trigger fuzzy notes search; signals the main loop to spawn skim.
+    pub pending_fuzzy_notes: bool,
     /// Key bindings mapping key combinations to actions.
     pub keymap: Keymap,
     /// Path to mpv's IPC socket for remote control communication.
@@ -34,6 +36,7 @@ impl App {
             config,
             should_quit: false,
             pending_notes_path: None,
+            pending_fuzzy_notes: false,
             keymap: Keymap::new(),
             socket_path,
         };
@@ -376,6 +379,9 @@ impl App {
             Action::Delete => {
                 self.delete_library_item();
             }
+            Action::FuzzyNotes => {
+                self.pending_fuzzy_notes = true;
+            }
         }
     }
 
@@ -696,6 +702,7 @@ mod tests {
                 config: Config::default(),
                 should_quit: false,
                 pending_notes_path: None,
+                pending_fuzzy_notes: false,
                 keymap: Keymap::new(),
                 socket_path: String::from("/tmp/mpvsocket"),
             };

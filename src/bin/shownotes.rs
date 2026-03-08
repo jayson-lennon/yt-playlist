@@ -525,6 +525,39 @@ fn run_app(
             }
         }
 
+        if app.pending_fuzzy_notes {
+            app.pending_fuzzy_notes = false;
+            disable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )?;
+            terminal.show_cursor()?;
+
+            let result = run_fuzzy_notes(app);
+
+            enable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                EnterAlternateScreen,
+                EnableMouseCapture
+            )?;
+            terminal.hide_cursor()?;
+            terminal.clear()?;
+            let keymap = app.keymap.clone();
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+
+            match result {
+                Ok(count) => {
+                    app.tui_state.status_message = Some(format!("Created {count} symlink(s)"));
+                }
+                Err(e) => {
+                    app.tui_state.status_message = Some(format!("Fuzzy search failed: {e}"));
+                }
+            }
+        }
+
         if app.should_quit {
             return Ok(());
         }
@@ -574,5 +607,78 @@ fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
         }
 
         Ok(())
+    })
+}
+
+fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
+    let notes = app
+        .services
+        .notes
+        .as_ref()
+        .ok_or("Notes service not initialized")?;
+
+    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    rt.block_on(async {
+        let all_notes = notes
+            .db
+            .get_all_notes_with_paths()
+            .await
+            .map_err(|e| format!("Database error: {e:?}"))?;
+
+        if all_notes.is_empty() {
+            return Ok(0);
+        }
+
+        let input: String = all_notes
+            .iter()
+            .fold(String::new(), |mut output, (path, content)| {
+                let cleaned: String = content
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .collect::<Vec<_>>()
+                    .join(". ");
+                let _ = writeln!(output, "{path}\t{cleaned}");
+                output
+            });
+
+        let mut child = Command::new("sk")
+            .args([
+                "-m",
+                "--delimiter=\\t",
+                "--with-nth=2..",
+                "--color=marker:51,hl+:201,hl:219",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn skim: {e}"))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(input.as_bytes())
+                .map_err(|e| format!("Failed to write to skim: {e}"))?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to read skim output: {e}"))?;
+
+        let selected = String::from_utf8_lossy(&output.stdout);
+        let selected_paths: Vec<&str> = selected
+            .lines()
+            .filter_map(|line| line.split('\t').next())
+            .collect();
+
+        let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {e}"))?;
+        let mut count = 0;
+        for path in &selected_paths {
+            let src = PathBuf::from(path);
+            match create_symlink_with_suffix(&src, &cwd) {
+                Ok(_) => count += 1,
+                Err(e) => eprintln!("Failed to create symlink for {path}: {e:?}"),
+            }
+        }
+
+        Ok(count)
     })
 }

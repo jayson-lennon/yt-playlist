@@ -25,6 +25,7 @@ pub enum Action {
     LaunchMpv,
     AddUrl,
     Delete,
+    FuzzyNotes,
 }
 
 #[derive(Debug, Clone)]
@@ -125,11 +126,18 @@ impl Keymap {
             PrefixKeyBinding {
                 prefix: 'g',
                 description: "general",
-                followups: vec![FollowupKey {
-                    key: 'm',
-                    action: Action::LaunchMpv,
-                    description: "launch mpv",
-                }],
+                followups: vec![
+                    FollowupKey {
+                        key: 'm',
+                        action: Action::LaunchMpv,
+                        description: "launch mpv",
+                    },
+                    FollowupKey {
+                        key: 'f',
+                        action: Action::FuzzyNotes,
+                        description: "fuzzy search notes",
+                    },
+                ],
             },
             PrefixKeyBinding {
                 prefix: 'a',
