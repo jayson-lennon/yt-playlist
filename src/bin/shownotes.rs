@@ -13,7 +13,7 @@ use crossterm::{
 use error_stack::{fmt::ColorMode, Report};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use yt_playlist::{
+use shownotes::{
     analysis,
     app::App,
     config::{load, Config},
@@ -26,7 +26,7 @@ use yt_playlist::{
 };
 
 #[derive(Parser)]
-#[command(name = "yt-playlist")]
+#[command(name = "shownotes")]
 #[command(about = "TUI playlist manager for mpv")]
 struct Args {
     #[command(subcommand)]

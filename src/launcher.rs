@@ -63,10 +63,10 @@ impl Launcher for FileLauncher {
                 .replace("{{socket_path}}", &socket_escaped)
                 .replace("{{path}}", &escaped_path);
 
-            let substituted = if substituted.starts_with("yt-playlist ") {
+            let substituted = if substituted.starts_with("shownotes ") {
                 if let Ok(exe_path) = std::env::current_exe() {
                     let exe_escaped = shell_escape::escape(exe_path.to_string_lossy());
-                    substituted.replacen("yt-playlist", &exe_escaped, 1)
+                    substituted.replacen("shownotes", &exe_escaped, 1)
                 } else {
                     substituted
                 }

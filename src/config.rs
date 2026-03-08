@@ -24,7 +24,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let mpv_cmd = "yt-playlist action mpv {{path}} --socket {{socket_path}}".to_string();
+        let mpv_cmd = "shownotes action mpv {{path}} --socket {{socket_path}}".to_string();
         Self {
             video: MimeCategory {
                 mime_types: vec![
@@ -118,11 +118,11 @@ impl Config {
 }
 
 fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("yt-playlist").join("yt-playlist.toml"))
+    dirs::config_dir().map(|p| p.join("shownotes").join("shownotes.toml"))
 }
 
 fn config_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("yt-playlist"))
+    dirs::config_dir().map(|p| p.join("shownotes"))
 }
 
 /// Loads configuration from the config file, or creates a default one if it doesn't exist.

@@ -1,6 +1,6 @@
 # Maintainer: Jayson Lennon <jayson@jaysonlennon.dev>
 
-pkgname=yt-playlist
+pkgname=shownotes
 pkgver=0.1.0
 pkgrel=1
 pkgdesc='manage playlists for mpv'
@@ -50,5 +50,5 @@ package() {
     local _buildtarget="$_builddir/target/release"
 
     # Install binaries
-    install -Dm0755 -t "$pkgdir/usr/bin/" "$_buildtarget/yt-playlist"
+    install -Dm0755 -t "$pkgdir/usr/bin/" "$_buildtarget/shownotes"
 }

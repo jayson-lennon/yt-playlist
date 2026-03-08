@@ -76,7 +76,7 @@ impl MpvBackend for MpvipcBackend {
 
     fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
         let temp_dir = std::env::temp_dir();
-        let playlist_path = temp_dir.join("yt-playlist-temp.m3u");
+        let playlist_path = temp_dir.join("shownotes-temp.m3u");
         let file = File::create(&playlist_path)
             .change_context(MpvError)
             .attach("failed to create temp playlist file")?;

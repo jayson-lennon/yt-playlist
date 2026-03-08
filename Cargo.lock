@@ -1535,6 +1535,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45bb67a18fa91266cc7807181f62f9178a6873bfad7dc788c42e6430db40184f"
 
 [[package]]
+name = "shownotes"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "crossterm 0.28.1",
+ "derive_more",
+ "dirs",
+ "error-stack",
+ "ffprobe",
+ "futures-util",
+ "fuzzy-matcher",
+ "infer",
+ "mpvipc",
+ "ratatui",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shell-escape",
+ "sysinfo",
+ "tempfile",
+ "tokio",
+ "toml",
+ "wherror",
+]
+
+[[package]]
 name = "signal-hook"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2491,32 +2517,6 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
-]
-
-[[package]]
-name = "yt-playlist"
-version = "0.1.0"
-dependencies = [
- "clap",
- "crossterm 0.28.1",
- "derive_more",
- "dirs",
- "error-stack",
- "ffprobe",
- "futures-util",
- "fuzzy-matcher",
- "infer",
- "mpvipc",
- "ratatui",
- "rstest",
- "serde",
- "serde_json",
- "shell-escape",
- "sysinfo",
- "tempfile",
- "tokio",
- "toml",
- "wherror",
 ]
 
 [[package]]
