@@ -54,7 +54,7 @@ enum Commands {
         socket: PathBuf,
 
         /// Directory path for library scanning
-        #[arg(long, default_value = ".")]
+        #[arg(default_value = ".")]
         path: PathBuf,
     },
 
