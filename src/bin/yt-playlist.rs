@@ -1,4 +1,8 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use clap::{Parser, Subcommand};
 use crossterm::{
@@ -78,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn run_action_mpv(path: &PathBuf, socket: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn run_action_mpv(path: &Path, socket: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let backend = MpvipcBackend::new(socket);
     backend.load_file(path)?;
     println!("Loaded: {}", path.display());
@@ -174,13 +178,13 @@ fn collect_all_files(playlist_data: &PlaylistData, config: &Config) -> Vec<PathB
 }
 
 fn build_services(
-    playlist: &PathBuf,
-    socket: &PathBuf,
+    playlist: &Path,
+    socket: &Path,
     media_backend: Arc<dyn MediaQueryBackend>,
 ) -> Services {
     let mpv_backend: Arc<dyn MpvBackend> = Arc::new(MpvipcBackend::new(socket));
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
-        Arc::new(TomlBackend::new(playlist.clone()));
+        Arc::new(TomlBackend::new(playlist.to_path_buf()));
 
     Services {
         mpv: MpvClient::new(mpv_backend),

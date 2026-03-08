@@ -86,20 +86,20 @@ impl Config {
     }
 
     pub fn get_cmd(&self, path: &std::path::Path) -> Option<&str> {
-        if self.matches_category(&self.video, path) {
+        if Self::matches_category(&self.video, path) {
             return self.video.cmd.as_deref();
         }
-        if self.matches_category(&self.audio, path) {
+        if Self::matches_category(&self.audio, path) {
             return self.audio.cmd.as_deref();
         }
         None
     }
 
     pub fn is_video_or_audio(&self, path: &std::path::Path) -> bool {
-        self.matches_category(&self.video, path) || self.matches_category(&self.audio, path)
+        Self::matches_category(&self.video, path) || Self::matches_category(&self.audio, path)
     }
 
-    fn matches_category(&self, category: &MimeCategory, path: &std::path::Path) -> bool {
+    fn matches_category(category: &MimeCategory, path: &std::path::Path) -> bool {
         if let Ok(Some(inferred)) = infer::get_from_path(path) {
             if category
                 .mime_types
