@@ -687,6 +687,7 @@ mod tests {
                 storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
                 mpv_launcher: MpvLauncherService::new(Arc::new(self.mpv_launcher)),
                 file_launcher: LauncherService::new(Arc::new(self.file_launcher)),
+                notes: None,
             };
 
             let mut app = App {

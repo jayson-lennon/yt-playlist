@@ -3,6 +3,7 @@ use derive_more::Debug;
 use crate::launcher::LauncherService;
 use crate::media::MediaQuery;
 use crate::mpv::{MpvClient, MpvLauncherService};
+use crate::notes::SystemServicesHandle;
 use crate::playlist::PlaylistStorage;
 
 #[derive(Debug, Clone)]
@@ -12,4 +13,5 @@ pub struct Services {
     pub storage: PlaylistStorage,
     pub mpv_launcher: MpvLauncherService,
     pub file_launcher: LauncherService,
+    pub notes: Option<SystemServicesHandle>,
 }
