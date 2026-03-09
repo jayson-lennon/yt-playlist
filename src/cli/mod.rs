@@ -16,7 +16,6 @@ pub mod generate;
 pub mod notes;
 pub mod sources;
 pub mod tui;
-pub mod utils;
 
 #[derive(Parser)]
 #[command(name = "shownotes")]

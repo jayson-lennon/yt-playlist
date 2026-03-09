@@ -21,12 +21,12 @@ use crate::{
     feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
     feat::mpv::MpvIpc,
     feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage},
-    feat::{ExternalEditor, NoteDb, PathResolver, sources::SourceDb},
+    feat::{ExternalEditor, NoteDb, PathResolver, create_symlink_with_suffix, sources::SourceDb},
     services::Services,
     tui,
 };
 
-use super::{RunError, utils::create_symlink_with_suffix};
+use super::RunError;
 
 /// Runs the terminal user interface.
 ///

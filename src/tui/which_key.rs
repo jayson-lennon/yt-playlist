@@ -1,4 +1,4 @@
-use crate::keymap::{Key, KeyCategory, Keymap, LeafBinding};
+use crate::feat::keymap::{Key, KeyCategory, Keymap, LeafBinding};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},

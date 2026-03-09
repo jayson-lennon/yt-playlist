@@ -4,7 +4,7 @@ use crossterm::event::{Event, KeyCode};
 
 use crate::config::Config;
 use crate::feat::playlist::PlaylistData;
-use crate::keymap::{Action, Keymap};
+use crate::feat::keymap::{Action, Keymap};
 use crate::services::Services;
 use crate::tui::{Pane, PlaylistItem, TuiState, get_mime_type};
 
@@ -275,13 +275,13 @@ impl App {
             }
 
             if self.tui_state.which_key.is_pending() {
-                if let Some(key) = crate::keymap::Key::from_keycode(key.code) {
+                if let Some(key) = crate::feat::keymap::Key::from_keycode(key.code) {
                     match key {
-                        crate::keymap::Key::Esc => {
+                        crate::feat::keymap::Key::Esc => {
                             self.tui_state.which_key.dismiss();
                             self.tui_state.pending_keys.clear();
                         }
-                        crate::keymap::Key::Backspace => {
+                        crate::feat::keymap::Key::Backspace => {
                             self.tui_state.which_key.pop_key();
                             self.tui_state.pending_keys.pop();
                             if !self.tui_state.which_key.is_pending() {
@@ -296,12 +296,12 @@ impl App {
                                 .get_node_at_path(&self.tui_state.pending_keys)
                             {
                                 match node {
-                                    crate::keymap::KeyNode::Leaf { action, .. } => {
+                                    crate::feat::keymap::KeyNode::Leaf { action, .. } => {
                                         self.tui_state.which_key.dismiss();
                                         self.tui_state.pending_keys.clear();
                                         self.execute_action(*action);
                                     }
-                                    crate::keymap::KeyNode::Branch { .. } => {
+                                    crate::feat::keymap::KeyNode::Branch { .. } => {
                                         self.tui_state.which_key.push_key(key);
                                     }
                                 }
@@ -315,7 +315,7 @@ impl App {
                 return;
             }
 
-            if let Some(key) = crate::keymap::Key::from_keycode(key.code) {
+            if let Some(key) = crate::feat::keymap::Key::from_keycode(key.code) {
                 if self.runtime.keymap.is_prefix_key(key) {
                     self.tui_state.pending_keys.push(key);
                     self.tui_state.which_key.push_key(key);
@@ -593,7 +593,7 @@ mod tests {
         MpvClient, MpvClientService, MpvError, MpvLauncher, MpvLauncherService,
     };
     use crate::feat::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageService};
-    use crate::keymap::{Action, Keymap};
+use crate::feat::keymap::{Action, Keymap};
 
     struct FakeMpvBackend;
 
@@ -1467,12 +1467,12 @@ mod tests {
 
         assert_eq!(
             app.tui_state.pending_keys,
-            vec![crate::keymap::Key::Char('g')]
+            vec![crate::feat::keymap::Key::Char('g')]
         );
         assert!(app.tui_state.which_key.active);
         assert_eq!(
             app.tui_state.which_key.pending_keys,
-            vec![crate::keymap::Key::Char('g')]
+            vec![crate::feat::keymap::Key::Char('g')]
         );
     }
 
@@ -1510,7 +1510,7 @@ mod tests {
         )));
         assert_eq!(
             app.tui_state.pending_keys,
-            vec![crate::keymap::Key::Char('g')]
+            vec![crate::feat::keymap::Key::Char('g')]
         );
 
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
@@ -1535,12 +1535,12 @@ mod tests {
 
         assert_eq!(
             app.tui_state.pending_keys,
-            vec![crate::keymap::Key::Char('a')]
+            vec![crate::feat::keymap::Key::Char('a')]
         );
         assert!(app.tui_state.which_key.active);
         assert_eq!(
             app.tui_state.which_key.pending_keys,
-            vec![crate::keymap::Key::Char('a')]
+            vec![crate::feat::keymap::Key::Char('a')]
         );
     }
 
@@ -1572,7 +1572,7 @@ mod tests {
         )));
         assert_eq!(
             app.tui_state.pending_keys,
-            vec![crate::keymap::Key::Char('a')]
+            vec![crate::feat::keymap::Key::Char('a')]
         );
 
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(

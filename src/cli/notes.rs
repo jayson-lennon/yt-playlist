@@ -8,10 +8,10 @@ use std::{
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
-use crate::feat::{ExternalEditor, NoteDb, PathResolver};
+use crate::feat::{ExternalEditor, NoteDb, PathResolver, create_symlink_with_suffix};
 use crate::services::Services;
 
-use super::{RunError, utils::create_symlink_with_suffix};
+use super::RunError;
 
 #[derive(Subcommand)]
 pub enum NotesCommands {

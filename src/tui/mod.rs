@@ -8,15 +8,16 @@ mod state;
 mod url_input;
 mod which_key;
 
-pub use crate::{keymap::Keymap, tui::state::TuiState};
+pub use crate::feat::keymap::Keymap;
+pub use crate::tui::state::TuiState;
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::Paragraph,
+    Frame,
 };
 
-pub use common::{Pane, PlaylistItem, get_mime_type};
+pub use common::{get_mime_type, Pane, PlaylistItem};
 pub use error_popup::ErrorPopup;
 pub use filter::Filter;
 pub use library_pane::LibraryPane;

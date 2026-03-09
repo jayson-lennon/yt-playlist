@@ -1,5 +1,6 @@
 pub mod external_editor;
 pub mod generate_show_notes;
+pub mod keymap;
 pub mod launcher;
 pub mod media_duration_analysis;
 pub mod media_query;
@@ -8,6 +9,7 @@ pub mod note_db;
 pub mod path_resolver;
 pub mod playlist;
 pub mod sources;
+pub mod symlink;
 
 pub use external_editor::{
     ExternalEditor, ExternalEditorError, ExternalEditorService, SystemEditor,
@@ -28,3 +30,4 @@ pub use playlist::{
     TomlStorage,
 };
 pub use sources::{Source, SourceDb, SourceDbService};
+pub use symlink::{SymlinkError, SymlinkResult, create_symlink_with_suffix};
