@@ -5,6 +5,21 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use crate::ui::Pane;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ShowNoteKind {
+    Html,
+    Markdown,
+}
+
+impl ShowNoteKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ShowNoteKind::Html => "html",
+            ShowNoteKind::Markdown => "markdown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
     Quit,
     Save,
@@ -29,7 +44,7 @@ pub enum Action {
     Delete,
     FuzzyNotes,
     EditSources,
-    GenerateShowNotes,
+    GenerateShowNotes(ShowNoteKind),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -462,13 +477,22 @@ impl Keymap {
                     KeyCategory::General,
                     KeyContext::Global,
                 )
-                .bind(
-                    "n",
-                    Action::GenerateShowNotes,
-                    "generate show notes",
-                    KeyCategory::General,
-                    KeyContext::Global,
-                );
+                .describe("n", "generate show notes", |n| {
+                    n.bind(
+                        "h",
+                        Action::GenerateShowNotes(ShowNoteKind::Html),
+                        "HTML",
+                        KeyCategory::General,
+                        KeyContext::Global,
+                    )
+                    .bind(
+                        "m",
+                        Action::GenerateShowNotes(ShowNoteKind::Markdown),
+                        "markdown",
+                        KeyCategory::General,
+                        KeyContext::Global,
+                    );
+                });
             })
             .describe("a", "add", |a| {
                 a.bind(
@@ -786,7 +810,11 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches { Some(*action) } else { None }
+                if context_matches {
+                    Some(*action)
+                } else {
+                    None
+                }
             }
             KeyNode::Branch { .. } => None,
         }

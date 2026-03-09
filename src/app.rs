@@ -24,8 +24,8 @@ pub struct App {
     pub pending_fuzzy_notes: bool,
     /// Path to file for which to edit sources; signals the main loop to spawn an editor.
     pub pending_sources_path: Option<PathBuf>,
-    /// Flag to trigger show notes generation; signals the main loop to output to stdout.
-    pub pending_generate_notes: bool,
+    /// Format for show notes generation; signals the main loop to generate and copy to clipboard.
+    pub pending_generate_notes: Option<String>,
     /// Key bindings mapping key combinations to actions.
     pub keymap: Keymap,
     /// Path to mpv's IPC socket for remote control communication.
@@ -49,7 +49,7 @@ impl App {
             pending_notes_path: None,
             pending_fuzzy_notes: false,
             pending_sources_path: None,
-            pending_generate_notes: false,
+            pending_generate_notes: None,
             keymap: Keymap::new(),
             socket_path,
             library_path,
@@ -423,8 +423,8 @@ impl App {
                     self.pending_sources_path = Some(item.path.clone());
                 }
             }
-            Action::GenerateShowNotes => {
-                self.pending_generate_notes = true;
+            Action::GenerateShowNotes(kind) => {
+                self.pending_generate_notes = Some(kind.as_str().to_string());
             }
         }
     }
@@ -764,7 +764,7 @@ mod tests {
                 pending_notes_path: None,
                 pending_fuzzy_notes: false,
                 pending_sources_path: None,
-                pending_generate_notes: false,
+                pending_generate_notes: None,
                 keymap: Keymap::new(),
                 socket_path: String::from("/tmp/mpvsocket"),
                 library_path: self.library_path,

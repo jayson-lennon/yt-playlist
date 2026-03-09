@@ -285,14 +285,13 @@ fn run_app(
             }
         }
 
-        if app.pending_generate_notes {
-            app.pending_generate_notes = false;
-
-            let result = run_generate_notes(app);
+        if let Some(format) = app.pending_generate_notes.take() {
+            let result = run_generate_notes(app, &format);
 
             match result {
                 Ok(()) => {
-                    app.tui_state.status_message = Some("Show notes copied to clipboard".to_string());
+                    app.tui_state.status_message =
+                        Some(format!("Show notes ({format}) copied to clipboard"));
                 }
                 Err(e) => {
                     app.tui_state.status_message = Some(format!("Failed to generate notes: {e}"));
@@ -464,7 +463,7 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
     })
 }
 
-fn run_generate_notes(app: &App) -> Result<(), String> {
+fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
     let playlist_data = app
         .services
         .storage
@@ -476,7 +475,7 @@ fn run_generate_notes(app: &App) -> Result<(), String> {
         .block_on(crate::feat::generate_show_notes(
             &playlist_data,
             &app.services.notes.sources,
-            "markdown",
+            format,
         ))
         .map_err(|e| format!("Generation failed: {e:?}"))?;
 
