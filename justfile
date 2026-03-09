@@ -9,6 +9,12 @@ clean:
   rm -rfv .build/
   cargo clean -vv
 
+coverage:
+  cargo llvm-cov --lcov --output-path coverage.lcov
+
+debt:
+  debtmap analyze . --lcov coverage.lcov
+
 apply-license:
    #!/bin/bash
 
