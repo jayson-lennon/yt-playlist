@@ -3,8 +3,8 @@ use std::fmt;
 use crossterm::event::{KeyCode, KeyModifiers};
 
 use super::{
-    parse_key_sequence, Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding,
-    ShowNoteKind,
+    Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding, ShowNoteKind,
+    parse_key_sequence,
 };
 use crate::tui::Pane;
 
@@ -43,6 +43,7 @@ pub struct Keymap {
 }
 
 impl Keymap {
+    #[rustfmt::skip]
     #[allow(clippy::too_many_lines, clippy::missing_panics_doc)]
     pub fn new() -> Self {
         let mut keymap = Self {
@@ -50,186 +51,36 @@ impl Keymap {
         };
 
         keymap
-            .bind(
-                "?",
-                Action::ShowHelp,
-                "show help",
-                KeyCategory::General,
-                KeyContext::Global,
-            )
-            .bind(
-                "/",
-                Action::StartFilter,
-                "filter",
-                KeyCategory::General,
-                KeyContext::Global,
-            )
-            .bind(
-                "q",
-                Action::Quit,
-                "quit",
-                KeyCategory::General,
-                KeyContext::Global,
-            )
-            .bind(
-                "s",
-                Action::Save,
-                "save",
-                KeyCategory::General,
-                KeyContext::Global,
-            )
-            .bind(
-                "j",
-                Action::MoveDown,
-                "down",
-                KeyCategory::Navigation,
-                KeyContext::Global,
-            )
-            .bind(
-                "k",
-                Action::MoveUp,
-                "up",
-                KeyCategory::Navigation,
-                KeyContext::Global,
-            )
-            .bind(
-                "<Tab>",
-                Action::SwitchPane,
-                "switch pane",
-                KeyCategory::PaneSwitch,
-                KeyContext::Global,
-            )
-            .bind(
-                "h",
-                Action::FocusPlaylist,
-                "focus playlist",
-                KeyCategory::PaneSwitch,
-                KeyContext::Global,
-            )
-            .bind(
-                "l",
-                Action::FocusLibrary,
-                "focus library",
-                KeyCategory::PaneSwitch,
-                KeyContext::Global,
-            )
-            .bind(
-                "<Space>",
-                Action::ToggleItem,
-                "add/remove",
-                KeyCategory::ItemActions,
-                KeyContext::Global,
-            )
-            .bind(
-                "r",
-                Action::Rename,
-                "rename",
-                KeyCategory::ItemActions,
-                KeyContext::Global,
-            )
-            .bind(
-                "e",
-                Action::EditSources,
-                "edit sources",
-                KeyCategory::ItemActions,
-                KeyContext::Global,
-            )
-            .bind(
-                "n",
-                Action::Notes,
-                "notes",
-                KeyCategory::ItemActions,
-                KeyContext::Global,
-            )
-            .bind(
-                "J",
-                Action::ReorderDown,
-                "move down",
-                KeyCategory::PlaylistActions,
-                KeyContext::Playlist,
-            )
-            .bind(
-                "K",
-                Action::ReorderUp,
-                "move up",
-                KeyCategory::PlaylistActions,
-                KeyContext::Playlist,
-            )
-            .bind(
-                "o",
-                Action::LaunchFile,
-                "open file",
-                KeyCategory::PlaylistActions,
-                KeyContext::Playlist,
-            )
-            .bind(
-                "p",
-                Action::LoadPlaylist,
-                "load playlist",
-                KeyCategory::PlaylistActions,
-                KeyContext::Playlist,
-            )
-            .bind(
-                "L",
-                Action::MoveToLibrary,
-                "to library",
-                KeyCategory::ItemActions,
-                KeyContext::Playlist,
-            )
-            .bind(
-                "H",
-                Action::MoveToPlaylist,
-                "to playlist",
-                KeyCategory::ItemActions,
-                KeyContext::Library,
-            )
-            .bind(
-                "x",
-                Action::Delete,
-                "delete",
-                KeyCategory::ItemActions,
-                KeyContext::Library,
-            )
+            .bind("?", Action::ShowHelp, "show help", KeyCategory::General, KeyContext::Global)
+            .bind("/", Action::StartFilter, "filter", KeyCategory::General, KeyContext::Global)
+            .bind("q", Action::Quit, "quit", KeyCategory::General, KeyContext::Global)
+            .bind("s", Action::Save, "save", KeyCategory::General, KeyContext::Global)
+            .bind("j", Action::MoveDown, "down", KeyCategory::Navigation, KeyContext::Global)
+            .bind("k", Action::MoveUp, "up", KeyCategory::Navigation, KeyContext::Global)
+            .bind("<Tab>", Action::SwitchPane, "switch pane", KeyCategory::PaneSwitch, KeyContext::Global)
+            .bind("h", Action::FocusPlaylist, "focus playlist", KeyCategory::PaneSwitch, KeyContext::Global)
+            .bind("l", Action::FocusLibrary, "focus library", KeyCategory::PaneSwitch, KeyContext::Global)
+            .bind("<Space>", Action::ToggleItem, "add/remove", KeyCategory::ItemActions, KeyContext::Global)
+            .bind("r", Action::Rename, "rename", KeyCategory::ItemActions, KeyContext::Global)
+            .bind("e", Action::EditSources, "edit sources", KeyCategory::ItemActions, KeyContext::Global)
+            .bind("n", Action::Notes, "notes", KeyCategory::ItemActions, KeyContext::Global)
+            .bind("J", Action::ReorderDown, "move down", KeyCategory::PlaylistActions, KeyContext::Playlist)
+            .bind("K", Action::ReorderUp, "move up", KeyCategory::PlaylistActions, KeyContext::Playlist)
+            .bind("o", Action::LaunchFile, "open file", KeyCategory::PlaylistActions, KeyContext::Playlist)
+            .bind("p", Action::LoadPlaylist, "load playlist", KeyCategory::PlaylistActions, KeyContext::Playlist)
+            .bind("L", Action::MoveToLibrary, "to library", KeyCategory::ItemActions, KeyContext::Playlist)
+            .bind("H", Action::MoveToPlaylist, "to playlist", KeyCategory::ItemActions, KeyContext::Library)
+            .bind("x", Action::Delete, "delete", KeyCategory::ItemActions, KeyContext::Library)
             .describe("g", "general", |g| {
-                g.bind(
-                    "m",
-                    Action::LaunchMpv,
-                    "launch mpv",
-                    KeyCategory::General,
-                    KeyContext::Global,
-                )
-                .bind(
-                    "f",
-                    Action::FuzzyNotes,
-                    "fuzzy search notes",
-                    KeyCategory::General,
-                    KeyContext::Global,
-                )
-                .describe("n", "generate show notes", |n| {
-                    n.bind(
-                        "h",
-                        Action::GenerateShowNotes(ShowNoteKind::Html),
-                        "HTML",
-                        KeyCategory::General,
-                        KeyContext::Global,
-                    )
-                    .bind(
-                        "m",
-                        Action::GenerateShowNotes(ShowNoteKind::Markdown),
-                        "markdown",
-                        KeyCategory::General,
-                        KeyContext::Global,
-                    );
-                });
+                g.bind("m", Action::LaunchMpv, "launch mpv", KeyCategory::General, KeyContext::Global)
+                 .bind("f", Action::FuzzyNotes, "fuzzy search notes", KeyCategory::General, KeyContext::Global)
+                 .describe("n", "generate show notes", |n| {
+                    n.bind("h", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", KeyCategory::General, KeyContext::Global)
+                     .bind("m", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", KeyCategory::General, KeyContext::Global);
+                    });
             })
             .describe("a", "add", |a| {
-                a.bind(
-                    "u",
-                    Action::AddUrl,
-                    "add url",
-                    KeyCategory::General,
-                    KeyContext::Global,
-                );
+                a.bind("u", Action::AddUrl, "add url", KeyCategory::General, KeyContext::Global);
             });
 
         keymap.finalize().expect("keymap has missing descriptions");
@@ -528,11 +379,7 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches {
-                    Some(*action)
-                } else {
-                    None
-                }
+                if context_matches { Some(*action) } else { None }
             }
             KeyNode::Branch { .. } => None,
         }
