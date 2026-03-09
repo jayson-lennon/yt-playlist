@@ -158,6 +158,20 @@ mod tests {
         assert!(action.is_none());
     }
 
+    #[rstest::rstest]
+    #[case(Pane::Playlist)]
+    #[case(Pane::Library)]
+    fn get_action_returns_launch_file_in_any_pane(#[case] pane: Pane) {
+        // Given the default keymap
+        let keymap = Keymap::new();
+
+        // When getting the launch file action
+        let action = keymap.get_action(KeyCode::Char('o'), KeyModifiers::empty(), pane);
+
+        // Then the action is returned
+        assert_eq!(action, Some(Action::LaunchFile));
+    }
+
     #[test]
     fn get_action_returns_none_for_unbound_key() {
         // Given the default keymap

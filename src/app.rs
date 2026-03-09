@@ -531,7 +531,7 @@ impl App {
     }
 
     fn launch_file(&mut self) {
-        if let Some(item) = self.tui_state.selected_playlist_item() {
+        if let Some(item) = self.tui_state.get_selected_item() {
             let cmd = self.config.get_cmd(&item.path);
             match self
                 .services

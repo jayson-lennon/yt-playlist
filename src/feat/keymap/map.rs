@@ -3,8 +3,8 @@ use std::fmt;
 use crossterm::event::{KeyCode, KeyModifiers};
 
 use super::{
-    Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding, ShowNoteKind,
-    parse_key_sequence,
+    parse_key_sequence, Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding,
+    ShowNoteKind,
 };
 use crate::tui::Pane;
 
@@ -69,7 +69,7 @@ impl Keymap {
             .bind("n", Action::Notes, "notes", Cat::ItemActions, Ctx::Global)
             .bind("J", Action::ReorderDown, "move down", Cat::PlaylistActions, Ctx::Playlist)
             .bind("K", Action::ReorderUp, "move up", Cat::PlaylistActions, Ctx::Playlist)
-            .bind("o", Action::LaunchFile, "open file", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("o", Action::LaunchFile, "open file", Cat::ItemActions, Ctx::Global)
             .bind("p", Action::LoadPlaylist, "load playlist", Cat::PlaylistActions, Ctx::Playlist)
             .bind("L", Action::MoveToLibrary, "to library", Cat::ItemActions, Ctx::Playlist)
             .bind("H", Action::MoveToPlaylist, "to playlist", Cat::ItemActions, Ctx::Library)
@@ -388,7 +388,11 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches { Some(*action) } else { None }
+                if context_matches {
+                    Some(*action)
+                } else {
+                    None
+                }
             }
             KeyNode::Branch { .. } => None,
         }
