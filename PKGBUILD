@@ -7,7 +7,7 @@ pkgdesc='manage shownotes for podcast/video'
 url=''
 license=(GPL-3.0-only)
 makedepends=('cargo')
-depends=()
+depends=('mpv' 'skim' 'xdg-utils')
 arch=('i686' 'x86_64' 'armv6h' 'armv7h')
 
 # No source array needed - we reference files directly from $startdir
