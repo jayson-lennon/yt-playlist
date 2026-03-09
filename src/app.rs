@@ -16,6 +16,32 @@ pub struct Fork {
     pub generate_notes: Option<String>,
 }
 
+pub enum ForkAction {
+    AddNote { path: PathBuf },
+    FuzzyNotes,
+    EditSources { path: PathBuf },
+    GenerateNotes { format: String },
+}
+
+impl Fork {
+    pub fn take_action(&mut self) -> Option<ForkAction> {
+        if let Some(path) = self.notes_path.take() {
+            return Some(ForkAction::AddNote { path });
+        }
+        if self.fuzzy_notes {
+            self.fuzzy_notes = false;
+            return Some(ForkAction::FuzzyNotes);
+        }
+        if let Some(path) = self.sources_path.take() {
+            return Some(ForkAction::EditSources { path });
+        }
+        if let Some(format) = self.generate_notes.take() {
+            return Some(ForkAction::GenerateNotes { format });
+        }
+        None
+    }
+}
+
 pub struct RuntimeSettings {
     pub keymap: Keymap,
     pub socket_path: String,
@@ -1824,5 +1850,97 @@ use crate::feat::keymap::{Action, Keymap};
         assert_eq!(item.path, url);
         assert!(item.is_virtual);
         assert_eq!(item.alias, Some("Test Video".to_string()));
+    }
+
+    #[test]
+    fn fork_take_action_returns_none_when_empty() {
+        // Given an empty fork struct.
+        let mut fork = Fork::default();
+
+        // When taking an action.
+        let action = fork.take_action();
+
+        // Then no action is returned.
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn fork_take_action_returns_add_note_and_clears_flag() {
+        // Given a fork with notes_path set.
+        let mut fork = Fork {
+            notes_path: Some(PathBuf::from("/test/path")),
+            ..Default::default()
+        };
+
+        // When taking an action.
+        let action = fork.take_action();
+
+        // Then AddNote action is returned and flag is cleared.
+        assert!(matches!(action, Some(ForkAction::AddNote { .. })));
+        assert!(fork.notes_path.is_none());
+    }
+
+    #[test]
+    fn fork_take_action_returns_fuzzy_notes_and_clears_flag() {
+        // Given a fork with fuzzy_notes set.
+        let mut fork = Fork {
+            fuzzy_notes: true,
+            ..Default::default()
+        };
+
+        // When taking an action.
+        let action = fork.take_action();
+
+        // Then FuzzyNotes action is returned and flag is cleared.
+        assert!(matches!(action, Some(ForkAction::FuzzyNotes)));
+        assert!(!fork.fuzzy_notes);
+    }
+
+    #[test]
+    fn fork_take_action_returns_edit_sources_and_clears_flag() {
+        // Given a fork with sources_path set.
+        let mut fork = Fork {
+            sources_path: Some(PathBuf::from("/test/sources")),
+            ..Default::default()
+        };
+
+        // When taking an action.
+        let action = fork.take_action();
+
+        // Then EditSources action is returned and flag is cleared.
+        assert!(matches!(action, Some(ForkAction::EditSources { .. })));
+        assert!(fork.sources_path.is_none());
+    }
+
+    #[test]
+    fn fork_take_action_returns_generate_notes_and_clears_flag() {
+        // Given a fork with generate_notes set.
+        let mut fork = Fork {
+            generate_notes: Some("markdown".to_string()),
+            ..Default::default()
+        };
+
+        // When taking an action.
+        let action = fork.take_action();
+
+        // Then GenerateNotes action is returned and flag is cleared.
+        assert!(matches!(action, Some(ForkAction::GenerateNotes { .. })));
+        assert!(fork.generate_notes.is_none());
+    }
+
+    #[test]
+    fn fork_take_action_priority_order() {
+        // Given a fork with multiple flags set.
+        let mut fork = Fork {
+            notes_path: Some(PathBuf::from("/note")),
+            fuzzy_notes: true,
+            ..Default::default()
+        };
+
+        // When taking an action.
+        let action = fork.take_action();
+
+        // Then notes_path has highest priority.
+        assert!(matches!(action, Some(ForkAction::AddNote { .. })));
     }
 }

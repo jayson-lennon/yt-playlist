@@ -11,7 +11,7 @@ use error_stack::{Report, ResultExt};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{
-    app::App,
+    app::{App, ForkAction},
     feat::config::{Config, load},
     feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
     feat::mpv::MpvIpc,
@@ -23,6 +23,65 @@ use crate::{
 };
 
 use super::RunError;
+
+enum ForkResult {
+    Success(String),
+    Failed(String),
+    SuspendFailed,
+}
+
+fn requires_suspend(action: &ForkAction) -> bool {
+    !matches!(action, ForkAction::GenerateNotes { .. })
+}
+
+fn execute_fork_action(app: &mut App, action: ForkAction) -> ForkResult {
+    match action {
+        ForkAction::AddNote { path } => match add_note_for_path(app, &path) {
+            Ok(()) => ForkResult::Success(format!("Note added: {}", path.display())),
+            Err(e) => ForkResult::Failed(format!("Failed to add note: {e}")),
+        },
+        ForkAction::FuzzyNotes => match run_fuzzy_notes(app) {
+            Ok(count) => ForkResult::Success(format!("Created {count} symlink(s)")),
+            Err(e) => ForkResult::Failed(format!("Fuzzy search failed: {e}")),
+        },
+        ForkAction::EditSources { path } => match edit_sources_for_path(app, &path) {
+            Ok(()) => ForkResult::Success(format!("Updated sources: {}", path.display())),
+            Err(e) => ForkResult::Failed(format!("Failed to edit sources: {e}")),
+        },
+        ForkAction::GenerateNotes { format } => match run_generate_notes(app, &format) {
+            Ok(()) => ForkResult::Success(format!("Show notes ({format}) copied to clipboard")),
+            Err(e) => ForkResult::Failed(format!("Failed to generate notes: {e}")),
+        },
+    }
+}
+
+fn process_fork(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    app: &mut App,
+    action: ForkAction,
+) -> Result<(), Report<RunError>> {
+    let needs_suspend = requires_suspend(&action);
+    
+    let result: Result<ForkResult, std::convert::Infallible> = if needs_suspend {
+        suspend_and_run(terminal, || Ok(execute_fork_action(app, action)))
+            .unwrap_or(Ok(ForkResult::SuspendFailed))
+    } else {
+        Ok(execute_fork_action(app, action))
+    };
+    
+    let keymap = app.runtime.keymap.clone();
+    terminal
+        .draw(|f| tui::render(f, &app.tui_state, &keymap))
+        .change_context(RunError)?;
+    
+    let message = match result {
+        Ok(ForkResult::Success(msg) | ForkResult::Failed(msg)) => msg,
+        Ok(ForkResult::SuspendFailed) => "Failed to suspend terminal".to_string(),
+    };
+    app.tui_state.status_message = Some(message);
+    
+    Ok(())
+}
 
 /// Runs the terminal user interface.
 ///
@@ -175,7 +234,6 @@ fn build_services(
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
@@ -185,6 +243,7 @@ fn run_app(
             terminal.clear().change_context(RunError)?;
             app.tui_state.needs_clear = false;
         }
+        
         let keymap = app.runtime.keymap.clone();
         terminal
             .draw(|f| tui::render(f, &app.tui_state, &keymap))
@@ -195,80 +254,8 @@ fn run_app(
             app.handle_event(event);
         }
 
-        if let Some(path) = app.fork.notes_path.take() {
-            let result = suspend_and_run(terminal, || add_note_for_path(app, &path));
-            let keymap = app.runtime.keymap.clone();
-            terminal
-                .draw(|f| tui::render(f, &app.tui_state, &keymap))
-                .change_context(RunError)?;
-
-            match result {
-                Ok(Ok(())) => {
-                    app.tui_state.status_message = Some(format!("Note added: {}", path.display()));
-                }
-                Ok(Err(e)) => {
-                    app.tui_state.status_message = Some(format!("Failed to add note: {e}"));
-                }
-                Err(_) => {
-                    app.tui_state.status_message = Some("Failed to suspend terminal".to_string());
-                }
-            }
-        }
-
-        if app.fork.fuzzy_notes {
-            app.fork.fuzzy_notes = false;
-            let result = suspend_and_run(terminal, || run_fuzzy_notes(app));
-            let keymap = app.runtime.keymap.clone();
-            terminal
-                .draw(|f| tui::render(f, &app.tui_state, &keymap))
-                .change_context(RunError)?;
-
-            match result {
-                Ok(Ok(count)) => {
-                    app.tui_state.status_message = Some(format!("Created {count} symlink(s)"));
-                }
-                Ok(Err(e)) => {
-                    app.tui_state.status_message = Some(format!("Fuzzy search failed: {e}"));
-                }
-                Err(_) => {
-                    app.tui_state.status_message = Some("Failed to suspend terminal".to_string());
-                }
-            }
-        }
-
-        if let Some(path) = app.fork.sources_path.take() {
-            let result = suspend_and_run(terminal, || edit_sources_for_path(app, &path));
-            let keymap = app.runtime.keymap.clone();
-            terminal
-                .draw(|f| tui::render(f, &app.tui_state, &keymap))
-                .change_context(RunError)?;
-
-            match result {
-                Ok(Ok(())) => {
-                    app.tui_state.status_message =
-                        Some(format!("Updated sources: {}", path.display()));
-                }
-                Ok(Err(e)) => {
-                    app.tui_state.status_message = Some(format!("Failed to edit sources: {e}"));
-                }
-                Err(_) => {
-                    app.tui_state.status_message = Some("Failed to suspend terminal".to_string());
-                }
-            }
-        }
-
-        if let Some(format) = app.fork.generate_notes.take() {
-            let result = run_generate_notes(app, &format);
-
-            match result {
-                Ok(()) => {
-                    app.tui_state.status_message =
-                        Some(format!("Show notes ({format}) copied to clipboard"));
-                }
-                Err(e) => {
-                    app.tui_state.status_message = Some(format!("Failed to generate notes: {e}"));
-                }
-            }
+        if let Some(action) = app.fork.take_action() {
+            process_fork(terminal, app, action)?;
         }
 
         if app.should_quit {
@@ -419,4 +406,50 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
         .set_text(&output)
         .map_err(|e| format!("Clipboard error: {e}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn requires_suspend_returns_true_for_add_note() {
+        // Given an AddNote action.
+        let action = ForkAction::AddNote { path: PathBuf::from("/test") };
+
+        // When checking if suspend is required.
+        // Then it returns true.
+        assert!(requires_suspend(&action));
+    }
+
+    #[test]
+    fn requires_suspend_returns_true_for_fuzzy_notes() {
+        // Given a FuzzyNotes action.
+        let action = ForkAction::FuzzyNotes;
+
+        // When checking if suspend is required.
+        // Then it returns true.
+        assert!(requires_suspend(&action));
+    }
+
+    #[test]
+    fn requires_suspend_returns_true_for_edit_sources() {
+        // Given an EditSources action.
+        let action = ForkAction::EditSources { path: PathBuf::from("/test") };
+
+        // When checking if suspend is required.
+        // Then it returns true.
+        assert!(requires_suspend(&action));
+    }
+
+    #[test]
+    fn requires_suspend_returns_false_for_generate_notes() {
+        // Given a GenerateNotes action.
+        let action = ForkAction::GenerateNotes { format: "markdown".to_string() };
+
+        // When checking if suspend is required.
+        // Then it returns false (clipboard-only, no terminal suspend).
+        assert!(!requires_suspend(&action));
+    }
 }
