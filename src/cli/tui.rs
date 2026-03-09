@@ -1,26 +1,22 @@
 use std::{
     collections::HashSet,
-    fmt::Write,
-    io::Write as IoWrite,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
     sync::Arc,
 };
 
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
+use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture};
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
 use error_stack::{Report, ResultExt};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{
     app::App,
-    config::{Config, load},
+    feat::config::{Config, load},
     feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
     feat::mpv::MpvIpc,
     feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage},
+    feat::terminal::suspend_and_run,
     feat::{ExternalEditor, NoteDb, PathResolver, create_symlink_with_suffix, sources::SourceDb},
     services::Services,
     tui,
@@ -174,6 +170,7 @@ fn build_services(
         editor: core.editor,
         path_resolver: core.path_resolver,
         sources: core.sources,
+        fuzzy_search: core.fuzzy_search,
         rt: core.rt,
     }
 }
@@ -199,111 +196,63 @@ fn run_app(
         }
 
         if let Some(path) = app.fork.notes_path.take() {
-            disable_raw_mode().change_context(RunError)?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )
-            .change_context(RunError)?;
-            terminal.show_cursor().change_context(RunError)?;
-
-            let result = add_note_for_path(app, &path);
-
-            enable_raw_mode().change_context(RunError)?;
-            execute!(
-                terminal.backend_mut(),
-                EnterAlternateScreen,
-                EnableMouseCapture
-            )
-            .change_context(RunError)?;
-            terminal.hide_cursor().change_context(RunError)?;
-            terminal.clear().change_context(RunError)?;
+            let result = suspend_and_run(terminal, || add_note_for_path(app, &path));
             let keymap = app.runtime.keymap.clone();
             terminal
                 .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
 
             match result {
-                Ok(()) => {
+                Ok(Ok(())) => {
                     app.tui_state.status_message = Some(format!("Note added: {}", path.display()));
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     app.tui_state.status_message = Some(format!("Failed to add note: {e}"));
+                }
+                Err(_) => {
+                    app.tui_state.status_message = Some("Failed to suspend terminal".to_string());
                 }
             }
         }
 
         if app.fork.fuzzy_notes {
             app.fork.fuzzy_notes = false;
-            disable_raw_mode().change_context(RunError)?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )
-            .change_context(RunError)?;
-            terminal.show_cursor().change_context(RunError)?;
-
-            let result = run_fuzzy_notes(app);
-
-            enable_raw_mode().change_context(RunError)?;
-            execute!(
-                terminal.backend_mut(),
-                EnterAlternateScreen,
-                EnableMouseCapture
-            )
-            .change_context(RunError)?;
-            terminal.hide_cursor().change_context(RunError)?;
-            terminal.clear().change_context(RunError)?;
+            let result = suspend_and_run(terminal, || run_fuzzy_notes(app));
             let keymap = app.runtime.keymap.clone();
             terminal
                 .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
 
             match result {
-                Ok(count) => {
+                Ok(Ok(count)) => {
                     app.tui_state.status_message = Some(format!("Created {count} symlink(s)"));
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     app.tui_state.status_message = Some(format!("Fuzzy search failed: {e}"));
+                }
+                Err(_) => {
+                    app.tui_state.status_message = Some("Failed to suspend terminal".to_string());
                 }
             }
         }
 
         if let Some(path) = app.fork.sources_path.take() {
-            disable_raw_mode().change_context(RunError)?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )
-            .change_context(RunError)?;
-            terminal.show_cursor().change_context(RunError)?;
-
-            let result = edit_sources_for_path(app, &path);
-
-            enable_raw_mode().change_context(RunError)?;
-            execute!(
-                terminal.backend_mut(),
-                EnterAlternateScreen,
-                EnableMouseCapture
-            )
-            .change_context(RunError)?;
-            terminal.hide_cursor().change_context(RunError)?;
-            terminal.clear().change_context(RunError)?;
+            let result = suspend_and_run(terminal, || edit_sources_for_path(app, &path));
             let keymap = app.runtime.keymap.clone();
             terminal
                 .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
 
             match result {
-                Ok(()) => {
+                Ok(Ok(())) => {
                     app.tui_state.status_message =
                         Some(format!("Updated sources: {}", path.display()));
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     app.tui_state.status_message = Some(format!("Failed to edit sources: {e}"));
+                }
+                Err(_) => {
+                    app.tui_state.status_message = Some("Failed to suspend terminal".to_string());
                 }
             }
         }
@@ -383,53 +332,18 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
             return Ok(0);
         }
 
-        let input: String = all_notes
-            .iter()
-            .fold(String::new(), |mut output, (path, content)| {
-                let cleaned: String = content
-                    .lines()
-                    .filter(|line| !line.trim().is_empty())
-                    .collect::<Vec<_>>()
-                    .join(". ");
-                let _ = writeln!(output, "{path}\t{cleaned}");
-                output
-            });
-
-        let mut child = Command::new("sk")
-            .args([
-                "-m",
-                "--delimiter=\\t",
-                "--with-nth=2..",
-                "--color=marker:51,hl+:201,hl:219",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("Failed to spawn skim: {e}"))?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(input.as_bytes())
-                .map_err(|e| format!("Failed to write to skim: {e}"))?;
-        }
-
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to read skim output: {e}"))?;
-
-        let selected = String::from_utf8_lossy(&output.stdout);
-        let selected_paths: Vec<&str> = selected
-            .lines()
-            .filter_map(|line| line.split('\t').next())
-            .collect();
+        let result = services
+            .fuzzy_search
+            .search(&all_notes)
+            .map_err(|e| format!("Fuzzy search error: {e:?}"))?;
 
         let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {e}"))?;
         let mut count = 0;
-        for path in &selected_paths {
+        for path in &result.selected_paths {
             let src = PathBuf::from(path);
             match create_symlink_with_suffix(&src, &cwd) {
                 Ok(_) => count += 1,
-                Err(e) => eprintln!("Failed to create symlink for {path}: {e:?}"),
+                Err(e) => eprintln!("Failed to create symlink for {}: {e:?}", path),
             }
         }
 

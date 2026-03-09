@@ -4,6 +4,7 @@ use derive_more::Debug;
 use error_stack::Report;
 
 use crate::feat::external_editor::{ExternalEditorService, SystemEditor};
+use crate::feat::fuzzy_search::{FuzzySearchService, backend::SkimBackend};
 use crate::feat::launcher::FileLauncherService;
 use crate::feat::media_query::MediaQueryService;
 use crate::feat::mpv::{MpvClientService, MpvLauncherService};
@@ -23,6 +24,7 @@ pub struct Services {
     pub editor: ExternalEditorService,
     pub path_resolver: PathResolverService,
     pub sources: SourceDbService,
+    pub fuzzy_search: FuzzySearchService,
     pub rt: tokio::runtime::Handle,
 }
 
@@ -51,6 +53,7 @@ impl Services {
             editor: ExternalEditorService::new(editor),
             path_resolver: PathResolverService::new(path_resolver),
             sources: SourceDbService::new(source_db),
+            fuzzy_search: FuzzySearchService::new(Arc::new(SkimBackend)),
             rt,
         })
     }

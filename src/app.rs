@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{Event, KeyCode};
 
-use crate::config::Config;
+use crate::feat::config::Config;
 use crate::feat::playlist::PlaylistData;
 use crate::feat::keymap::{Action, Keymap};
 use crate::services::Services;
@@ -748,6 +748,7 @@ use crate::feat::keymap::{Action, Keymap};
                 editor: core.editor,
                 path_resolver: core.path_resolver,
                 sources: core.sources,
+                fuzzy_search: core.fuzzy_search,
                 rt: core.rt,
             };
 

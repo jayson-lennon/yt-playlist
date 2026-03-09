@@ -1,13 +1,12 @@
 use std::{
-    fmt::Write,
-    io::Write as IoWrite,
     path::PathBuf,
-    process::{Command, Stdio},
+    sync::Arc,
 };
 
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
+use crate::feat::fuzzy_search::{FuzzySearchService, backend::SkimBackend};
 use crate::feat::{ExternalEditor, NoteDb, PathResolver, create_symlink_with_suffix};
 use crate::services::Services;
 
@@ -160,6 +159,8 @@ async fn run_notes_command_async(
             }
         }
         NotesCommands::Fuzzy { symlink } => {
+            let fuzzy_search = FuzzySearchService::new(Arc::new(SkimBackend));
+            
             let notes = services
                 .db
                 .get_all_notes_with_paths()
@@ -170,53 +171,21 @@ async fn run_notes_command_async(
                 return Ok(());
             }
 
-            let input: String = notes
-                .iter()
-                .fold(String::new(), |mut output, (path, content)| {
-                    let cleaned: String = content
-                        .lines()
-                        .filter(|line| !line.trim().is_empty())
-                        .collect::<Vec<_>>()
-                        .join(". ");
-                    let _ = writeln!(output, "{path}\t{cleaned}");
-                    output
-                });
-
-            let mut child = Command::new("sk")
-                .args([
-                    "-m",
-                    "--delimiter=\\t",
-                    "--with-nth=2..",
-                    "--color=marker:51,hl+:201,hl:219",
-                ])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .spawn()
+            let result = fuzzy_search
+                .search(&notes)
                 .change_context(RunError)?;
 
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(input.as_bytes()).change_context(RunError)?;
-            }
-
-            let output = child.wait_with_output().change_context(RunError)?;
-
-            let selected = String::from_utf8_lossy(&output.stdout);
-            let selected_paths: Vec<&str> = selected
-                .lines()
-                .filter_map(|line| line.split('\t').next())
-                .collect();
-
-            for path in &selected_paths {
-                println!("{path}");
+            for path in &result.selected_paths {
+                println!("{}", path);
             }
 
             if symlink {
                 let cwd = std::env::current_dir().change_context(RunError)?;
-                for path in &selected_paths {
+                for path in &result.selected_paths {
                     let src = PathBuf::from(path);
                     match create_symlink_with_suffix(&src, &cwd) {
                         Ok(dest) => eprintln!("Created symlink: {}", dest.display()),
-                        Err(e) => eprintln!("Failed to create symlink for {path}: {e:?}"),
+                        Err(e) => eprintln!("Failed to create symlink for {}: {e:?}", path),
                     }
                 }
             }
