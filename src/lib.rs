@@ -2,6 +2,7 @@ pub mod analysis;
 pub mod app;
 pub mod cli;
 pub mod config;
+pub mod feat;
 pub mod format;
 pub mod keymap;
 pub mod launcher;

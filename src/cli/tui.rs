@@ -19,7 +19,6 @@ use crate::{
     analysis,
     app::App,
     config::{load, Config},
-    format::FormatRegistry,
     media::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
     mpv::MpvipcBackend,
     notes::{Editor, NoteDb, PathResolver, SystemServicesHandle},
@@ -466,56 +465,24 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
 }
 
 fn run_generate_notes(app: &App) -> Result<(), String> {
-    let notes = &app.services.notes;
-
-    let storage = &app.services.storage;
-    let playlist_data = storage.load().map_err(|e| format!("Failed to load playlist: {e:?}"))?;
+    let playlist_data = app
+        .services
+        .storage
+        .load()
+        .map_err(|e| format!("Failed to load playlist: {e:?}"))?;
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    let paths: Vec<String> = playlist_data
-        .playlist
-        .iter()
-        .map(|p| p.to_string_lossy().into_owned())
-        .collect();
+    let output = rt
+        .block_on(crate::feat::generate_show_notes(
+            &playlist_data,
+            &app.services.notes.sources,
+            "markdown",
+        ))
+        .map_err(|e| format!("Generation failed: {e:?}"))?;
 
-    let sources_map = rt.block_on(notes.sources.get_sources_for_paths(&paths))
-        .map_err(|e| format!("Database error: {e:?}"))?;
-
-    let registry = FormatRegistry::new();
-    let formatter = registry
-        .get("markdown")
-        .ok_or_else(|| "Unknown format: markdown".to_string())?;
-
-    let entries: Vec<crate::format::ShowNotesEntry> = playlist_data
-        .playlist
-        .iter()
-        .filter_map(|path| {
-            let path_str = path.to_string_lossy();
-            let filename = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let alias = playlist_data.files.get(path).and_then(|m| m.alias.clone());
-            let sources: Vec<String> = sources_map
-                .get(&*path_str)
-                .map(|v| v.iter().map(|s| s.source_url.clone()).collect())
-                .unwrap_or_default();
-
-            if sources.is_empty() {
-                None
-            } else {
-                Some(crate::format::ShowNotesEntry {
-                    path: path_str.into_owned(),
-                    filename,
-                    alias,
-                    sources,
-                })
-            }
-        })
-        .collect();
-
-    let output = formatter.format(&entries);
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;
-    clipboard.set_text(&output).map_err(|e| format!("Clipboard error: {e}"))?;
+    clipboard
+        .set_text(&output)
+        .map_err(|e| format!("Clipboard error: {e}"))?;
     Ok(())
 }

@@ -3,10 +3,9 @@ use std::{path::Path, sync::Arc};
 use error_stack::{Report, ResultExt};
 
 use crate::{
-    format::FormatRegistry,
+    feat::generate_show_notes,
     notes::SystemServicesHandle,
     playlist::{PlaylistStorage, PlaylistStorageBackend, TomlBackend},
-    sources::SourceDb,
 };
 
 use super::RunError;
@@ -35,55 +34,11 @@ pub fn run_generate(
             .await
             .change_context(RunError)?;
 
-        let paths: Vec<String> = playlist_data
-            .playlist
-            .iter()
-            .map(|p| p.to_string_lossy().into_owned())
-            .collect();
-
-        let sources_map = services
-            .sources
-            .get_sources_for_paths(&paths)
+        let output = generate_show_notes(&playlist_data, &services.sources, format)
             .await
             .change_context(RunError)?;
 
-        let registry = FormatRegistry::new();
-        let formatter = registry
-            .get(format)
-            .ok_or_else(|| Report::new(RunError))?;
-
-        let entries: Vec<crate::format::ShowNotesEntry> = playlist_data
-            .playlist
-            .iter()
-            .filter_map(|path| {
-                let path_str = path.to_string_lossy();
-                let filename = path.file_name().map_or_else(
-                    || path_str.clone().into_owned(),
-                    |n| n.to_string_lossy().into_owned(),
-                );
-                let alias = playlist_data
-                    .files
-                    .get(path)
-                    .and_then(|m| m.alias.clone());
-                let sources: Vec<String> = sources_map
-                    .get(&*path_str)
-                    .map(|v| v.iter().map(|s| s.source_url.clone()).collect())
-                    .unwrap_or_default();
-
-                if sources.is_empty() {
-                    None
-                } else {
-                    Some(crate::format::ShowNotesEntry {
-                        path: path_str.into_owned(),
-                        filename,
-                        alias,
-                        sources,
-                    })
-                }
-            })
-            .collect();
-
-        println!("{}", formatter.format(&entries));
+        println!("{output}");
         Ok(())
     })
 }
