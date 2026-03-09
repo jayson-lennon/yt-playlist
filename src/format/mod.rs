@@ -20,8 +20,17 @@ impl ShowNotesEntry {
     }
 }
 
+/// Trait for show notes output formatters.
+///
+/// Implementations define how to format a collection of show notes entries
+/// into a specific output format (e.g., markdown, HTML, plain text).
 pub trait ShowNotesFormat: Send + Sync {
+    /// Formats the provided entries into a string representation.
     fn format(&self, entries: &[ShowNotesEntry]) -> String;
+
+    /// Returns the name identifier for this format.
+    ///
+    /// Used for format selection via the registry.
     fn name(&self) -> &'static str;
 }
 

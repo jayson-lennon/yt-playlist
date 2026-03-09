@@ -19,10 +19,33 @@ pub struct Source {
     pub label: Option<String>,
 }
 
+/// Trait for source URL database operations.
+///
+/// Provides methods for managing source URLs associated with media files,
+/// tracking where each file originated from.
 #[async_trait]
 pub trait SourceDb: Send + Sync {
+    /// Retrieves all source URLs for a file path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     async fn get_sources(&self, file_path_id: i64) -> Result<Vec<Source>, Report<SourceDbError>>;
+
+    /// Sets the source URLs for a file path, replacing any existing sources.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     async fn set_sources(&self, file_path_id: i64, urls: &[String]) -> Result<(), Report<SourceDbError>>;
+
+    /// Batch retrieves sources for multiple file paths.
+    ///
+    /// Returns a map from file path string to its associated sources.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     async fn get_sources_for_paths(&self, paths: &[String]) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>>;
 }
 
