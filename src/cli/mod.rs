@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use error_stack::{fmt::ColorMode, Report};
+use error_stack::{Report, fmt::ColorMode};
 
 use crate::cli::{
-    action::{run_action_mpv, ActionCommands},
+    action::{ActionCommands, run_action_mpv},
     generate::run_generate,
-    notes::{run_notes_command, NotesCommands},
-    sources::{run_sources_command, SourcesCommands},
+    notes::{NotesCommand, run_notes_command},
+    sources::{SourcesCommands, run_sources_command},
     tui::run_tui,
 };
 
@@ -20,6 +20,7 @@ pub mod tui;
 #[derive(Parser)]
 #[command(name = "shownotes")]
 #[command(about = "TUI playlist manager for mpv with notes support")]
+#[rustfmt::skip]
 pub struct Args {
     #[arg(long, env = "SHOWNOTES_DB_PATH", default_value = "/mnt/zed/work/youtube/notes.db")]
     pub db_path: PathBuf,
@@ -54,7 +55,7 @@ pub enum Commands {
     /// Notes commands for managing file notes
     Notes {
         #[command(subcommand)]
-        notes_cmd: NotesCommands,
+        notes_cmd: NotesCommand,
     },
 
     /// Source URL commands for managing file provenance
@@ -84,6 +85,7 @@ pub struct RunError;
 /// # Errors
 ///
 /// Returns an error if any command fails to execute.
+#[rustfmt::skip]
 pub fn run() -> Result<(), Report<RunError>> {
     Report::set_color_mode(ColorMode::None);
 
@@ -101,7 +103,11 @@ pub fn run() -> Result<(), Report<RunError>> {
             ActionCommands::Mpv { path, socket } => run_action_mpv(&path, &socket),
         },
         Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path, &handle),
-        Commands::Sources { sources_cmd } => run_sources_command(sources_cmd, &args.db_path, &handle),
-        Commands::Generate { format, playlist } => run_generate(&format, &playlist, &args.db_path, &handle),
+        Commands::Sources { sources_cmd } => {
+            run_sources_command(sources_cmd, &args.db_path, &handle)
+        }
+        Commands::Generate { format, playlist } => {
+            run_generate(&format, &playlist, &args.db_path, &handle)
+        }
     }
 }

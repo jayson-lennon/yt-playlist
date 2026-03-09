@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
@@ -13,7 +10,7 @@ use crate::services::Services;
 use super::RunError;
 
 #[derive(Subcommand)]
-pub enum NotesCommands {
+pub enum NotesCommand {
     /// Add notes to files
     Add { paths: Vec<PathBuf> },
 
@@ -44,7 +41,7 @@ pub enum NotesCommands {
 /// - The editor fails to open
 /// - The fuzzy search process fails to spawn or communicate
 pub fn run_notes_command(
-    cmd: NotesCommands,
+    cmd: NotesCommand,
     db_path: &std::path::Path,
     rt: &tokio::runtime::Handle,
 ) -> Result<(), Report<RunError>> {
@@ -53,7 +50,7 @@ pub fn run_notes_command(
 
 #[allow(clippy::too_many_lines)]
 async fn run_notes_command_async(
-    cmd: NotesCommands,
+    cmd: NotesCommand,
     db_path: &std::path::Path,
     rt: &tokio::runtime::Handle,
 ) -> Result<(), Report<RunError>> {
@@ -62,7 +59,7 @@ async fn run_notes_command_async(
         .change_context(RunError)?;
 
     match cmd {
-        NotesCommands::Add { paths } => {
+        NotesCommand::Add { paths } => {
             if paths.is_empty() {
                 return Err(Report::new(RunError));
             }
@@ -135,7 +132,7 @@ async fn run_notes_command_async(
                 }
             }
         }
-        NotesCommands::Search { query, symlink } => {
+        NotesCommand::Search { query, symlink } => {
             let results = services
                 .db
                 .search_notes(&query)
@@ -158,9 +155,9 @@ async fn run_notes_command_async(
                 }
             }
         }
-        NotesCommands::Fuzzy { symlink } => {
+        NotesCommand::Fuzzy { symlink } => {
             let fuzzy_search = FuzzySearchService::new(Arc::new(SkimBackend));
-            
+
             let notes = services
                 .db
                 .get_all_notes_with_paths()
@@ -171,9 +168,7 @@ async fn run_notes_command_async(
                 return Ok(());
             }
 
-            let result = fuzzy_search
-                .search(&notes)
-                .change_context(RunError)?;
+            let result = fuzzy_search.search(&notes).change_context(RunError)?;
 
             for path in &result.selected_paths {
                 println!("{path}");

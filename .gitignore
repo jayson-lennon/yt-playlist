@@ -4,3 +4,4 @@ shownotes.toml
 /.build
 *.zst
 /pkg
+coverage.lcov
