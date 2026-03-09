@@ -1,0 +1,106 @@
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
+use error_stack::{fmt::ColorMode, Report};
+
+use crate::cli::{
+    action::{run_action_mpv, ActionCommands},
+    generate::run_generate,
+    notes::{run_notes_command, NotesCommands},
+    sources::{run_sources_command, SourcesCommands},
+    tui::run_tui,
+};
+
+pub mod action;
+pub mod generate;
+pub mod notes;
+pub mod sources;
+pub mod tui;
+pub mod utils;
+
+#[derive(Parser)]
+#[command(name = "shownotes")]
+#[command(about = "TUI playlist manager for mpv with notes support")]
+pub struct Args {
+    #[arg(long, env = "SHOWNOTES_DB_PATH", default_value = "/mnt/zed/work/youtube/notes.db")]
+    pub db_path: PathBuf,
+
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Run the TUI (default when no command specified)
+    Tui {
+        /// Playlist file path
+        #[arg(short, long, default_value = "shownotes.toml")]
+        playlist: PathBuf,
+
+        /// mpv socket path
+        #[arg(long, default_value = "/tmp/mpvsocket")]
+        socket: PathBuf,
+
+        /// Directory path for library scanning
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+
+    /// Perform an action on a file
+    Action {
+        #[command(subcommand)]
+        action: ActionCommands,
+    },
+
+    /// Notes commands for managing file notes
+    Notes {
+        #[command(subcommand)]
+        notes_cmd: NotesCommands,
+    },
+
+    /// Source URL commands for managing file provenance
+    Sources {
+        #[command(subcommand)]
+        sources_cmd: SourcesCommands,
+    },
+
+    /// Generate show notes from playlist
+    Generate {
+        /// Output format (markdown, plain, html)
+        #[arg(short, long, default_value = "markdown")]
+        format: String,
+
+        /// Playlist file path
+        #[arg(short, long, default_value = "shownotes.toml")]
+        playlist: PathBuf,
+    },
+}
+
+#[derive(Debug, wherror::Error)]
+#[error(debug)]
+pub struct RunError;
+
+/// Runs the CLI application.
+///
+/// # Errors
+///
+/// Returns an error if any command fails to execute.
+pub fn run() -> Result<(), Report<RunError>> {
+    Report::set_color_mode(ColorMode::None);
+
+    let args = Args::parse();
+
+    match args.command.unwrap_or(Commands::Tui {
+        playlist: PathBuf::from("shownotes.toml"),
+        socket: PathBuf::from("/tmp/mpvsocket"),
+        path: PathBuf::from("."),
+    }) {
+        Commands::Tui { playlist, socket, path } => run_tui(playlist, socket, &args.db_path, path),
+        Commands::Action { action } => match action {
+            ActionCommands::Mpv { path, socket } => run_action_mpv(&path, &socket),
+        },
+        Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path),
+        Commands::Sources { sources_cmd } => run_sources_command(sources_cmd, &args.db_path),
+        Commands::Generate { format, playlist } => run_generate(&format, &playlist, &args.db_path),
+    }
+}
