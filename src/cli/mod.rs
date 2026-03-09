@@ -89,18 +89,20 @@ pub fn run() -> Result<(), Report<RunError>> {
     Report::set_color_mode(ColorMode::None);
 
     let args = Args::parse();
+    let rt = tokio::runtime::Runtime::new().map_err(|_| Report::new(RunError))?;
+    let handle = rt.handle().clone();
 
     match args.command.unwrap_or(Commands::Tui {
         playlist: PathBuf::from("shownotes.toml"),
         socket: PathBuf::from("/tmp/mpvsocket"),
         path: PathBuf::from("."),
     }) {
-        Commands::Tui { playlist, socket, path } => run_tui(playlist, socket, &args.db_path, path),
+        Commands::Tui { playlist, socket, path } => run_tui(playlist, socket, &args.db_path, path, rt),
         Commands::Action { action } => match action {
             ActionCommands::Mpv { path, socket } => run_action_mpv(&path, &socket),
         },
-        Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path),
-        Commands::Sources { sources_cmd } => run_sources_command(sources_cmd, &args.db_path),
-        Commands::Generate { format, playlist } => run_generate(&format, &playlist, &args.db_path),
+        Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path, &handle),
+        Commands::Sources { sources_cmd } => run_sources_command(sources_cmd, &args.db_path, &handle),
+        Commands::Generate { format, playlist } => run_generate(&format, &playlist, &args.db_path, &handle),
     }
 }

@@ -43,6 +43,7 @@ pub fn run_tui(
     socket: PathBuf,
     db_path: &Path,
     library_path: PathBuf,
+    rt: tokio::runtime::Runtime,
 ) -> Result<(), Report<RunError>> {
     let config = load().change_context(RunError)?;
 
@@ -68,9 +69,8 @@ pub fn run_tui(
 
     let media_backend: Arc<dyn MediaQuery> = Arc::new(CachedMedia::new(durations, ffprobe_backend));
 
-    let core_services = tokio::runtime::Runtime::new()
-        .change_context(RunError)?
-        .block_on(Services::new(&db_path.to_string_lossy()))
+    let handle = rt.handle().clone();
+    let core_services = rt.block_on(Services::new(&db_path.to_string_lossy(), handle))
         .change_context(RunError)?;
 
     let services = build_services(&playlist, &socket, media_backend, core_services);
@@ -86,6 +86,7 @@ pub fn run_tui(
         config,
         socket.to_string_lossy().into_owned(),
         library_path,
+        rt,
     );
     let res = run_app(&mut terminal, &mut app);
 
@@ -173,6 +174,7 @@ fn build_services(
         editor: core.editor,
         path_resolver: core.path_resolver,
         sources: core.sources,
+        rt: core.rt,
     }
 }
 
@@ -329,8 +331,7 @@ fn run_app(
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
     let services = &app.services;
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(async {
+    app.services.rt.block_on(async {
         let resolved = services
             .path_resolver
             .resolve(path)
@@ -371,8 +372,7 @@ fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
 fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
     let services = &app.services;
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(async {
+    app.services.rt.block_on(async {
         let all_notes = services
             .db
             .get_all_notes_with_paths()
@@ -440,8 +440,7 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
 fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
     let services = &app.services;
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(async {
+    app.services.rt.block_on(async {
         let resolved = services
             .path_resolver
             .resolve(path)
@@ -491,8 +490,9 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
         .load()
         .map_err(|e| format!("Failed to load playlist: {e:?}"))?;
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    let output = rt
+    let output = app
+        .services
+        .rt
         .block_on(crate::feat::generate_show_notes(
             &playlist_data,
             &app.services.sources,

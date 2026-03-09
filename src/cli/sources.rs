@@ -44,17 +44,18 @@ pub enum SourcesCommands {
 pub fn run_sources_command(
     cmd: SourcesCommands,
     db_path: &std::path::Path,
+    rt: &tokio::runtime::Handle,
 ) -> Result<(), Report<RunError>> {
-    let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
-    rt.block_on(async { run_sources_command_async(cmd, db_path).await })
+    rt.block_on(async { run_sources_command_async(cmd, db_path, rt).await })
 }
 
 #[allow(clippy::too_many_lines)]
 async fn run_sources_command_async(
     cmd: SourcesCommands,
     db_path: &std::path::Path,
+    rt: &tokio::runtime::Handle,
 ) -> Result<(), Report<RunError>> {
-    let services = Services::new(&db_path.to_string_lossy())
+    let services = Services::new(&db_path.to_string_lossy(), rt.clone())
         .await
         .change_context(RunError)?;
 

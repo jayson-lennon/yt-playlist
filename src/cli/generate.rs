@@ -22,15 +22,15 @@ pub fn run_generate(
     format: &str,
     playlist_path: &Path,
     db_path: &Path,
+    rt: &tokio::runtime::Handle,
 ) -> Result<(), Report<RunError>> {
     let storage_backend: Arc<dyn PlaylistStorage> =
         Arc::new(TomlStorage::new(playlist_path.to_path_buf()));
     let playlist_storage = PlaylistStorageService::new(storage_backend);
     let playlist_data = playlist_storage.load().change_context(RunError)?;
 
-    let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async {
-        let services = Services::new(&db_path.to_string_lossy())
+        let services = Services::new(&db_path.to_string_lossy(), rt.clone())
             .await
             .change_context(RunError)?;
 

@@ -23,12 +23,13 @@ pub struct Services {
     pub editor: ExternalEditorService,
     pub path_resolver: PathResolverService,
     pub sources: SourceDbService,
+    pub rt: tokio::runtime::Handle,
 }
 
 impl Services {
     /// # Errors
     /// Returns an error if the database connection or migration fails.
-    pub async fn new(db_path: &str) -> Result<Self, Report<SqliteNoteDbError>> {
+    pub async fn new(db_path: &str, rt: tokio::runtime::Handle) -> Result<Self, Report<SqliteNoteDbError>> {
         let note_db = Arc::new(SqliteNoteDb::new(db_path).await?);
         let source_db = Arc::new(SqliteSourceDb::new(note_db.pool().clone()));
         let editor = Arc::new(SystemEditor);
@@ -50,6 +51,7 @@ impl Services {
             editor: ExternalEditorService::new(editor),
             path_resolver: PathResolverService::new(path_resolver),
             sources: SourceDbService::new(source_db),
+            rt,
         })
     }
 }

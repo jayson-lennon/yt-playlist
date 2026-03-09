@@ -8,22 +8,12 @@ use crate::keymap::{Action, Keymap};
 use crate::services::Services;
 use crate::tui::{Pane, PlaylistItem, TuiState, get_mime_type};
 
+#[derive(Default)]
 pub struct Fork {
     pub notes_path: Option<PathBuf>,
     pub fuzzy_notes: bool,
     pub sources_path: Option<PathBuf>,
     pub generate_notes: Option<String>,
-}
-
-impl Default for Fork {
-    fn default() -> Self {
-        Self {
-            notes_path: None,
-            fuzzy_notes: false,
-            sources_path: None,
-            generate_notes: None,
-        }
-    }
 }
 
 pub struct RuntimeSettings {
@@ -39,6 +29,7 @@ pub struct App {
     pub should_quit: bool,
     pub fork: Fork,
     pub runtime: RuntimeSettings,
+    pub tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl App {
@@ -47,6 +38,7 @@ impl App {
         config: Config,
         socket_path: String,
         library_path: PathBuf,
+        tokio_runtime: tokio::runtime::Runtime,
     ) -> Self {
         let mut app = Self {
             services,
@@ -59,6 +51,7 @@ impl App {
                 socket_path,
                 library_path,
             },
+            tokio_runtime,
         };
         app.load_playlist();
         app.refresh_library();
@@ -297,8 +290,10 @@ impl App {
                         }
                         _ => {
                             self.tui_state.pending_keys.push(key);
-                            if let Some(node) =
-                                self.runtime.keymap.get_node_at_path(&self.tui_state.pending_keys)
+                            if let Some(node) = self
+                                .runtime
+                                .keymap
+                                .get_node_at_path(&self.tui_state.pending_keys)
                             {
                                 match node {
                                     crate::keymap::KeyNode::Leaf { action, .. } => {
@@ -329,7 +324,8 @@ impl App {
             }
 
             if let Some(action) =
-                self.runtime.keymap
+                self.runtime
+                    .keymap
                     .get_action(key.code, key.modifiers, self.tui_state.focused_pane)
             {
                 self.execute_action(action);
@@ -562,7 +558,11 @@ impl App {
     }
 
     fn launch_mpv(&mut self) {
-        if self.services.mpv_launcher.is_running(&self.runtime.socket_path) {
+        if self
+            .services
+            .mpv_launcher
+            .is_running(&self.runtime.socket_path)
+        {
             self.tui_state.status_message = Some("MPV already running".to_string());
         } else {
             match self.services.mpv_launcher.spawn(&self.runtime.socket_path) {
@@ -734,7 +734,9 @@ mod tests {
 
         fn build(self) -> App {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let core = rt.block_on(async { Services::new("sqlite::memory:").await.unwrap() });
+            let handle = rt.handle().clone();
+            let core =
+                rt.block_on(async { Services::new("sqlite::memory:", handle).await.unwrap() });
 
             let services = Services {
                 mpv: MpvClientService::new(Arc::new(self.mpv_backend)),
@@ -746,6 +748,7 @@ mod tests {
                 editor: core.editor,
                 path_resolver: core.path_resolver,
                 sources: core.sources,
+                rt: core.rt,
             };
 
             let mut app = App {
@@ -759,6 +762,7 @@ mod tests {
                     socket_path: String::from("/tmp/mpvsocket"),
                     library_path: self.library_path,
                 },
+                tokio_runtime: rt,
             };
 
             for path in self.playlist_items {
