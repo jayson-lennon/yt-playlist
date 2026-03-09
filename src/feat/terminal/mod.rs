@@ -18,6 +18,8 @@ pub struct TerminalGuard<'a> {
 }
 
 impl<'a> TerminalGuard<'a> {
+    /// # Errors
+    /// Returns an error if the terminal cannot be suspended.
     pub fn new(
         terminal: &'a mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> Result<Self, Report<TerminalSuspendError>> {
@@ -35,7 +37,7 @@ impl<'a> TerminalGuard<'a> {
     }
 }
 
-impl<'a> Drop for TerminalGuard<'a> {
+impl Drop for TerminalGuard<'_> {
     fn drop(&mut self) {
         let _ = enable_raw_mode();
         let _ = execute!(
@@ -48,7 +50,7 @@ impl<'a> Drop for TerminalGuard<'a> {
     }
 }
 
-impl<'a> TerminalGuard<'a> {
+impl TerminalGuard<'_> {
     pub fn terminal(&mut self) -> &mut Terminal<CrosstermBackend<io::Stdout>> {
         self.terminal
     }
@@ -56,6 +58,9 @@ impl<'a> TerminalGuard<'a> {
 
 /// Suspends the TUI, runs the closure, then resumes the TUI.
 /// Automatically handles cleanup on drop, even if the closure panics.
+///
+/// # Errors
+/// Returns an error if the terminal cannot be suspended or resumed.
 pub fn suspend_and_run<F, T, E>(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     f: F,

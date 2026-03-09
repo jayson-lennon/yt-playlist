@@ -17,6 +17,8 @@ pub struct FuzzySearchResult {
 pub trait FuzzySearch: Send + Sync {
     fn name(&self) -> &'static str;
 
+    /// # Errors
+    /// Returns an error if the fuzzy search backend fails.
     fn search(
         &self,
         items: &[(String, String)],
@@ -34,6 +36,8 @@ impl FuzzySearchService {
         Self { backend }
     }
 
+    /// # Errors
+    /// Returns an error if the fuzzy search backend fails.
     pub fn search(
         &self,
         items: &[(String, String)],

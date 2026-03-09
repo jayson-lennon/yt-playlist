@@ -26,7 +26,7 @@ impl FuzzySearch for SkimBackend {
                     .filter(|line| !line.trim().is_empty())
                     .collect::<Vec<_>>()
                     .join(". ");
-                let _ = writeln!(output, "{}\t{}", path, cleaned);
+                let _ = writeln!(output, "{path}\t{cleaned}");
                 output
             });
 

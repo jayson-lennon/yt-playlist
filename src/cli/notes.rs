@@ -176,7 +176,7 @@ async fn run_notes_command_async(
                 .change_context(RunError)?;
 
             for path in &result.selected_paths {
-                println!("{}", path);
+                println!("{path}");
             }
 
             if symlink {
@@ -185,7 +185,7 @@ async fn run_notes_command_async(
                     let src = PathBuf::from(path);
                     match create_symlink_with_suffix(&src, &cwd) {
                         Ok(dest) => eprintln!("Created symlink: {}", dest.display()),
-                        Err(e) => eprintln!("Failed to create symlink for {}: {e:?}", path),
+                        Err(e) => eprintln!("Failed to create symlink for {path}: {e:?}"),
                     }
                 }
             }

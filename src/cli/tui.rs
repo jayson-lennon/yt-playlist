@@ -343,7 +343,7 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
             let src = PathBuf::from(path);
             match create_symlink_with_suffix(&src, &cwd) {
                 Ok(_) => count += 1,
-                Err(e) => eprintln!("Failed to create symlink for {}: {e:?}", path),
+                Err(e) => eprintln!("Failed to create symlink for {path}: {e:?}"),
             }
         }
 
