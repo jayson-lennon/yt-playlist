@@ -11,8 +11,8 @@ use derive_more::Debug;
 use error_stack::Report;
 use wherror::Error;
 
-use crate::sources::db::sqlite::SqliteSourceDb;
 use crate::sources::SourceDbWrapper;
+use crate::sources::db::sqlite::SqliteSourceDb;
 
 #[derive(Debug, Error)]
 #[error(debug)]
@@ -59,7 +59,11 @@ pub trait NoteDb: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the database operation fails.
-    async fn upsert_note(&self, file_path_id: i64, content: &str) -> Result<(), Report<NoteDbError>>;
+    async fn upsert_note(
+        &self,
+        file_path_id: i64,
+        content: &str,
+    ) -> Result<(), Report<NoteDbError>>;
 
     /// Searches notes for content matching the query string.
     ///
@@ -72,7 +76,7 @@ pub trait NoteDb: Send + Sync {
 
     /// Retrieves all notes with their associated file paths.
     ///
-    /// Returns a vector of (file_path, note_content) pairs for all
+    /// Returns a vector of (`file_path`, `note_content`) pairs for all
     /// notes stored in the database.
     ///
     /// # Errors
