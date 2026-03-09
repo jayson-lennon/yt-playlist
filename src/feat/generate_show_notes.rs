@@ -13,6 +13,13 @@ use crate::{
 #[error(debug)]
 pub struct GenerateShowNotesError(pub String);
 
+/// Generates show notes for a playlist in the specified format.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Fetching sources from the database fails
+/// - The specified format is not recognized
 pub async fn generate_show_notes(
     playlist_data: &PlaylistData,
     sources: &dyn SourceDb,
