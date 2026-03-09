@@ -4,7 +4,7 @@ use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
 use crate::{
-    feat::{ExternalEditorBackend, NoteDbBackend, PathResolverBackend, sources::SourceDbBackend},
+    feat::{ExternalEditor, NoteDb, PathResolver, sources::SourceDb},
     services::Services,
 };
 

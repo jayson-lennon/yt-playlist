@@ -18,10 +18,10 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use crate::{
     app::App,
     config::{Config, load},
-    feat::media_query::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
-    feat::mpv::MpvipcBackend,
-    feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
-    feat::{ExternalEditorBackend, NoteDbBackend, PathResolverBackend, sources::SourceDbBackend},
+    feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
+    feat::mpv::MpvIpc,
+    feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage},
+    feat::{ExternalEditor, NoteDb, PathResolver, sources::SourceDb},
     services::Services,
     ui,
 };
@@ -46,13 +46,13 @@ pub fn run_tui(
 ) -> Result<(), Report<RunError>> {
     let config = load().change_context(RunError)?;
 
-    let storage_backend: Arc<dyn PlaylistStorageBackend> =
-        Arc::new(TomlBackend::new(playlist.clone()));
-    let playlist_storage = PlaylistStorage::new(storage_backend.clone());
+    let storage_backend: Arc<dyn PlaylistStorage> =
+        Arc::new(TomlStorage::new(playlist.clone()));
+    let playlist_storage = PlaylistStorageService::new(storage_backend.clone());
 
     let playlist_data = playlist_storage.load().change_context(RunError)?;
     let all_files = collect_all_files(&playlist_data, &config, &library_path);
-    let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
+    let ffprobe_backend: Arc<dyn MediaQuery> = Arc::new(Ffprobe);
 
     let result = crate::feat::media_duration_analysis::analyze_files(
         &all_files,
@@ -67,8 +67,8 @@ pub fn run_tui(
         .filter_map(|(k, v)| v.duration.map(|d| (k.clone(), d)))
         .collect();
 
-    let media_backend: Arc<dyn MediaQueryBackend> =
-        Arc::new(CachedMediaBackend::new(durations, ffprobe_backend));
+    let media_backend: Arc<dyn MediaQuery> =
+        Arc::new(CachedMedia::new(durations, ffprobe_backend));
 
     let core_services = tokio::runtime::Runtime::new()
         .change_context(RunError)?
@@ -153,24 +153,24 @@ fn collect_all_files(
 fn build_services(
     playlist: &Path,
     socket: &Path,
-    media_backend: Arc<dyn MediaQueryBackend>,
+    media_backend: Arc<dyn MediaQuery>,
     core: Services,
 ) -> Services {
     use crate::{
-        feat::launcher::{FileLauncher, FileLauncherService},
-        feat::mpv::{MpvClient, MpvLauncher, RealMpvLauncher},
+        feat::launcher::{FileLauncherService, XdgLauncher},
+        feat::mpv::{MpvClientService, MpvLauncherService, RealMpvLauncher},
     };
 
-    let mpv_backend: Arc<dyn crate::feat::mpv::MpvBackend> = Arc::new(MpvipcBackend::new(socket));
-    let storage_backend: Arc<dyn PlaylistStorageBackend> =
-        Arc::new(TomlBackend::new(playlist.to_path_buf()));
+    let mpv_backend: Arc<dyn crate::feat::mpv::MpvClient> = Arc::new(MpvIpc::new(socket));
+    let storage_backend: Arc<dyn PlaylistStorage> =
+        Arc::new(TomlStorage::new(playlist.to_path_buf()));
 
     Services {
-        mpv: MpvClient::new(mpv_backend),
-        media: MediaQuery::new(media_backend),
-        storage: PlaylistStorage::new(storage_backend),
-        mpv_launcher: MpvLauncher::new(Arc::new(RealMpvLauncher)),
-        file_launcher: FileLauncherService::new(Arc::new(FileLauncher::new())),
+        mpv: MpvClientService::new(mpv_backend),
+        media: MediaQueryService::new(media_backend),
+        storage: PlaylistStorageService::new(storage_backend),
+        mpv_launcher: MpvLauncherService::new(Arc::new(RealMpvLauncher)),
+        file_launcher: FileLauncherService::new(Arc::new(XdgLauncher::new())),
         db: core.db,
         editor: core.editor,
         path_resolver: core.path_resolver,

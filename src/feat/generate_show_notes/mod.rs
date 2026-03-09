@@ -8,7 +8,7 @@ use wherror::Error;
 use crate::{
     feat::generate_show_notes::format::{FormatRegistry, ShowNotesEntry},
     feat::playlist::PlaylistData,
-    feat::sources::{Source, SourceDbBackend},
+    feat::sources::{Source, SourceDb},
 };
 
 #[derive(Debug, Error)]
@@ -24,7 +24,7 @@ pub struct GenerateShowNotesError(pub String);
 /// - The specified format is not recognized
 pub async fn generate_show_notes(
     playlist_data: &PlaylistData,
-    sources: &dyn SourceDbBackend,
+    sources: &dyn SourceDb,
     format: &str,
 ) -> Result<String, Report<GenerateShowNotesError>> {
     let paths: Vec<String> = playlist_data

@@ -581,15 +581,19 @@ mod tests {
 
     use super::*;
     use crate::feat::FileLauncherService;
-    use crate::feat::launcher::{FileLauncherBackend, LaunchResult};
-    use crate::feat::media_query::{MediaError, MediaQuery, MediaQueryBackend};
-    use crate::feat::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher, MpvLauncherBackend};
-    use crate::feat::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
+    use crate::feat::launcher::{FileLauncher, LaunchResult};
+    use crate::feat::media_query::{MediaError, MediaQuery, MediaQueryService};
+    use crate::feat::mpv::{
+        MpvClient, MpvClientService, MpvError, MpvLauncher, MpvLauncherService,
+    };
+    use crate::feat::playlist::{
+        IoError, PlaylistData, PlaylistStorage, PlaylistStorageService,
+    };
     use crate::keymap::{Action, Keymap};
 
     struct FakeMpvBackend;
 
-    impl MpvBackend for FakeMpvBackend {
+    impl MpvClient for FakeMpvBackend {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -618,7 +622,7 @@ mod tests {
         }
     }
 
-    impl MpvLauncherBackend for FakeMpvLauncher {
+    impl MpvLauncher for FakeMpvLauncher {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -634,7 +638,7 @@ mod tests {
 
     struct FakeMediaBackend;
 
-    impl MediaQueryBackend for FakeMediaBackend {
+    impl MediaQuery for FakeMediaBackend {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -646,7 +650,7 @@ mod tests {
 
     struct FakeStorageBackend;
 
-    impl PlaylistStorageBackend for FakeStorageBackend {
+    impl PlaylistStorage for FakeStorageBackend {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -662,7 +666,7 @@ mod tests {
 
     struct FakeLauncher;
 
-    impl FileLauncherBackend for FakeLauncher {
+    impl FileLauncher for FakeLauncher {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -729,10 +733,10 @@ mod tests {
             let core = rt.block_on(async { Services::new("sqlite::memory:").await.unwrap() });
 
             let services = Services {
-                mpv: MpvClient::new(Arc::new(self.mpv_backend)),
-                media: MediaQuery::new(Arc::new(self.media_backend)),
-                storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
-                mpv_launcher: MpvLauncher::new(Arc::new(self.mpv_launcher)),
+                mpv: MpvClientService::new(Arc::new(self.mpv_backend)),
+                media: MediaQueryService::new(Arc::new(self.media_backend)),
+                storage: PlaylistStorageService::new(Arc::new(self.storage_backend)),
+                mpv_launcher: MpvLauncherService::new(Arc::new(self.mpv_launcher)),
                 file_launcher: FileLauncherService::new(Arc::new(self.file_launcher)),
                 db: core.db,
                 editor: core.editor,

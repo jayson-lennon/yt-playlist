@@ -5,26 +5,26 @@ use async_trait::async_trait;
 use derive_more::Debug;
 use error_stack::Report;
 
-use super::{PathResolutionError, PathResolverBackend};
+use super::{PathResolutionError, PathResolver};
 
 pub mod system;
 
 pub use system::SystemPathResolver;
 
 #[derive(Debug, Clone)]
-pub struct PathResolver {
+pub struct PathResolverService {
     #[debug("<PathResolver>")]
-    backend: Arc<dyn PathResolverBackend>,
+    backend: Arc<dyn PathResolver>,
 }
 
-impl PathResolver {
-    pub fn new(backend: Arc<dyn PathResolverBackend>) -> Self {
+impl PathResolverService {
+    pub fn new(backend: Arc<dyn PathResolver>) -> Self {
         Self { backend }
     }
 }
 
 #[async_trait]
-impl PathResolverBackend for PathResolver {
+impl PathResolver for PathResolverService {
     async fn resolve(&self, path: &Path) -> Result<PathBuf, Report<PathResolutionError>> {
         self.backend.resolve(path).await
     }

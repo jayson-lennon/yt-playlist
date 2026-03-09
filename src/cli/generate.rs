@@ -4,7 +4,7 @@ use error_stack::{Report, ResultExt};
 
 use crate::{
     feat::generate_show_notes,
-    feat::playlist::{PlaylistStorage, PlaylistStorageBackend, TomlBackend},
+    feat::playlist::{PlaylistStorage, PlaylistStorageService, TomlStorage},
     services::Services,
 };
 
@@ -23,9 +23,9 @@ pub fn run_generate(
     playlist_path: &Path,
     db_path: &Path,
 ) -> Result<(), Report<RunError>> {
-    let storage_backend: Arc<dyn PlaylistStorageBackend> =
-        Arc::new(TomlBackend::new(playlist_path.to_path_buf()));
-    let playlist_storage = PlaylistStorage::new(storage_backend);
+    let storage_backend: Arc<dyn PlaylistStorage> =
+        Arc::new(TomlStorage::new(playlist_path.to_path_buf()));
+    let playlist_storage = PlaylistStorageService::new(storage_backend);
     let playlist_data = playlist_storage.load().change_context(RunError)?;
 
     let rt = tokio::runtime::Runtime::new().change_context(RunError)?;

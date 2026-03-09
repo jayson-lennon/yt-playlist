@@ -13,7 +13,7 @@ use wherror::Error;
 #[error(debug)]
 pub struct MediaError;
 
-pub trait MediaQueryBackend: Send + Sync {
+pub trait MediaQuery: Send + Sync {
     /// Returns the name identifier for this media query backend implementation.
     fn name(&self) -> &'static str;
 
@@ -26,13 +26,13 @@ pub trait MediaQueryBackend: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct MediaQuery {
+pub struct MediaQueryService {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn MediaQueryBackend>,
+    backend: Arc<dyn MediaQuery>,
 }
 
-impl MediaQuery {
-    pub fn new(backend: Arc<dyn MediaQueryBackend>) -> Self {
+impl MediaQueryService {
+    pub fn new(backend: Arc<dyn MediaQuery>) -> Self {
         Self { backend }
     }
 
@@ -44,9 +44,9 @@ impl MediaQuery {
     }
 }
 
-pub struct FfprobeBackend;
+pub struct Ffprobe;
 
-impl MediaQueryBackend for FfprobeBackend {
+impl MediaQuery for Ffprobe {
     fn name(&self) -> &'static str {
         "ffprobe"
     }
@@ -60,18 +60,18 @@ impl MediaQueryBackend for FfprobeBackend {
     }
 }
 
-pub struct CachedMediaBackend {
+pub struct CachedMedia {
     cache: HashMap<PathBuf, Duration>,
-    fallback: Arc<dyn MediaQueryBackend>,
+    fallback: Arc<dyn MediaQuery>,
 }
 
-impl CachedMediaBackend {
-    pub fn new(cache: HashMap<PathBuf, Duration>, fallback: Arc<dyn MediaQueryBackend>) -> Self {
+impl CachedMedia {
+    pub fn new(cache: HashMap<PathBuf, Duration>, fallback: Arc<dyn MediaQuery>) -> Self {
         Self { cache, fallback }
     }
 }
 
-impl MediaQueryBackend for CachedMediaBackend {
+impl MediaQuery for CachedMedia {
     fn name(&self) -> &'static str {
         "cached"
     }
@@ -108,7 +108,7 @@ mod tests {
         }
     }
 
-    impl MediaQueryBackend for FakeMediaBackend {
+    impl MediaQuery for FakeMediaBackend {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -123,7 +123,7 @@ mod tests {
     fn media_query_delegates_to_backend() {
         // Given a media query with fake backend.
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
-        let query = MediaQuery::new(fake.clone());
+        let query = MediaQueryService::new(fake.clone());
 
         // When getting duration.
         let result = query.get_duration(&path("test.mp4"));
@@ -139,7 +139,7 @@ mod tests {
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
         cache.insert(path("cached.mp4"), Duration::from_secs(60));
-        let cached = CachedMediaBackend::new(cache, fake.clone());
+        let cached = CachedMedia::new(cache, fake.clone());
 
         // When getting duration for cached path.
         let result = cached.get_duration(&path("cached.mp4"));
@@ -153,7 +153,7 @@ mod tests {
     fn cached_backend_falls_back_on_cache_miss() {
         // Given a cached backend with empty cache.
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
-        let cached = CachedMediaBackend::new(HashMap::new(), fake.clone());
+        let cached = CachedMedia::new(HashMap::new(), fake.clone());
 
         // When getting duration for uncached path.
         let result = cached.get_duration(&path("uncached.mp4"));
@@ -171,7 +171,7 @@ mod tests {
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
         cache.insert(canonical_path.clone(), Duration::from_secs(60));
-        let cached = CachedMediaBackend::new(cache, fake.clone());
+        let cached = CachedMedia::new(cache, fake.clone());
 
         // When getting duration with the same path (canonicalized internally).
         let result = cached.get_duration(&canonical_path);
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn ffprobe_backend_name() {
         // Given an ffprobe backend.
-        let backend = FfprobeBackend;
+        let backend = Ffprobe;
 
         // When getting name.
         let name = backend.name();
@@ -197,7 +197,7 @@ mod tests {
     fn cached_backend_name() {
         // Given a cached backend.
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
-        let cached = CachedMediaBackend::new(HashMap::new(), fake);
+        let cached = CachedMedia::new(HashMap::new(), fake);
 
         // When getting name.
         let name = cached.name();
@@ -224,7 +224,7 @@ mod tests {
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
         cache.insert(path("video.mp4"), Duration::from_secs(60));
-        let cached = CachedMediaBackend::new(cache, fake.clone());
+        let cached = CachedMedia::new(cache, fake.clone());
 
         // When getting duration multiple times.
         let _ = cached.get_duration(&path("video.mp4"));
@@ -241,7 +241,7 @@ mod tests {
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
         cache.insert(path("cached.mp4"), Duration::from_secs(60));
-        let cached = CachedMediaBackend::new(cache, fake.clone());
+        let cached = CachedMedia::new(cache, fake.clone());
 
         // When getting duration for different paths.
         let _ = cached.get_duration(&path("cached.mp4"));

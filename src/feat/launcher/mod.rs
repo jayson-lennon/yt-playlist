@@ -1,4 +1,4 @@
-mod file;
+mod xdg;
 
 use std::{path::Path, sync::Arc};
 
@@ -6,7 +6,7 @@ use derive_more::Debug;
 use error_stack::Report;
 use wherror::Error;
 
-pub use file::FileLauncher;
+pub use xdg::XdgLauncher;
 
 #[derive(Debug, Error)]
 #[error(debug)]
@@ -18,7 +18,7 @@ pub struct LaunchResult {
     pub used_default_opener: bool,
 }
 
-pub trait FileLauncherBackend: Send + Sync {
+pub trait FileLauncher: Send + Sync {
     fn name(&self) -> &'static str;
 
     /// # Errors
@@ -34,11 +34,11 @@ pub trait FileLauncherBackend: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct FileLauncherService {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn FileLauncherBackend>,
+    backend: Arc<dyn FileLauncher>,
 }
 
 impl FileLauncherService {
-    pub fn new(backend: Arc<dyn FileLauncherBackend>) -> Self {
+    pub fn new(backend: Arc<dyn FileLauncher>) -> Self {
         Self { backend }
     }
 

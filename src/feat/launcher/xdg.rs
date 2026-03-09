@@ -6,14 +6,14 @@ use std::{
 
 use error_stack::{Report, ResultExt};
 
-use super::{FileLauncherBackend, LaunchError, LaunchResult};
+use super::{FileLauncher, LaunchError, LaunchResult};
 
 #[derive(Debug, Clone)]
-pub struct FileLauncher {
+pub struct XdgLauncher {
     shell: String,
 }
 
-impl FileLauncher {
+impl XdgLauncher {
     pub fn new() -> Self {
         Self {
             shell: std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
@@ -21,13 +21,13 @@ impl FileLauncher {
     }
 }
 
-impl Default for FileLauncher {
+impl Default for XdgLauncher {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl FileLauncherBackend for FileLauncher {
+impl FileLauncher for XdgLauncher {
     fn name(&self) -> &'static str {
         "file"
     }
@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn file_launcher_uses_shell_from_env() {
-        let launcher = FileLauncher::new();
+        let launcher = XdgLauncher::new();
         assert!(!launcher.shell.is_empty());
     }
 
@@ -158,7 +158,7 @@ mod tests {
         }
     }
 
-    impl FileLauncherBackend for FakeLauncher {
+    impl FileLauncher for FakeLauncher {
         fn name(&self) -> &'static str {
             "fake"
         }

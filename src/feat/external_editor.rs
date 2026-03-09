@@ -20,7 +20,7 @@ pub enum DialoguerEditorError {
 pub struct SystemEditor;
 
 #[async_trait]
-pub trait ExternalEditorBackend: Send + Sync {
+pub trait ExternalEditor: Send + Sync {
     async fn open(
         &self,
         initial_content: &str,
@@ -28,7 +28,7 @@ pub trait ExternalEditorBackend: Send + Sync {
 }
 
 #[async_trait]
-impl ExternalEditorBackend for SystemEditor {
+impl ExternalEditor for SystemEditor {
     async fn open(
         &self,
         initial_content: &str,
@@ -50,19 +50,19 @@ impl ExternalEditorBackend for SystemEditor {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExternalEditor {
+pub struct ExternalEditorService {
     #[debug("<ExternalEditor>")]
-    backend: Arc<dyn ExternalEditorBackend>,
+    backend: Arc<dyn ExternalEditor>,
 }
 
-impl ExternalEditor {
-    pub fn new(backend: Arc<dyn ExternalEditorBackend>) -> Self {
+impl ExternalEditorService {
+    pub fn new(backend: Arc<dyn ExternalEditor>) -> Self {
         Self { backend }
     }
 }
 
 #[async_trait]
-impl ExternalEditorBackend for ExternalEditor {
+impl ExternalEditor for ExternalEditorService {
     async fn open(
         &self,
         initial_content: &str,

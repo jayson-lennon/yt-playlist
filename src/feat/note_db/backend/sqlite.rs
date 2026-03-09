@@ -7,7 +7,7 @@ use sqlx::SqlitePool;
 use sqlx::sqlite::SqliteConnectOptions;
 use wherror::Error;
 
-use super::super::{NoteDbBackend, NoteDbError};
+use super::super::{NoteDb, NoteDbError};
 
 #[derive(Debug, Error)]
 pub enum SqliteNoteDbError {
@@ -59,7 +59,7 @@ impl SqliteNoteDb {
 }
 
 #[async_trait]
-impl NoteDbBackend for SqliteNoteDb {
+impl NoteDb for SqliteNoteDb {
     async fn get_or_create_file_path(&self, path: &str) -> Result<i64, Report<NoteDbError>> {
         let result = sqlx::query_scalar::<_, i64>("SELECT id FROM file_paths WHERE path = ?")
             .bind(path)

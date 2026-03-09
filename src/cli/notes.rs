@@ -8,7 +8,7 @@ use std::{
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
-use crate::feat::{ExternalEditorBackend, NoteDbBackend, PathResolverBackend};
+use crate::feat::{ExternalEditor, NoteDb, PathResolver};
 use crate::services::Services;
 
 use super::{RunError, utils::create_symlink_with_suffix};

@@ -3,13 +3,13 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use error_stack::Report;
 
-use super::super::{PathResolutionError, PathResolverBackend};
+use super::super::{PathResolutionError, PathResolver};
 
 #[derive(Debug, Clone)]
 pub struct SystemPathResolver;
 
 #[async_trait]
-impl PathResolverBackend for SystemPathResolver {
+impl PathResolver for SystemPathResolver {
     async fn resolve(&self, path: &Path) -> Result<PathBuf, Report<PathResolutionError>> {
         let path = path.to_path_buf();
         tokio::task::spawn_blocking(move || {

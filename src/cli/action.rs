@@ -3,7 +3,7 @@ use std::path::Path;
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
-use crate::feat::mpv::{MpvBackend, MpvipcBackend};
+use crate::feat::mpv::{MpvClient, MpvIpc};
 
 use super::RunError;
 
@@ -26,7 +26,7 @@ pub enum ActionCommands {
 ///
 /// Returns an error if the file cannot be loaded via the mpv IPC socket.
 pub fn run_action_mpv(path: &Path, socket: &Path) -> Result<(), Report<RunError>> {
-    let backend = MpvipcBackend::new(socket);
+    let backend = MpvIpc::new(socket);
     backend.load_file(path).change_context(RunError)?;
     println!("Loaded: {}", path.display());
     Ok(())

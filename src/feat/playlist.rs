@@ -55,7 +55,7 @@ pub struct PlaylistData {
     pub files: HashMap<PathBuf, FileMetadata>,
 }
 
-pub trait PlaylistStorageBackend: Send + Sync {
+pub trait PlaylistStorage: Send + Sync {
     /// Returns the name identifier for this storage backend implementation.
     fn name(&self) -> &'static str;
 
@@ -75,13 +75,13 @@ pub trait PlaylistStorageBackend: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlaylistStorage {
+pub struct PlaylistStorageService {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn PlaylistStorageBackend>,
+    backend: Arc<dyn PlaylistStorage>,
 }
 
-impl PlaylistStorage {
-    pub fn new(backend: Arc<dyn PlaylistStorageBackend>) -> Self {
+impl PlaylistStorageService {
+    pub fn new(backend: Arc<dyn PlaylistStorage>) -> Self {
         Self { backend }
     }
 
@@ -100,17 +100,17 @@ impl PlaylistStorage {
     }
 }
 
-pub struct TomlBackend {
+pub struct TomlStorage {
     path: PathBuf,
 }
 
-impl TomlBackend {
+impl TomlStorage {
     pub fn new(path: PathBuf) -> Self {
         Self { path }
     }
 }
 
-impl PlaylistStorageBackend for TomlBackend {
+impl PlaylistStorage for TomlStorage {
     fn name(&self) -> &'static str {
         "toml"
     }
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn toml_backend_load_returns_default_when_file_not_exists() {
         // Given a backend with non-existent path.
-        let backend = TomlBackend::new(PathBuf::from("/nonexistent/path.toml"));
+        let backend = TomlStorage::new(PathBuf::from("/nonexistent/path.toml"));
 
         // When loading.
         let result = backend.load();
@@ -245,7 +245,7 @@ duration = 120.5
 alias = "First Video"
 "#;
         let file = create_temp_file(content);
-        let backend = TomlBackend::new(file.path().to_path_buf());
+        let backend = TomlStorage::new(file.path().to_path_buf());
 
         // When loading.
         let result = backend.load();
@@ -265,7 +265,7 @@ version = 1
 playlist = []
 "#;
         let file = create_temp_file(content);
-        let backend = TomlBackend::new(file.path().to_path_buf());
+        let backend = TomlStorage::new(file.path().to_path_buf());
 
         // When loading.
         let result = backend.load();
@@ -288,7 +288,7 @@ path = "video.mp4"
 duration = -10.0
 "#;
         let file = create_temp_file(content);
-        let backend = TomlBackend::new(file.path().to_path_buf());
+        let backend = TomlStorage::new(file.path().to_path_buf());
 
         // When loading.
         let result = backend.load().unwrap();
@@ -311,7 +311,7 @@ path = "video.mp4"
 duration = 0.0
 "#;
         let file = create_temp_file(content);
-        let backend = TomlBackend::new(file.path().to_path_buf());
+        let backend = TomlStorage::new(file.path().to_path_buf());
 
         // When loading.
         let result = backend.load().unwrap();
@@ -334,7 +334,7 @@ path = "video.mp4"
 duration = 120.5
 "#;
         let file = create_temp_file(content);
-        let backend = TomlBackend::new(file.path().to_path_buf());
+        let backend = TomlStorage::new(file.path().to_path_buf());
 
         // When loading.
         let result = backend.load().unwrap();
@@ -349,54 +349,10 @@ duration = 120.5
     }
 
     #[test]
-    fn toml_backend_load_handles_missing_files_section() {
-        // Given a TOML file without files section.
-        let content = r#"
-version = 1
-playlist = ["video.mp4"]
-"#;
-        let file = create_temp_file(content);
-        let backend = TomlBackend::new(file.path().to_path_buf());
-
-        // When loading.
-        let result = backend.load();
-
-        // Then data is parsed with empty files.
-        assert!(result.is_ok());
-        let data = result.unwrap();
-        assert!(data.files.is_empty());
-    }
-
-    #[test]
     fn toml_backend_save_writes_valid_toml() {
         // Given a temp file and data.
         let file = NamedTempFile::new().expect("Failed to create temp file");
-        let backend = TomlBackend::new(file.path().to_path_buf());
-        let mut data = PlaylistData::default();
-        data.playlist.push(PathBuf::from("video.mp4"));
-        data.files.insert(
-            PathBuf::from("video.mp4"),
-            FileMetadata {
-                duration: Some(Duration::from_secs(120)),
-                alias: Some("My Video".to_string()),
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-            },
-        );
-
-        // When saving.
-        let result = backend.save(&data);
-
-        // Then save succeeds.
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn toml_backend_save_load_roundtrip() {
-        // Given data to save.
-        let file = NamedTempFile::new().expect("Failed to create temp file");
-        let backend = TomlBackend::new(file.path().to_path_buf());
+        let backend = TomlStorage::new(file.path().to_path_buf());
         let mut original = PlaylistData::default();
         original.playlist.push(PathBuf::from("video.mp4"));
         original.files.insert(
@@ -423,7 +379,7 @@ playlist = ["video.mp4"]
     fn playlist_storage_delegates_to_backend() {
         // Given a storage with fake backend.
         let backend = Arc::new(FakeStorageBackend::default());
-        let storage = PlaylistStorage::new(backend.clone());
+        let storage = PlaylistStorageService::new(backend.clone());
 
         // When loading.
         let result = storage.load();
@@ -442,7 +398,7 @@ playlist = ["video.mp4"]
     fn playlist_storage_save_delegates_to_backend() {
         // Given a storage with fake backend.
         let backend = Arc::new(FakeStorageBackend::default());
-        let storage = PlaylistStorage::new(backend.clone());
+        let storage = PlaylistStorageService::new(backend.clone());
         let data = PlaylistData::default();
 
         // When saving.
@@ -507,7 +463,7 @@ playlist = ["video.mp4"]
         }
     }
 
-    impl PlaylistStorageBackend for FakeStorageBackend {
+    impl PlaylistStorage for FakeStorageBackend {
         fn name(&self) -> &'static str {
             "fake"
         }

@@ -5,7 +5,7 @@ use error_stack::Report;
 use sqlx::SqlitePool;
 use wherror::Error;
 
-use crate::feat::sources::{Source, SourceDbBackend, SourceDbError};
+use crate::feat::sources::{Source, SourceDb, SourceDbError};
 
 #[derive(Debug, Error)]
 pub enum SqliteSourceDbError {
@@ -29,7 +29,7 @@ impl SqliteSourceDb {
 }
 
 #[async_trait]
-impl SourceDbBackend for SqliteSourceDb {
+impl SourceDb for SqliteSourceDb {
     async fn get_sources(&self, file_path_id: i64) -> Result<Vec<Source>, Report<SourceDbError>> {
         let results = sqlx::query_as::<_, (i64, String, Option<String>)>(
             "SELECT id, source_url, label FROM sources WHERE file_path_id = ? ORDER BY id",
@@ -128,7 +128,7 @@ impl SourceDbBackend for SqliteSourceDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::feat::NoteDbBackend;
+    use crate::feat::NoteDb;
     use crate::feat::note_db::SqliteNoteDb;
     use tempfile::NamedTempFile;
 

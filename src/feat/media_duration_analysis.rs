@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use error_stack::Report;
 
-use super::media_query::{MediaError, MediaQueryBackend};
+use super::media_query::{MediaError, MediaQuery};
 use super::playlist::FileMetadata;
 
 pub struct AnalysisResult {
@@ -13,7 +13,7 @@ pub struct AnalysisResult {
 pub fn analyze_files(
     files: &[PathBuf],
     mut metadata: HashMap<PathBuf, FileMetadata>,
-    backend: &dyn MediaQueryBackend,
+    backend: &dyn MediaQuery,
 ) -> Result<AnalysisResult, Report<MediaError>> {
     let uncached: Vec<_> = files
         .iter()
@@ -78,7 +78,7 @@ mod tests {
         }
     }
 
-    impl MediaQueryBackend for FakeMediaBackend {
+    impl MediaQuery for FakeMediaBackend {
         fn name(&self) -> &'static str {
             "fake"
         }

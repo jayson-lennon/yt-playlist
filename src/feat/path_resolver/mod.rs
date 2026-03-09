@@ -6,13 +6,13 @@ use wherror::Error;
 
 pub mod backend;
 
-pub use backend::{PathResolver, SystemPathResolver};
+pub use backend::{PathResolverService, SystemPathResolver};
 
 #[derive(Debug, Error)]
 #[error(debug)]
 pub struct PathResolutionError;
 
 #[async_trait]
-pub trait PathResolverBackend: Send + Sync {
+pub trait PathResolver: Send + Sync {
     async fn resolve(&self, path: &Path) -> Result<PathBuf, Report<PathResolutionError>>;
 }

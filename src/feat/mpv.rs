@@ -16,7 +16,7 @@ use wherror::Error;
 #[error(debug)]
 pub struct MpvError;
 
-pub trait MpvBackend: Send + Sync {
+pub trait MpvClient: Send + Sync {
     /// Returns the name identifier for this backend implementation.
     fn name(&self) -> &'static str;
 
@@ -36,13 +36,13 @@ pub trait MpvBackend: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct MpvClient {
+pub struct MpvClientService {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn MpvBackend>,
+    backend: Arc<dyn MpvClient>,
 }
 
-impl MpvClient {
-    pub fn new(backend: Arc<dyn MpvBackend>) -> Self {
+impl MpvClientService {
+    pub fn new(backend: Arc<dyn MpvClient>) -> Self {
         Self { backend }
     }
 
@@ -61,11 +61,11 @@ impl MpvClient {
     }
 }
 
-pub struct MpvipcBackend {
+pub struct MpvIpc {
     socket_path: String,
 }
 
-impl MpvipcBackend {
+impl MpvIpc {
     pub fn new(socket_path: &Path) -> Self {
         let socket = socket_path.to_string_lossy().into_owned();
         Self {
@@ -74,7 +74,7 @@ impl MpvipcBackend {
     }
 }
 
-impl MpvBackend for MpvipcBackend {
+impl MpvClient for MpvIpc {
     fn name(&self) -> &'static str {
         "mpvipc"
     }
@@ -116,7 +116,7 @@ impl MpvBackend for MpvipcBackend {
     }
 }
 
-pub trait MpvLauncherBackend: Send + Sync {
+pub trait MpvLauncher: Send + Sync {
     /// Returns the name identifier for this launcher implementation.
     fn name(&self) -> &'static str;
 
@@ -132,13 +132,13 @@ pub trait MpvLauncherBackend: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct MpvLauncher {
+pub struct MpvLauncherService {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn MpvLauncherBackend>,
+    backend: Arc<dyn MpvLauncher>,
 }
 
-impl MpvLauncher {
-    pub fn new(backend: Arc<dyn MpvLauncherBackend>) -> Self {
+impl MpvLauncherService {
+    pub fn new(backend: Arc<dyn MpvLauncher>) -> Self {
         Self { backend }
     }
 
@@ -156,7 +156,7 @@ impl MpvLauncher {
 
 pub struct RealMpvLauncher;
 
-impl MpvLauncherBackend for RealMpvLauncher {
+impl MpvLauncher for RealMpvLauncher {
     fn name(&self) -> &'static str {
         "real"
     }

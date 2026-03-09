@@ -24,7 +24,7 @@ pub struct Source {
 /// Provides methods for managing source URLs associated with media files,
 /// tracking where each file originated from.
 #[async_trait]
-pub trait SourceDbBackend: Send + Sync {
+pub trait SourceDb: Send + Sync {
     /// Retrieves all source URLs for a file path.
     ///
     /// # Errors
@@ -57,19 +57,19 @@ pub trait SourceDbBackend: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceDb {
+pub struct SourceDbService {
     #[debug("<SourceDb>")]
-    backend: Arc<dyn SourceDbBackend>,
+    backend: Arc<dyn SourceDb>,
 }
 
-impl SourceDb {
-    pub fn new(backend: Arc<dyn SourceDbBackend>) -> Self {
+impl SourceDbService {
+    pub fn new(backend: Arc<dyn SourceDb>) -> Self {
         Self { backend }
     }
 }
 
 #[async_trait]
-impl SourceDbBackend for SourceDb {
+impl SourceDb for SourceDbService {
     async fn get_sources(&self, file_path_id: i64) -> Result<Vec<Source>, Report<SourceDbError>> {
         self.backend.get_sources(file_path_id).await
     }
