@@ -447,7 +447,7 @@ impl Keymap {
                 KeyCategory::ItemActions,
                 KeyContext::Library,
             )
-            .describe("g", "go", |g| {
+            .describe("g", "general", |g| {
                 g.bind(
                     "m",
                     Action::LaunchMpv,
@@ -786,11 +786,7 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches {
-                    Some(*action)
-                } else {
-                    None
-                }
+                if context_matches { Some(*action) } else { None }
             }
             KeyNode::Branch { .. } => None,
         }
@@ -1215,7 +1211,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When describing a prefix with bindings
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
                 Action::LaunchMpv,
@@ -1227,14 +1223,14 @@ mod tests {
 
         // Then the branch has the description
         let node = keymap.get_node_at_path(&[Key::Char('g')]).unwrap();
-        assert_eq!(node.description(), "go");
+        assert_eq!(node.description(), "general");
     }
 
     #[test]
     fn finalize_succeeds_when_branch_is_described() {
         // Given a keymap with a described branch
         let mut keymap = Keymap::empty();
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
                 Action::LaunchMpv,
@@ -1257,7 +1253,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When describing a prefix with multiple bindings
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
                 Action::LaunchMpv,
@@ -1276,7 +1272,7 @@ mod tests {
 
         // Then the branch has the description
         let node = keymap.get_node_at_path(&[Key::Char('g')]).unwrap();
-        assert_eq!(node.description(), "go");
+        assert_eq!(node.description(), "general");
     }
 
     #[rstest::rstest]
@@ -1287,7 +1283,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When describing a prefix with multiple bindings
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
                 Action::LaunchMpv,
@@ -1316,7 +1312,7 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case(Key::Char('g'), "go")]
+    #[case(Key::Char('g'), "general")]
     #[case(Key::Char('a'), "add")]
     fn describe_chains_multiple_prefixes(#[case] key: Key, #[case] expected_description: &str) {
         // Given an empty keymap
@@ -1324,7 +1320,7 @@ mod tests {
 
         // When chaining multiple describe calls
         keymap
-            .describe("g", "go", |g| {
+            .describe("g", "general", |g| {
                 g.bind(
                     "m",
                     Action::LaunchMpv,
@@ -1382,7 +1378,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When binding multiple keys under the same prefix
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
                 Action::LaunchMpv,
@@ -1410,7 +1406,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When nesting describes
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.describe("m", "mpv", |m| {
                 m.bind(
                     "p",
@@ -1427,14 +1423,14 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case(&[Key::Char('g')], "go")]
+    #[case(&[Key::Char('g')], "general")]
     #[case(&[Key::Char('g'), Key::Char('m')], "mpv")]
     fn bind_nested_describe_has_descriptions(#[case] path: &[Key], #[case] expected: &str) {
         // Given an empty keymap
         let mut keymap = Keymap::empty();
 
         // When nesting describes
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.describe("m", "mpv", |m| {
                 m.bind(
                     "p",
@@ -1458,7 +1454,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When nesting describes with a leaf binding
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.describe("m", "mpv", |m| {
                 m.bind(
                     "p",
@@ -1537,7 +1533,7 @@ mod tests {
     ) {
         // Given a keymap with a prefix key 'g'
         let mut keymap = Keymap::empty();
-        keymap.describe("g", "go", |g| {
+        keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
                 Action::LaunchMpv,
@@ -1557,7 +1553,7 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case(Key::Char('g'), "go prefix")]
+    #[case(Key::Char('g'), "general prefix")]
     #[case(Key::Char('a'), "add prefix")]
     fn default_keymap_has_prefix_keys(#[case] key: Key, #[case] description: &str) {
         // Given the default keymap
