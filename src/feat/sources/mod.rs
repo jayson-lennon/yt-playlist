@@ -24,7 +24,7 @@ pub struct Source {
 /// Provides methods for managing source URLs associated with media files,
 /// tracking where each file originated from.
 #[async_trait]
-pub trait SourceDb: Send + Sync {
+pub trait SourceDbBackend: Send + Sync {
     /// Retrieves all source URLs for a file path.
     ///
     /// # Errors
@@ -37,7 +37,11 @@ pub trait SourceDb: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the database operation fails.
-    async fn set_sources(&self, file_path_id: i64, urls: &[String]) -> Result<(), Report<SourceDbError>>;
+    async fn set_sources(
+        &self,
+        file_path_id: i64,
+        urls: &[String],
+    ) -> Result<(), Report<SourceDbError>>;
 
     /// Batch retrieves sources for multiple file paths.
     ///
@@ -46,32 +50,42 @@ pub trait SourceDb: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the database operation fails.
-    async fn get_sources_for_paths(&self, paths: &[String]) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>>;
+    async fn get_sources_for_paths(
+        &self,
+        paths: &[String],
+    ) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>>;
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceDbWrapper {
+pub struct SourceDb {
     #[debug("<SourceDb>")]
-    backend: Arc<dyn SourceDb>,
+    backend: Arc<dyn SourceDbBackend>,
 }
 
-impl SourceDbWrapper {
-    pub fn new(backend: Arc<dyn SourceDb>) -> Self {
+impl SourceDb {
+    pub fn new(backend: Arc<dyn SourceDbBackend>) -> Self {
         Self { backend }
     }
 }
 
 #[async_trait]
-impl SourceDb for SourceDbWrapper {
+impl SourceDbBackend for SourceDb {
     async fn get_sources(&self, file_path_id: i64) -> Result<Vec<Source>, Report<SourceDbError>> {
         self.backend.get_sources(file_path_id).await
     }
 
-    async fn set_sources(&self, file_path_id: i64, urls: &[String]) -> Result<(), Report<SourceDbError>> {
+    async fn set_sources(
+        &self,
+        file_path_id: i64,
+        urls: &[String],
+    ) -> Result<(), Report<SourceDbError>> {
         self.backend.set_sources(file_path_id, urls).await
     }
 
-    async fn get_sources_for_paths(&self, paths: &[String]) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>> {
+    async fn get_sources_for_paths(
+        &self,
+        paths: &[String],
+    ) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>> {
         self.backend.get_sources_for_paths(paths).await
     }
 }

@@ -5,7 +5,7 @@ use error_stack::Report;
 use sqlx::SqlitePool;
 use wherror::Error;
 
-use crate::feat::sources::{Source, SourceDb, SourceDbError};
+use crate::feat::sources::{Source, SourceDbBackend, SourceDbError};
 
 #[derive(Debug, Error)]
 pub enum SqliteSourceDbError {
@@ -29,7 +29,7 @@ impl SqliteSourceDb {
 }
 
 #[async_trait]
-impl SourceDb for SqliteSourceDb {
+impl SourceDbBackend for SqliteSourceDb {
     async fn get_sources(&self, file_path_id: i64) -> Result<Vec<Source>, Report<SourceDbError>> {
         let results = sqlx::query_as::<_, (i64, String, Option<String>)>(
             "SELECT id, source_url, label FROM sources WHERE file_path_id = ? ORDER BY id",
@@ -49,8 +49,16 @@ impl SourceDb for SqliteSourceDb {
             .collect())
     }
 
-    async fn set_sources(&self, file_path_id: i64, urls: &[String]) -> Result<(), Report<SourceDbError>> {
-        let mut tx = self.pool.begin().await.map_err(|_| Report::new(SourceDbError))?;
+    async fn set_sources(
+        &self,
+        file_path_id: i64,
+        urls: &[String],
+    ) -> Result<(), Report<SourceDbError>> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| Report::new(SourceDbError))?;
 
         sqlx::query("DELETE FROM sources WHERE file_path_id = ?")
             .bind(file_path_id)
@@ -77,7 +85,10 @@ impl SourceDb for SqliteSourceDb {
         Ok(())
     }
 
-    async fn get_sources_for_paths(&self, paths: &[String]) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>> {
+    async fn get_sources_for_paths(
+        &self,
+        paths: &[String],
+    ) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>> {
         if paths.is_empty() {
             return Ok(HashMap::new());
         }
@@ -103,13 +114,11 @@ impl SourceDb for SqliteSourceDb {
 
         let mut map: HashMap<String, Vec<Source>> = HashMap::new();
         for (path, id, source_url, label) in results {
-            map.entry(path)
-                .or_default()
-                .push(Source {
-                    id,
-                    source_url,
-                    label,
-                });
+            map.entry(path).or_default().push(Source {
+                id,
+                source_url,
+                label,
+            });
         }
 
         Ok(map)
@@ -119,8 +128,8 @@ impl SourceDb for SqliteSourceDb {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::feat::NoteDbBackend;
     use crate::feat::note_db::SqliteNoteDb;
-    use crate::feat::NoteDb;
     use tempfile::NamedTempFile;
 
     async fn create_test_db() -> (SqliteSourceDb, SqliteNoteDb) {
@@ -151,7 +160,10 @@ mod tests {
         let path = temp.path().to_str().unwrap();
         let file_path_id = note_db.get_or_create_file_path(path).await.unwrap();
 
-        let urls = vec!["https://example.com/1".to_string(), "https://example.com/2".to_string()];
+        let urls = vec![
+            "https://example.com/1".to_string(),
+            "https://example.com/2".to_string(),
+        ];
         source_db.set_sources(file_path_id, &urls).await.unwrap();
 
         let sources = source_db.get_sources(file_path_id).await.unwrap();
@@ -167,8 +179,14 @@ mod tests {
         let path = temp.path().to_str().unwrap();
         let file_path_id = note_db.get_or_create_file_path(path).await.unwrap();
 
-        source_db.set_sources(file_path_id, &["https://old.com".to_string()]).await.unwrap();
-        source_db.set_sources(file_path_id, &["https://new.com".to_string()]).await.unwrap();
+        source_db
+            .set_sources(file_path_id, &["https://old.com".to_string()])
+            .await
+            .unwrap();
+        source_db
+            .set_sources(file_path_id, &["https://new.com".to_string()])
+            .await
+            .unwrap();
 
         let sources = source_db.get_sources(file_path_id).await.unwrap();
         assert_eq!(sources.len(), 1);
@@ -182,7 +200,11 @@ mod tests {
         let path = temp.path().to_str().unwrap();
         let file_path_id = note_db.get_or_create_file_path(path).await.unwrap();
 
-        let urls = vec!["https://example.com".to_string(), String::new(), "   ".to_string()];
+        let urls = vec![
+            "https://example.com".to_string(),
+            String::new(),
+            "   ".to_string(),
+        ];
         source_db.set_sources(file_path_id, &urls).await.unwrap();
 
         let sources = source_db.get_sources(file_path_id).await.unwrap();
@@ -200,10 +222,22 @@ mod tests {
         let id1 = note_db.get_or_create_file_path(&path1).await.unwrap();
         let id2 = note_db.get_or_create_file_path(&path2).await.unwrap();
 
-        source_db.set_sources(id1, &["https://a.com".to_string()]).await.unwrap();
-        source_db.set_sources(id2, &["https://b.com".to_string(), "https://c.com".to_string()]).await.unwrap();
+        source_db
+            .set_sources(id1, &["https://a.com".to_string()])
+            .await
+            .unwrap();
+        source_db
+            .set_sources(
+                id2,
+                &["https://b.com".to_string(), "https://c.com".to_string()],
+            )
+            .await
+            .unwrap();
 
-        let map = source_db.get_sources_for_paths(&[path1.clone(), path2.clone()]).await.unwrap();
+        let map = source_db
+            .get_sources_for_paths(&[path1.clone(), path2.clone()])
+            .await
+            .unwrap();
 
         assert_eq!(map.len(), 2);
         assert_eq!(map.get(&path1).unwrap().len(), 1);

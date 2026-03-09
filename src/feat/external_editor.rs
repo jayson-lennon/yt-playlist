@@ -20,13 +20,19 @@ pub enum DialoguerEditorError {
 pub struct SystemEditor;
 
 #[async_trait]
-pub trait ExternalEditor: Send + Sync {
-    async fn open(&self, initial_content: &str) -> Result<Option<String>, Report<ExternalEditorError>>;
+pub trait ExternalEditorBackend: Send + Sync {
+    async fn open(
+        &self,
+        initial_content: &str,
+    ) -> Result<Option<String>, Report<ExternalEditorError>>;
 }
 
 #[async_trait]
-impl ExternalEditor for SystemEditor {
-    async fn open(&self, initial_content: &str) -> Result<Option<String>, Report<ExternalEditorError>> {
+impl ExternalEditorBackend for SystemEditor {
+    async fn open(
+        &self,
+        initial_content: &str,
+    ) -> Result<Option<String>, Report<ExternalEditorError>> {
         let content = initial_content.to_string();
         tokio::task::spawn_blocking(move || {
             let edited = Editor::new()
@@ -44,20 +50,23 @@ impl ExternalEditor for SystemEditor {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExternalEditorWrapper {
+pub struct ExternalEditor {
     #[debug("<ExternalEditor>")]
-    backend: Arc<dyn ExternalEditor>,
+    backend: Arc<dyn ExternalEditorBackend>,
 }
 
-impl ExternalEditorWrapper {
-    pub fn new(backend: Arc<dyn ExternalEditor>) -> Self {
+impl ExternalEditor {
+    pub fn new(backend: Arc<dyn ExternalEditorBackend>) -> Self {
         Self { backend }
     }
 }
 
 #[async_trait]
-impl ExternalEditor for ExternalEditorWrapper {
-    async fn open(&self, initial_content: &str) -> Result<Option<String>, Report<ExternalEditorError>> {
+impl ExternalEditorBackend for ExternalEditor {
+    async fn open(
+        &self,
+        initial_content: &str,
+    ) -> Result<Option<String>, Report<ExternalEditorError>> {
         self.backend.open(initial_content).await
     }
 }

@@ -4,7 +4,7 @@ use error_stack::{Report, ResultExt};
 
 use crate::{
     feat::generate_show_notes,
-    playlist::{PlaylistStorage, PlaylistStorageBackend, TomlBackend},
+    feat::playlist::{PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
 };
 

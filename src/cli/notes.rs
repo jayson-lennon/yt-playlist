@@ -8,10 +8,10 @@ use std::{
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
-use crate::feat::{ExternalEditor, NoteDb, PathResolver};
+use crate::feat::{ExternalEditorBackend, NoteDbBackend, PathResolverBackend};
 use crate::services::Services;
 
-use super::{utils::create_symlink_with_suffix, RunError};
+use super::{RunError, utils::create_symlink_with_suffix};
 
 #[derive(Subcommand)]
 pub enum NotesCommands {
@@ -44,7 +44,10 @@ pub enum NotesCommands {
 /// - Path resolution fails
 /// - The editor fails to open
 /// - The fuzzy search process fails to spawn or communicate
-pub fn run_notes_command(cmd: NotesCommands, db_path: &std::path::Path) -> Result<(), Report<RunError>> {
+pub fn run_notes_command(
+    cmd: NotesCommands,
+    db_path: &std::path::Path,
+) -> Result<(), Report<RunError>> {
     let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async { run_notes_command_async(cmd, db_path).await })
 }
@@ -102,11 +105,8 @@ async fn run_notes_command_async(
                         .await
                         .change_context(RunError)?;
                 }
-            } else if let Some(new_content) = services
-                .editor
-                .open("")
-                .await
-                .change_context(RunError)?
+            } else if let Some(new_content) =
+                services.editor.open("").await.change_context(RunError)?
             {
                 for resolved_path in resolved_paths {
                     let path_str = resolved_path.to_string_lossy();
@@ -169,15 +169,17 @@ async fn run_notes_command_async(
                 return Ok(());
             }
 
-            let input: String = notes.iter().fold(String::new(), |mut output, (path, content)| {
-                let cleaned: String = content
-                    .lines()
-                    .filter(|line| !line.trim().is_empty())
-                    .collect::<Vec<_>>()
-                    .join(". ");
-                let _ = writeln!(output, "{path}\t{cleaned}");
-                output
-            });
+            let input: String = notes
+                .iter()
+                .fold(String::new(), |mut output, (path, content)| {
+                    let cleaned: String = content
+                        .lines()
+                        .filter(|line| !line.trim().is_empty())
+                        .collect::<Vec<_>>()
+                        .join(". ");
+                    let _ = writeln!(output, "{path}\t{cleaned}");
+                    output
+                });
 
             let mut child = Command::new("sk")
                 .args([
@@ -192,14 +194,10 @@ async fn run_notes_command_async(
                 .change_context(RunError)?;
 
             if let Some(mut stdin) = child.stdin.take() {
-                stdin
-                    .write_all(input.as_bytes())
-                    .change_context(RunError)?;
+                stdin.write_all(input.as_bytes()).change_context(RunError)?;
             }
 
-            let output = child
-                .wait_with_output()
-                .change_context(RunError)?;
+            let output = child.wait_with_output().change_context(RunError)?;
 
             let selected = String::from_utf8_lossy(&output.stdout);
             let selected_paths: Vec<&str> = selected

@@ -116,7 +116,7 @@ impl MpvBackend for MpvipcBackend {
     }
 }
 
-pub trait MpvLauncher: Send + Sync {
+pub trait MpvLauncherBackend: Send + Sync {
     /// Returns the name identifier for this launcher implementation.
     fn name(&self) -> &'static str;
 
@@ -132,13 +132,13 @@ pub trait MpvLauncher: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct MpvLauncherService {
+pub struct MpvLauncher {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn MpvLauncher>,
+    backend: Arc<dyn MpvLauncherBackend>,
 }
 
-impl MpvLauncherService {
-    pub fn new(backend: Arc<dyn MpvLauncher>) -> Self {
+impl MpvLauncher {
+    pub fn new(backend: Arc<dyn MpvLauncherBackend>) -> Self {
         Self { backend }
     }
 
@@ -156,7 +156,7 @@ impl MpvLauncherService {
 
 pub struct RealMpvLauncher;
 
-impl MpvLauncher for RealMpvLauncher {
+impl MpvLauncherBackend for RealMpvLauncher {
     fn name(&self) -> &'static str {
         "real"
     }

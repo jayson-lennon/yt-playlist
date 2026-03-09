@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use crossterm::event::{Event, KeyCode};
 
 use crate::config::Config;
+use crate::feat::playlist::PlaylistData;
 use crate::keymap::{Action, Keymap};
-use crate::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui_state::TuiState;
-use crate::ui::{get_mime_type, Pane, PlaylistItem};
+use crate::ui::{Pane, PlaylistItem, get_mime_type};
 
 pub struct App {
     /// External service dependencies (mpv client, media query, playlist storage, mpv launcher, file launcher).
@@ -138,7 +138,7 @@ impl App {
         for item in &self.tui_state.playlist_pane.items {
             files.insert(
                 item.path.clone(),
-                crate::playlist::FileMetadata {
+                crate::feat::playlist::FileMetadata {
                     duration: item.duration,
                     alias: item.alias.clone(),
                     is_virtual: item.is_virtual,
@@ -150,7 +150,7 @@ impl App {
         for item in &self.tui_state.library_pane.items {
             files.insert(
                 item.path.clone(),
-                crate::playlist::FileMetadata {
+                crate::feat::playlist::FileMetadata {
                     duration: item.duration,
                     alias: item.alias.clone(),
                     is_virtual: item.is_virtual,
@@ -208,8 +208,7 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
             self.tui_state.status_message = None;
-            if self.tui_state.which_key.active && !self.tui_state.which_key.is_pending()
-            {
+            if self.tui_state.which_key.active && !self.tui_state.which_key.is_pending() {
                 self.tui_state.which_key.dismiss();
                 return;
             }
@@ -292,7 +291,9 @@ impl App {
                         }
                         _ => {
                             self.tui_state.pending_keys.push(key);
-                            if let Some(node) = self.keymap.get_node_at_path(&self.tui_state.pending_keys) {
+                            if let Some(node) =
+                                self.keymap.get_node_at_path(&self.tui_state.pending_keys)
+                            {
                                 match node {
                                     crate::keymap::KeyNode::Leaf { action, .. } => {
                                         self.tui_state.which_key.dismiss();
@@ -579,11 +580,12 @@ mod tests {
     use error_stack::Report;
 
     use super::*;
-    use crate::keymap::{Action, Keymap};
-    use crate::feat::launcher::{LaunchResult, Launcher, LauncherService};
+    use crate::feat::FileLauncherService;
+    use crate::feat::launcher::{FileLauncherBackend, LaunchResult};
     use crate::feat::media_query::{MediaError, MediaQuery, MediaQueryBackend};
-    use crate::feat::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher, MpvLauncherService};
-    use crate::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
+    use crate::feat::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher, MpvLauncherBackend};
+    use crate::feat::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
+    use crate::keymap::{Action, Keymap};
 
     struct FakeMpvBackend;
 
@@ -616,7 +618,7 @@ mod tests {
         }
     }
 
-    impl MpvLauncher for FakeMpvLauncher {
+    impl MpvLauncherBackend for FakeMpvLauncher {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -660,7 +662,7 @@ mod tests {
 
     struct FakeLauncher;
 
-    impl Launcher for FakeLauncher {
+    impl FileLauncherBackend for FakeLauncher {
         fn name(&self) -> &'static str {
             "fake"
         }
@@ -722,36 +724,16 @@ mod tests {
             self
         }
 
-        #[allow(dead_code)]
-        fn mpv_backend(mut self, backend: FakeMpvBackend) -> Self {
-            self.mpv_backend = backend;
-            self
-        }
-
-        #[allow(dead_code)]
-        fn media_backend(mut self, backend: FakeMediaBackend) -> Self {
-            self.media_backend = backend;
-            self
-        }
-
-        #[allow(dead_code)]
-        fn storage_backend(mut self, backend: FakeStorageBackend) -> Self {
-            self.storage_backend = backend;
-            self
-        }
-
         fn build(self) -> App {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let core = rt.block_on(async {
-                Services::new("sqlite::memory:").await.unwrap()
-            });
+            let core = rt.block_on(async { Services::new("sqlite::memory:").await.unwrap() });
 
             let services = Services {
                 mpv: MpvClient::new(Arc::new(self.mpv_backend)),
                 media: MediaQuery::new(Arc::new(self.media_backend)),
                 storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
-                mpv_launcher: MpvLauncherService::new(Arc::new(self.mpv_launcher)),
-                file_launcher: LauncherService::new(Arc::new(self.file_launcher)),
+                mpv_launcher: MpvLauncher::new(Arc::new(self.mpv_launcher)),
+                file_launcher: FileLauncherService::new(Arc::new(self.file_launcher)),
                 db: core.db,
                 editor: core.editor,
                 path_resolver: core.path_resolver,
@@ -1124,11 +1106,12 @@ mod tests {
         app.execute_action(Action::LoadPlaylist);
 
         // Then a loaded status message is shown.
-        assert!(app
-            .tui_state
-            .status_message
-            .unwrap()
-            .contains("Loaded 2 items"));
+        assert!(
+            app.tui_state
+                .status_message
+                .unwrap()
+                .contains("Loaded 2 items")
+        );
     }
 
     #[test]
@@ -1433,11 +1416,12 @@ mod tests {
         app.execute_action(Action::LaunchMpv);
 
         // Then status message shows mpv launched.
-        assert!(app
-            .tui_state
-            .status_message
-            .unwrap()
-            .contains("MPV launched"));
+        assert!(
+            app.tui_state
+                .status_message
+                .unwrap()
+                .contains("MPV launched")
+        );
     }
 
     #[test]
@@ -1451,11 +1435,12 @@ mod tests {
         app.execute_action(Action::LaunchMpv);
 
         // Then status message shows mpv already running.
-        assert!(app
-            .tui_state
-            .status_message
-            .unwrap()
-            .contains("MPV already running"));
+        assert!(
+            app.tui_state
+                .status_message
+                .unwrap()
+                .contains("MPV already running")
+        );
     }
 
     #[test]
@@ -1469,9 +1454,15 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('g')]);
+        assert_eq!(
+            app.tui_state.pending_keys,
+            vec![crate::keymap::Key::Char('g')]
+        );
         assert!(app.tui_state.which_key.active);
-        assert_eq!(app.tui_state.which_key.pending_keys, vec![crate::keymap::Key::Char('g')]);
+        assert_eq!(
+            app.tui_state.which_key.pending_keys,
+            vec![crate::keymap::Key::Char('g')]
+        );
     }
 
     #[test]
@@ -1489,11 +1480,12 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        assert!(app
-            .tui_state
-            .status_message
-            .unwrap()
-            .contains("MPV launched"));
+        assert!(
+            app.tui_state
+                .status_message
+                .unwrap()
+                .contains("MPV launched")
+        );
         assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
@@ -1505,7 +1497,10 @@ mod tests {
             KeyCode::Char('g'),
             KeyModifiers::empty(),
         )));
-        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('g')]);
+        assert_eq!(
+            app.tui_state.pending_keys,
+            vec![crate::keymap::Key::Char('g')]
+        );
 
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('x'),
@@ -1527,9 +1522,15 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('a')]);
+        assert_eq!(
+            app.tui_state.pending_keys,
+            vec![crate::keymap::Key::Char('a')]
+        );
         assert!(app.tui_state.which_key.active);
-        assert_eq!(app.tui_state.which_key.pending_keys, vec![crate::keymap::Key::Char('a')]);
+        assert_eq!(
+            app.tui_state.which_key.pending_keys,
+            vec![crate::keymap::Key::Char('a')]
+        );
     }
 
     #[test]
@@ -1558,7 +1559,10 @@ mod tests {
             KeyCode::Char('a'),
             KeyModifiers::empty(),
         )));
-        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('a')]);
+        assert_eq!(
+            app.tui_state.pending_keys,
+            vec![crate::keymap::Key::Char('a')]
+        );
 
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('x'),
@@ -1700,18 +1704,20 @@ mod tests {
 
         // Then both the virtual item and real file are present.
         assert_eq!(app.tui_state.library_pane.items.len(), 2);
-        assert!(app
-            .tui_state
-            .library_pane
-            .items
-            .iter()
-            .any(|i| i.path == url && i.is_virtual));
-        assert!(app
-            .tui_state
-            .library_pane
-            .items
-            .iter()
-            .any(|i| i.path.file_name().unwrap() == "real.mp4" && !i.is_virtual));
+        assert!(
+            app.tui_state
+                .library_pane
+                .items
+                .iter()
+                .any(|i| i.path == url && i.is_virtual)
+        );
+        assert!(
+            app.tui_state
+                .library_pane
+                .items
+                .iter()
+                .any(|i| i.path.file_name().unwrap() == "real.mp4" && !i.is_virtual)
+        );
     }
 
     #[test]
@@ -1773,12 +1779,13 @@ mod tests {
 
         // Then the item is NOT removed (only virtual items can be deleted).
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
-        assert!(app
-            .tui_state
-            .status_message
-            .clone()
-            .unwrap()
-            .contains("virtual"));
+        assert!(
+            app.tui_state
+                .status_message
+                .clone()
+                .unwrap()
+                .contains("virtual")
+        );
     }
 
     #[test]

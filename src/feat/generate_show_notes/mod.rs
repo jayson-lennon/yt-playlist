@@ -7,8 +7,8 @@ use wherror::Error;
 
 use crate::{
     feat::generate_show_notes::format::{FormatRegistry, ShowNotesEntry},
-    playlist::PlaylistData,
-    feat::sources::{Source, SourceDb},
+    feat::playlist::PlaylistData,
+    feat::sources::{Source, SourceDbBackend},
 };
 
 #[derive(Debug, Error)]
@@ -24,7 +24,7 @@ pub struct GenerateShowNotesError(pub String);
 /// - The specified format is not recognized
 pub async fn generate_show_notes(
     playlist_data: &PlaylistData,
-    sources: &dyn SourceDb,
+    sources: &dyn SourceDbBackend,
     format: &str,
 ) -> Result<String, Report<GenerateShowNotesError>> {
     let paths: Vec<String> = playlist_data
@@ -33,10 +33,13 @@ pub async fn generate_show_notes(
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
-    let sources_map = sources
-        .get_sources_for_paths(&paths)
-        .await
-        .change_context(GenerateShowNotesError("Failed to fetch sources".to_string()))?;
+    let sources_map =
+        sources
+            .get_sources_for_paths(&paths)
+            .await
+            .change_context(GenerateShowNotesError(
+                "Failed to fetch sources".to_string(),
+            ))?;
 
     let registry = FormatRegistry::new();
     let formatter = registry

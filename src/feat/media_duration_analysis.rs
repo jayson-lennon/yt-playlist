@@ -3,7 +3,7 @@ use std::{collections::HashMap, io::Write, path::PathBuf};
 use error_stack::Report;
 
 use super::media_query::{MediaError, MediaQueryBackend};
-use crate::playlist::FileMetadata;
+use super::playlist::FileMetadata;
 
 pub struct AnalysisResult {
     pub files: HashMap<PathBuf, FileMetadata>,

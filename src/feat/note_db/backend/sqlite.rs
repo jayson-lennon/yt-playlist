@@ -3,11 +3,11 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use error_stack::Report;
-use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
+use sqlx::sqlite::SqliteConnectOptions;
 use wherror::Error;
 
-use super::super::{NoteDb, NoteDbError};
+use super::super::{NoteDbBackend, NoteDbError};
 
 #[derive(Debug, Error)]
 pub enum SqliteNoteDbError {
@@ -24,7 +24,9 @@ pub struct SqliteNoteDb {
     pool: SqlitePool,
 }
 
-pub async fn connect_and_migrate(database_url: &str) -> Result<SqlitePool, Report<SqliteNoteDbError>> {
+pub async fn connect_and_migrate(
+    database_url: &str,
+) -> Result<SqlitePool, Report<SqliteNoteDbError>> {
     let options = SqliteConnectOptions::from_str(database_url)
         .map_err(|_| Report::new(SqliteNoteDbError::Connect))?
         .create_if_missing(true);
@@ -53,7 +55,7 @@ impl SqliteNoteDb {
 }
 
 #[async_trait]
-impl NoteDb for SqliteNoteDb {
+impl NoteDbBackend for SqliteNoteDb {
     async fn get_or_create_file_path(&self, path: &str) -> Result<i64, Report<NoteDbError>> {
         let result = sqlx::query_scalar::<_, i64>("SELECT id FROM file_paths WHERE path = ?")
             .bind(path)
@@ -65,25 +67,23 @@ impl NoteDb for SqliteNoteDb {
             return Ok(id);
         }
 
-        let id = sqlx::query_scalar::<_, i64>(
-            "INSERT INTO file_paths (path) VALUES (?) RETURNING id",
-        )
-        .bind(path)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|_| Report::new(NoteDbError))?;
+        let id =
+            sqlx::query_scalar::<_, i64>("INSERT INTO file_paths (path) VALUES (?) RETURNING id")
+                .bind(path)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|_| Report::new(NoteDbError))?;
 
         Ok(id)
     }
 
     async fn get_note(&self, file_path_id: i64) -> Result<Option<String>, Report<NoteDbError>> {
-        let result = sqlx::query_scalar::<_, String>(
-            "SELECT content FROM notes WHERE file_path_id = ?",
-        )
-        .bind(file_path_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|_| Report::new(NoteDbError))?;
+        let result =
+            sqlx::query_scalar::<_, String>("SELECT content FROM notes WHERE file_path_id = ?")
+                .bind(file_path_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|_| Report::new(NoteDbError))?;
 
         Ok(result)
     }
@@ -250,9 +250,13 @@ mod tests {
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
-        db.upsert_note(file_path_id, "original content").await.unwrap();
+        db.upsert_note(file_path_id, "original content")
+            .await
+            .unwrap();
 
-        db.upsert_note(file_path_id, "updated content").await.unwrap();
+        db.upsert_note(file_path_id, "updated content")
+            .await
+            .unwrap();
         let result = db.get_note(file_path_id).await.unwrap();
 
         assert_eq!(result, Some("updated content".to_string()));
@@ -283,7 +287,9 @@ mod tests {
         let path = temp.path().to_str().unwrap();
 
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
-        db.upsert_note(file_path_id, "my note content").await.unwrap();
+        db.upsert_note(file_path_id, "my note content")
+            .await
+            .unwrap();
         let note = db.get_note(file_path_id).await.unwrap();
 
         assert_eq!(note, Some("my note content".to_string()));

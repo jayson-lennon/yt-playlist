@@ -18,7 +18,7 @@ pub struct LaunchResult {
     pub used_default_opener: bool,
 }
 
-pub trait Launcher: Send + Sync {
+pub trait FileLauncherBackend: Send + Sync {
     /// Returns the name identifier for this launcher implementation.
     fn name(&self) -> &'static str;
 
@@ -38,13 +38,13 @@ pub trait Launcher: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct LauncherService {
+pub struct FileLauncherService {
     #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn Launcher>,
+    backend: Arc<dyn FileLauncherBackend>,
 }
 
-impl LauncherService {
-    pub fn new(backend: Arc<dyn Launcher>) -> Self {
+impl FileLauncherService {
+    pub fn new(backend: Arc<dyn FileLauncherBackend>) -> Self {
         Self { backend }
     }
 
@@ -81,7 +81,7 @@ impl Default for FileLauncher {
     }
 }
 
-impl Launcher for FileLauncher {
+impl FileLauncherBackend for FileLauncher {
     fn name(&self) -> &'static str {
         "file"
     }
@@ -224,7 +224,7 @@ mod tests {
         }
     }
 
-    impl Launcher for FakeLauncher {
+    impl FileLauncherBackend for FakeLauncher {
         fn name(&self) -> &'static str {
             "fake"
         }

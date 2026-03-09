@@ -10,23 +10,23 @@ use std::{
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use error_stack::{Report, ResultExt};
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{
     app::App,
-    config::{load, Config},
+    config::{Config, load},
     feat::media_query::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
     feat::mpv::MpvipcBackend,
-    feat::{sources::SourceDb, ExternalEditor, NoteDb, PathResolver},
-    playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
+    feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
+    feat::{ExternalEditorBackend, NoteDbBackend, PathResolverBackend, sources::SourceDbBackend},
     services::Services,
     ui,
 };
 
-use super::{utils::create_symlink_with_suffix, RunError};
+use super::{RunError, utils::create_symlink_with_suffix};
 
 /// Runs the terminal user interface.
 ///
@@ -54,8 +54,12 @@ pub fn run_tui(
     let all_files = collect_all_files(&playlist_data, &config, &library_path);
     let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
 
-    let result =
-        crate::feat::media_duration_analysis::analyze_files(&all_files, playlist_data.files, ffprobe_backend.as_ref()).change_context(RunError)?;
+    let result = crate::feat::media_duration_analysis::analyze_files(
+        &all_files,
+        playlist_data.files,
+        ffprobe_backend.as_ref(),
+    )
+    .change_context(RunError)?;
 
     let durations: std::collections::HashMap<PathBuf, std::time::Duration> = result
         .files
@@ -79,7 +83,12 @@ pub fn run_tui(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).change_context(RunError)?;
 
-    let mut app = App::new(services, config, socket.to_string_lossy().into_owned(), library_path);
+    let mut app = App::new(
+        services,
+        config,
+        socket.to_string_lossy().into_owned(),
+        library_path,
+    );
     let res = run_app(&mut terminal, &mut app);
 
     disable_raw_mode().change_context(RunError)?;
@@ -98,7 +107,11 @@ pub fn run_tui(
     Ok(())
 }
 
-fn collect_all_files(playlist_data: &PlaylistData, config: &Config, library_path: &Path) -> Vec<PathBuf> {
+fn collect_all_files(
+    playlist_data: &PlaylistData,
+    config: &Config,
+    library_path: &Path,
+) -> Vec<PathBuf> {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
     for path in &playlist_data.playlist {
@@ -144,8 +157,8 @@ fn build_services(
     core: Services,
 ) -> Services {
     use crate::{
-        feat::launcher::{FileLauncher, LauncherService},
-        feat::mpv::{MpvClient, MpvLauncherService, RealMpvLauncher},
+        feat::launcher::{FileLauncher, FileLauncherService},
+        feat::mpv::{MpvClient, MpvLauncher, RealMpvLauncher},
     };
 
     let mpv_backend: Arc<dyn crate::feat::mpv::MpvBackend> = Arc::new(MpvipcBackend::new(socket));
@@ -156,8 +169,8 @@ fn build_services(
         mpv: MpvClient::new(mpv_backend),
         media: MediaQuery::new(media_backend),
         storage: PlaylistStorage::new(storage_backend),
-        mpv_launcher: MpvLauncherService::new(Arc::new(RealMpvLauncher)),
-        file_launcher: LauncherService::new(Arc::new(FileLauncher::new())),
+        mpv_launcher: MpvLauncher::new(Arc::new(RealMpvLauncher)),
+        file_launcher: FileLauncherService::new(Arc::new(FileLauncher::new())),
         db: core.db,
         editor: core.editor,
         path_resolver: core.path_resolver,
@@ -176,7 +189,9 @@ fn run_app(
             app.tui_state.needs_clear = false;
         }
         let keymap = app.keymap.clone();
-        terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
+        terminal
+            .draw(|f| ui::render(f, &app.tui_state, &keymap))
+            .change_context(RunError)?;
 
         if event::poll(std::time::Duration::from_millis(100)).change_context(RunError)? {
             let event = event::read().change_context(RunError)?;
@@ -205,7 +220,9 @@ fn run_app(
             terminal.hide_cursor().change_context(RunError)?;
             terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
+            terminal
+                .draw(|f| ui::render(f, &app.tui_state, &keymap))
+                .change_context(RunError)?;
 
             match result {
                 Ok(()) => {
@@ -240,7 +257,9 @@ fn run_app(
             terminal.hide_cursor().change_context(RunError)?;
             terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
+            terminal
+                .draw(|f| ui::render(f, &app.tui_state, &keymap))
+                .change_context(RunError)?;
 
             match result {
                 Ok(count) => {
@@ -274,11 +293,14 @@ fn run_app(
             terminal.hide_cursor().change_context(RunError)?;
             terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
+            terminal
+                .draw(|f| ui::render(f, &app.tui_state, &keymap))
+                .change_context(RunError)?;
 
             match result {
                 Ok(()) => {
-                    app.tui_state.status_message = Some(format!("Updated sources: {}", path.display()));
+                    app.tui_state.status_message =
+                        Some(format!("Updated sources: {}", path.display()));
                 }
                 Err(e) => {
                     app.tui_state.status_message = Some(format!("Failed to edit sources: {e}"));

@@ -4,7 +4,7 @@ use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
 use crate::{
-    feat::{sources::SourceDb, ExternalEditor, NoteDb, PathResolver},
+    feat::{ExternalEditorBackend, NoteDbBackend, PathResolverBackend, sources::SourceDbBackend},
     services::Services,
 };
 
@@ -41,7 +41,10 @@ pub enum SourcesCommands {
 /// - The database cannot be accessed
 /// - Path resolution fails
 /// - The editor fails to open
-pub fn run_sources_command(cmd: SourcesCommands, db_path: &std::path::Path) -> Result<(), Report<RunError>> {
+pub fn run_sources_command(
+    cmd: SourcesCommands,
+    db_path: &std::path::Path,
+) -> Result<(), Report<RunError>> {
     let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async { run_sources_command_async(cmd, db_path).await })
 }

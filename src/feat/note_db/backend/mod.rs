@@ -5,26 +5,26 @@ use async_trait::async_trait;
 use derive_more::Debug;
 use error_stack::Report;
 
-use super::{NoteDb, NoteDbError};
+use super::{NoteDbBackend, NoteDbError};
 
 pub mod sqlite;
 
 pub use sqlite::{SqliteNoteDb, SqliteNoteDbError};
 
 #[derive(Debug, Clone)]
-pub struct NoteDbWrapper {
+pub struct NoteDb {
     #[debug("<NoteDb>")]
-    backend: Arc<dyn NoteDb>,
+    backend: Arc<dyn NoteDbBackend>,
 }
 
-impl NoteDbWrapper {
-    pub fn new(backend: Arc<dyn NoteDb>) -> Self {
+impl NoteDb {
+    pub fn new(backend: Arc<dyn NoteDbBackend>) -> Self {
         Self { backend }
     }
 }
 
 #[async_trait]
-impl NoteDb for NoteDbWrapper {
+impl NoteDbBackend for NoteDb {
     async fn get_or_create_file_path(&self, path: &str) -> Result<i64, Report<NoteDbError>> {
         self.backend.get_or_create_file_path(path).await
     }
