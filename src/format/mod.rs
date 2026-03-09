@@ -44,7 +44,7 @@ impl FormatRegistry {
         self.formats
             .iter()
             .find(|f| f.name().eq_ignore_ascii_case(name))
-            .map(|f| f.as_ref())
+            .map(AsRef::as_ref)
     }
 
     pub fn available_formats(&self) -> Vec<&'static str> {
@@ -61,8 +61,7 @@ impl Default for FormatRegistry {
 pub fn extract_filename(path: &str) -> String {
     Path::new(path)
         .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.to_string())
+        .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]

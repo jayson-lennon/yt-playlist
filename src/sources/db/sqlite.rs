@@ -182,7 +182,7 @@ mod tests {
         let path = temp.path().to_str().unwrap();
         let file_path_id = note_db.get_or_create_file_path(path).await.unwrap();
 
-        let urls = vec!["https://example.com".to_string(), "".to_string(), "   ".to_string()];
+        let urls = vec!["https://example.com".to_string(), String::new(), "   ".to_string()];
         source_db.set_sources(file_path_id, &urls).await.unwrap();
 
         let sources = source_db.get_sources(file_path_id).await.unwrap();

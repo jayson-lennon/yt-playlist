@@ -51,6 +51,11 @@ impl SqliteNoteDb {
         &self.pool
     }
 
+    /// Creates a new `SQLite` note database connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database connection fails or migrations cannot be run.
     pub async fn new(database_url: &str) -> Result<Self, Report<SqliteNoteDbError>> {
         let pool = connect_and_migrate(database_url).await?;
         Ok(Self { pool })

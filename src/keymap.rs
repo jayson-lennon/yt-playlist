@@ -145,8 +145,7 @@ pub enum KeyNode {
 impl KeyNode {
     pub fn description(&self) -> &str {
         match self {
-            KeyNode::Leaf { description, .. } => description,
-            KeyNode::Branch { description, .. } => description,
+            KeyNode::Leaf { description, .. } | KeyNode::Branch { description, .. } => description,
         }
     }
 
@@ -225,8 +224,8 @@ pub struct MissingDescription {
 
 impl fmt::Display for MissingDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let path_str: String = self.path.iter().map(|k| k.display()).collect();
-        write!(f, "Key sequence '{}' is missing a description", path_str)
+        let path_str: String = self.path.iter().map(Key::display).collect();
+        write!(f, "Key sequence '{path_str}' is missing a description")
     }
 }
 
@@ -239,7 +238,7 @@ impl fmt::Display for FinalizeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Keymap finalization failed. Missing descriptions:")?;
         for missing in &self.missing_descriptions {
-            writeln!(f, "  - {}", missing)?;
+            writeln!(f, "  - {missing}")?;
         }
         Ok(())
     }
@@ -301,6 +300,7 @@ pub struct Keymap {
 }
 
 impl Keymap {
+    #[allow(clippy::too_many_lines, clippy::missing_panics_doc)]
     pub fn new() -> Self {
         let mut keymap = Self {
             bindings: Vec::new(),
@@ -691,9 +691,14 @@ impl Keymap {
         }
     }
 
+    /// Validates the keymap and returns an error if any branches are missing descriptions.
+    ///
+    /// # Errors
+    ///
+    /// Returns `FinalizeError` if any key sequences have placeholder or empty descriptions.
     pub fn finalize(&self) -> Result<(), FinalizeError> {
         let mut missing_descriptions = Vec::new();
-        self.collect_missing_descriptions(&self.bindings, Vec::new(), &mut missing_descriptions);
+        Self::collect_missing_descriptions(&self.bindings, Vec::new(), &mut missing_descriptions);
 
         if missing_descriptions.is_empty() {
             Ok(())
@@ -705,7 +710,6 @@ impl Keymap {
     }
 
     fn collect_missing_descriptions(
-        &self,
         children: &[KeyChild],
         path: Vec<Key>,
         missing: &mut Vec<MissingDescription>,
@@ -722,7 +726,7 @@ impl Keymap {
             }
 
             if let KeyNode::Branch { children, .. } = &child.node {
-                self.collect_missing_descriptions(children, child_path, missing);
+                Self::collect_missing_descriptions(children, child_path, missing);
             }
         }
     }
@@ -1548,8 +1552,7 @@ mod tests {
         assert_eq!(
             keymap.is_prefix_key(key),
             expected,
-            "failed for {}",
-            description
+            "failed for {description}"
         );
     }
 
@@ -1562,7 +1565,7 @@ mod tests {
 
         // When checking for prefix keys
         // Then they are recognized as prefixes
-        assert!(keymap.is_prefix_key(key), "failed for {}", description);
+        assert!(keymap.is_prefix_key(key), "failed for {description}");
     }
 
     #[rstest::rstest]

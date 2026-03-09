@@ -28,10 +28,10 @@ mod tests {
 
     fn entry(name: &str, alias: Option<&str>, sources: Vec<&str>) -> ShowNotesEntry {
         ShowNotesEntry {
-            path: format!("/path/{}", name),
+            path: format!("/path/{name}"),
             filename: name.to_string(),
-            alias: alias.map(|s| s.to_string()),
-            sources: sources.iter().map(|s| s.to_string()).collect(),
+            alias: alias.map(ToString::to_string),
+            sources: sources.iter().map(ToString::to_string).collect(),
         }
     }
 

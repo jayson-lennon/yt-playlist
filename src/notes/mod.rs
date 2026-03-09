@@ -54,6 +54,11 @@ pub struct SystemServicesHandle {
 }
 
 impl SystemServicesHandle {
+    /// Creates a new system services handle with all dependencies.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database connection fails.
     pub async fn new(db_path: &str) -> Result<Self, Report<db::SqliteNoteDbError>> {
         let note_db = Arc::new(db::SqliteNoteDb::new(db_path).await?);
         let source_db = Arc::new(SqliteSourceDb::new(note_db.pool().clone()));

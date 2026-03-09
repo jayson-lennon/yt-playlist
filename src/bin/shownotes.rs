@@ -413,6 +413,7 @@ fn run_sources_command(cmd: SourcesCommands, db_path: &Path) -> Result<(), Box<d
     rt.block_on(async { run_sources_command_async(cmd, db_path).await })
 }
 
+#[allow(clippy::too_many_lines)]
 async fn run_sources_command_async(
     cmd: SourcesCommands,
     db_path: &Path,
@@ -513,10 +514,7 @@ async fn run_sources_command_async(
                 .await
                 .change_context(AppError::Editor)?
             {
-                let urls: Vec<String> = new_content
-                    .lines()
-                    .map(|s| s.to_string())
-                    .collect();
+                let urls: Vec<String> = new_content.lines().map(ToString::to_string).collect();
                 services
                     .sources
                     .set_sources(file_path_id, &urls)
@@ -568,10 +566,10 @@ fn run_generate(
             .iter()
             .filter_map(|path| {
                 let path_str = path.to_string_lossy();
-                let filename = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path_str.clone().into_owned());
+                let filename = path.file_name().map_or_else(
+                    || path_str.clone().into_owned(),
+                    |n| n.to_string_lossy().into_owned(),
+                );
                 let alias = playlist_data
                     .files
                     .get(path)
@@ -716,6 +714,7 @@ fn build_services(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
@@ -997,10 +996,7 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
             .await
             .map_err(|e| format!("Editor error: {e:?}"))?
         {
-            let urls: Vec<String> = new_content
-                .lines()
-                .map(|s| s.to_string())
-                .collect();
+            let urls: Vec<String> = new_content.lines().map(ToString::to_string).collect();
             notes
                 .sources
                 .set_sources(file_path_id, &urls)
@@ -1031,7 +1027,7 @@ fn run_generate_notes(app: &App) -> Result<(), String> {
     let registry = shownotes::format::FormatRegistry::new();
     let formatter = registry
         .get("markdown")
-        .ok_or_else(|| format!("Unknown format: markdown"))?;
+        .ok_or_else(|| "Unknown format: markdown".to_string())?;
 
     let entries: Vec<shownotes::format::ShowNotesEntry> = playlist_data
         .playlist

@@ -115,7 +115,7 @@ impl WhichKey {
     fn format_path(&self) -> String {
         self.pending_keys
             .iter()
-            .map(|k| k.display())
+            .map(Key::display)
             .collect::<Vec<_>>()
             .join(" > ")
     }
@@ -189,10 +189,10 @@ impl WhichKey {
 
             let key_display = key.display();
             let key_span = Span::styled(
-                format!("{:>width$}", key_display, width = max_key_width),
+                format!("{key_display:>max_key_width$}"),
                 Style::default().fg(Color::Cyan),
             );
-            let desc_span = Span::raw(format!(" {}", desc));
+            let desc_span = Span::raw(format!(" {desc}"));
             let line = Line::from(vec![key_span, desc_span]);
             let para = Paragraph::new(line);
             frame.render_widget(para, Rect::new(inner_area.x, y, inner_area.width, 1));
