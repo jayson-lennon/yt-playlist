@@ -22,6 +22,10 @@ pub struct App {
     pub pending_notes_path: Option<PathBuf>,
     /// Flag to trigger fuzzy notes search; signals the main loop to spawn skim.
     pub pending_fuzzy_notes: bool,
+    /// Path to file for which to edit sources; signals the main loop to spawn an editor.
+    pub pending_sources_path: Option<PathBuf>,
+    /// Flag to trigger show notes generation; signals the main loop to output to stdout.
+    pub pending_generate_notes: bool,
     /// Key bindings mapping key combinations to actions.
     pub keymap: Keymap,
     /// Path to mpv's IPC socket for remote control communication.
@@ -44,6 +48,8 @@ impl App {
             should_quit: false,
             pending_notes_path: None,
             pending_fuzzy_notes: false,
+            pending_sources_path: None,
+            pending_generate_notes: false,
             keymap: Keymap::new(),
             socket_path,
             library_path,
@@ -390,6 +396,14 @@ impl App {
             Action::FuzzyNotes => {
                 self.pending_fuzzy_notes = true;
             }
+            Action::EditSources => {
+                if let Some(item) = self.tui_state.get_selected_item() {
+                    self.pending_sources_path = Some(item.path.clone());
+                }
+            }
+            Action::GenerateShowNotes => {
+                self.pending_generate_notes = true;
+            }
         }
     }
 
@@ -705,13 +719,19 @@ mod tests {
         }
 
         fn build(self) -> App {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let notes = rt.block_on(async {
+                use crate::notes::SystemServicesHandle;
+                SystemServicesHandle::new("sqlite::memory:").await.unwrap()
+            });
+
             let services = Services {
                 mpv: MpvClient::new(Arc::new(self.mpv_backend)),
                 media: MediaQuery::new(Arc::new(self.media_backend)),
                 storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
                 mpv_launcher: MpvLauncherService::new(Arc::new(self.mpv_launcher)),
                 file_launcher: LauncherService::new(Arc::new(self.file_launcher)),
-                notes: None,
+                notes,
             };
 
             let mut app = App {
@@ -721,6 +741,8 @@ mod tests {
                 should_quit: false,
                 pending_notes_path: None,
                 pending_fuzzy_notes: false,
+                pending_sources_path: None,
+                pending_generate_notes: false,
                 keymap: Keymap::new(),
                 socket_path: String::from("/tmp/mpvsocket"),
                 library_path: self.library_path,

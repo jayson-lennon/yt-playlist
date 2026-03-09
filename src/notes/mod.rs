@@ -11,6 +11,9 @@ use derive_more::Debug;
 use error_stack::Report;
 use wherror::Error;
 
+use crate::sources::db::sqlite::SqliteSourceDb;
+use crate::sources::SourceDbWrapper;
+
 #[derive(Debug, Error)]
 #[error(debug)]
 pub struct NoteDbError;
@@ -47,23 +50,21 @@ pub struct SystemServicesHandle {
     pub db: db::NoteDbWrapper,
     pub editor: editor::EditorWrapper,
     pub path_resolver: path::PathResolverWrapper,
+    pub sources: SourceDbWrapper,
 }
 
 impl SystemServicesHandle {
-    /// Creates a new system services handle.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database connection or migration fails.
     pub async fn new(db_path: &str) -> Result<Self, Report<db::SqliteNoteDbError>> {
-        let db = Arc::new(db::SqliteNoteDb::new(db_path).await?);
+        let note_db = Arc::new(db::SqliteNoteDb::new(db_path).await?);
+        let source_db = Arc::new(SqliteSourceDb::new(note_db.pool().clone()));
         let editor = Arc::new(editor::SystemEditor);
         let path_resolver = Arc::new(path::SystemPathResolver);
 
         Ok(Self {
-            db: db::NoteDbWrapper::new(db),
+            db: db::NoteDbWrapper::new(note_db),
             editor: editor::EditorWrapper::new(editor),
             path_resolver: path::PathResolverWrapper::new(path_resolver),
+            sources: SourceDbWrapper::new(source_db),
         })
     }
 }

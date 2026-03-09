@@ -26,6 +26,8 @@ pub enum Action {
     AddUrl,
     Delete,
     FuzzyNotes,
+    EditSources,
+    GenerateShowNotes,
 }
 
 #[derive(Debug, Clone)]
@@ -137,6 +139,11 @@ impl Keymap {
                         action: Action::FuzzyNotes,
                         description: "fuzzy search notes",
                     },
+                    FollowupKey {
+                        key: 'n',
+                        action: Action::GenerateShowNotes,
+                        description: "generate show notes",
+                    },
                 ],
             },
             PrefixKeyBinding {
@@ -236,6 +243,13 @@ impl Keymap {
                 KeyCode::Char('r'),
                 Action::Rename,
                 "rename",
+                KeyCategory::ItemActions,
+                KeyContext::Global,
+            ),
+            KeyBinding::new(
+                KeyCode::Char('e'),
+                Action::EditSources,
+                "edit sources",
                 KeyCategory::ItemActions,
                 KeyContext::Global,
             ),

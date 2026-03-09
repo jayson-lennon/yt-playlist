@@ -47,11 +47,10 @@ pub async fn connect_and_migrate(database_url: &str) -> Result<SqlitePool, Repor
 }
 
 impl SqliteNoteDb {
-    /// Creates a new `SQLite` database connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database connection or migration fails.
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     pub async fn new(database_url: &str) -> Result<Self, Report<SqliteNoteDbError>> {
         let pool = connect_and_migrate(database_url).await?;
         Ok(Self { pool })

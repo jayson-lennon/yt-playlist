@@ -13,5 +13,5 @@ pub struct Services {
     pub storage: PlaylistStorage,
     pub mpv_launcher: MpvLauncherService,
     pub file_launcher: LauncherService,
-    pub notes: Option<SystemServicesHandle>,
+    pub notes: SystemServicesHandle,
 }

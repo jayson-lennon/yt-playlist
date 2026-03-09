@@ -27,6 +27,7 @@ use shownotes::{
     notes::{Editor, NoteDb, PathResolver, SystemServicesHandle},
     playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
+    sources::SourceDb,
     ui,
 };
 
@@ -69,6 +70,23 @@ enum Commands {
         #[command(subcommand)]
         notes_cmd: NotesCommands,
     },
+
+    /// Source URL commands for managing file provenance
+    Sources {
+        #[command(subcommand)]
+        sources_cmd: SourcesCommands,
+    },
+
+    /// Generate show notes from playlist
+    Generate {
+        /// Output format (markdown, plain, html)
+        #[arg(short, long, default_value = "markdown")]
+        format: String,
+
+        /// Playlist file path
+        #[arg(short, long, default_value = "shownotes.toml")]
+        playlist: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -106,6 +124,29 @@ enum NotesCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum SourcesCommands {
+    /// Add a source URL to a file
+    Add {
+        /// File path
+        path: PathBuf,
+        /// Source URL
+        url: String,
+    },
+
+    /// List source URLs for a file
+    List {
+        /// File path
+        path: PathBuf,
+    },
+
+    /// Edit source URLs for a file in $EDITOR
+    Edit {
+        /// File path
+        path: PathBuf,
+    },
+}
+
 #[derive(Debug, wherror::Error)]
 pub enum AppError {
     #[error("failed to initialize database")]
@@ -139,6 +180,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ActionCommands::Mpv { path, socket } => run_action_mpv(&path, &socket),
         },
         Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path),
+        Commands::Sources { sources_cmd } => run_sources_command(sources_cmd, &args.db_path),
+        Commands::Generate { format, playlist } => run_generate(&format, &playlist, &args.db_path),
     }
 }
 
@@ -365,6 +408,197 @@ fn create_symlink_with_suffix(target: &Path, dest_dir: &Path) -> Result<PathBuf,
     Ok(dest_path)
 }
 
+fn run_sources_command(cmd: SourcesCommands, db_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async { run_sources_command_async(cmd, db_path).await })
+}
+
+async fn run_sources_command_async(
+    cmd: SourcesCommands,
+    db_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let services = SystemServicesHandle::new(&db_path.to_string_lossy())
+        .await
+        .change_context(AppError::DbInit)?;
+
+    match cmd {
+        SourcesCommands::Add { path, url } => {
+            let resolved = services
+                .path_resolver
+                .resolve(&path)
+                .await
+                .change_context(AppError::PathResolution)?;
+
+            let path_str = resolved.to_string_lossy();
+            let file_path_id = services
+                .db
+                .get_or_create_file_path(&path_str)
+                .await
+                .change_context(AppError::Database)?;
+
+            let mut existing = services
+                .sources
+                .get_sources(file_path_id)
+                .await
+                .change_context(AppError::Database)?
+                .into_iter()
+                .map(|s| s.source_url)
+                .collect::<Vec<_>>();
+            existing.push(url);
+
+            services
+                .sources
+                .set_sources(file_path_id, &existing)
+                .await
+                .change_context(AppError::Database)?;
+
+            println!("Added source to: {}", path.display());
+        }
+        SourcesCommands::List { path } => {
+            let resolved = services
+                .path_resolver
+                .resolve(&path)
+                .await
+                .change_context(AppError::PathResolution)?;
+
+            let path_str = resolved.to_string_lossy();
+            let file_path_id = services
+                .db
+                .get_or_create_file_path(&path_str)
+                .await
+                .change_context(AppError::Database)?;
+
+            let sources = services
+                .sources
+                .get_sources(file_path_id)
+                .await
+                .change_context(AppError::Database)?;
+
+            if sources.is_empty() {
+                println!("No sources found for: {}", path.display());
+            } else {
+                for source in sources {
+                    println!("{}", source.source_url);
+                }
+            }
+        }
+        SourcesCommands::Edit { path } => {
+            let resolved = services
+                .path_resolver
+                .resolve(&path)
+                .await
+                .change_context(AppError::PathResolution)?;
+
+            let path_str = resolved.to_string_lossy();
+            let file_path_id = services
+                .db
+                .get_or_create_file_path(&path_str)
+                .await
+                .change_context(AppError::Database)?;
+
+            let existing = services
+                .sources
+                .get_sources(file_path_id)
+                .await
+                .change_context(AppError::Database)?;
+            let initial_content = existing
+                .iter()
+                .map(|s| s.source_url.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if let Some(new_content) = services
+                .editor
+                .open(&initial_content)
+                .await
+                .change_context(AppError::Editor)?
+            {
+                let urls: Vec<String> = new_content
+                    .lines()
+                    .map(|s| s.to_string())
+                    .collect();
+                services
+                    .sources
+                    .set_sources(file_path_id, &urls)
+                    .await
+                    .change_context(AppError::Database)?;
+                println!("Updated sources for: {}", path.display());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn run_generate(
+    format: &str,
+    playlist_path: &Path,
+    db_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let storage_backend: Arc<dyn PlaylistStorageBackend> =
+        Arc::new(TomlBackend::new(playlist_path.to_path_buf()));
+    let playlist_storage = PlaylistStorage::new(storage_backend);
+    let playlist_data = playlist_storage.load()?;
+
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async {
+        let services = SystemServicesHandle::new(&db_path.to_string_lossy())
+            .await
+            .change_context(AppError::DbInit)?;
+
+        let paths: Vec<String> = playlist_data
+            .playlist
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+
+        let sources_map = services
+            .sources
+            .get_sources_for_paths(&paths)
+            .await
+            .change_context(AppError::Database)?;
+
+        let registry = shownotes::format::FormatRegistry::new();
+        let formatter = registry
+            .get(format)
+            .ok_or_else(|| format!("Unknown format: {format}. Available: {:?}", registry.available_formats()))?;
+
+        let entries: Vec<shownotes::format::ShowNotesEntry> = playlist_data
+            .playlist
+            .iter()
+            .filter_map(|path| {
+                let path_str = path.to_string_lossy();
+                let filename = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path_str.clone().into_owned());
+                let alias = playlist_data
+                    .files
+                    .get(path)
+                    .and_then(|m| m.alias.clone());
+                let sources: Vec<String> = sources_map
+                    .get(&*path_str)
+                    .map(|v| v.iter().map(|s| s.source_url.clone()).collect())
+                    .unwrap_or_default();
+
+                if sources.is_empty() {
+                    None
+                } else {
+                    Some(shownotes::format::ShowNotesEntry {
+                        path: path_str.into_owned(),
+                        filename,
+                        alias,
+                        sources,
+                    })
+                }
+            })
+            .collect();
+
+        println!("{}", formatter.format(&entries));
+        Ok(())
+    })
+}
+
 fn run_tui(
     playlist: PathBuf,
     socket: PathBuf,
@@ -397,7 +631,7 @@ fn run_tui(
         .block_on(SystemServicesHandle::new(&db_path.to_string_lossy()))
         .map_err(|e| format!("Failed to initialize notes database: {e:?}"))?;
 
-    let services = build_services(&playlist, &socket, media_backend, Some(notes_handle));
+    let services = build_services(&playlist, &socket, media_backend, notes_handle);
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -466,7 +700,7 @@ fn build_services(
     playlist: &Path,
     socket: &Path,
     media_backend: Arc<dyn MediaQueryBackend>,
-    notes: Option<SystemServicesHandle>,
+    notes: SystemServicesHandle,
 ) -> Services {
     let mpv_backend: Arc<dyn MpvBackend> = Arc::new(MpvipcBackend::new(socket));
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
@@ -564,6 +798,71 @@ fn run_app(
             }
         }
 
+        if let Some(path) = app.pending_sources_path.take() {
+            disable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )?;
+            terminal.show_cursor()?;
+
+            let result = edit_sources_for_path(app, &path);
+
+            enable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                EnterAlternateScreen,
+                EnableMouseCapture
+            )?;
+            terminal.hide_cursor()?;
+            terminal.clear()?;
+            let keymap = app.keymap.clone();
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+
+            match result {
+                Ok(()) => {
+                    app.tui_state.status_message = Some(format!("Updated sources: {}", path.display()));
+                }
+                Err(e) => {
+                    app.tui_state.status_message = Some(format!("Failed to edit sources: {e}"));
+                }
+            }
+        }
+
+        if app.pending_generate_notes {
+            app.pending_generate_notes = false;
+            disable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )?;
+            terminal.show_cursor()?;
+
+            let result = run_generate_notes(app);
+
+            enable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                EnterAlternateScreen,
+                EnableMouseCapture
+            )?;
+            terminal.hide_cursor()?;
+            terminal.clear()?;
+            let keymap = app.keymap.clone();
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+
+            match result {
+                Ok(()) => {
+                    app.tui_state.status_message = Some("Show notes generated to stdout".to_string());
+                }
+                Err(e) => {
+                    app.tui_state.status_message = Some(format!("Failed to generate notes: {e}"));
+                }
+            }
+        }
+
         if app.should_quit {
             return Ok(());
         }
@@ -571,11 +870,7 @@ fn run_app(
 }
 
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let notes = app
-        .services
-        .notes
-        .as_ref()
-        .ok_or("Notes service not initialized")?;
+    let notes = &app.services.notes;
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
@@ -617,11 +912,7 @@ fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
 }
 
 fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
-    let notes = app
-        .services
-        .notes
-        .as_ref()
-        .ok_or("Notes service not initialized")?;
+    let notes = &app.services.notes;
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
@@ -687,4 +978,107 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
 
         Ok(count)
     })
+}
+
+fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
+    let notes = &app.services.notes;
+
+    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    rt.block_on(async {
+        let resolved = notes
+            .path_resolver
+            .resolve(path)
+            .await
+            .map_err(|e| format!("Path resolution failed: {e:?}"))?;
+
+        let path_str = resolved.to_string_lossy();
+        let file_path_id = notes
+            .db
+            .get_or_create_file_path(&path_str)
+            .await
+            .map_err(|e| format!("Database error: {e:?}"))?;
+
+        let existing = notes
+            .sources
+            .get_sources(file_path_id)
+            .await
+            .map_err(|e| format!("Database error: {e:?}"))?;
+        let initial_content = existing
+            .iter()
+            .map(|s| s.source_url.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if let Some(new_content) = notes
+            .editor
+            .open(&initial_content)
+            .await
+            .map_err(|e| format!("Editor error: {e:?}"))?
+        {
+            let urls: Vec<String> = new_content
+                .lines()
+                .map(|s| s.to_string())
+                .collect();
+            notes
+                .sources
+                .set_sources(file_path_id, &urls)
+                .await
+                .map_err(|e| format!("Database error: {e:?}"))?;
+        }
+
+        Ok(())
+    })
+}
+
+fn run_generate_notes(app: &App) -> Result<(), String> {
+    let notes = &app.services.notes;
+
+    let storage = &app.services.storage;
+    let playlist_data = storage.load().map_err(|e| format!("Failed to load playlist: {e:?}"))?;
+
+    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    let paths: Vec<String> = playlist_data
+        .playlist
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+
+    let sources_map = rt.block_on(notes.sources.get_sources_for_paths(&paths))
+        .map_err(|e| format!("Database error: {e:?}"))?;
+
+    let registry = shownotes::format::FormatRegistry::new();
+    let formatter = registry
+        .get("markdown")
+        .ok_or_else(|| format!("Unknown format: markdown"))?;
+
+    let entries: Vec<shownotes::format::ShowNotesEntry> = playlist_data
+        .playlist
+        .iter()
+        .filter_map(|path| {
+            let path_str = path.to_string_lossy();
+            let filename = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let alias = playlist_data.files.get(path).and_then(|m| m.alias.clone());
+            let sources: Vec<String> = sources_map
+                .get(&*path_str)
+                .map(|v| v.iter().map(|s| s.source_url.clone()).collect())
+                .unwrap_or_default();
+
+            if sources.is_empty() {
+                None
+            } else {
+                Some(shownotes::format::ShowNotesEntry {
+                    path: path_str.into_owned(),
+                    filename,
+                    alias,
+                    sources,
+                })
+            }
+        })
+        .collect();
+
+    println!("{}", formatter.format(&entries));
+    Ok(())
 }
