@@ -23,6 +23,7 @@ prepare() {
 
     # Copy Rust source files to build directory
     cp -r "$startdir/src" "$_builddir/"
+    cp -r "$startdir/migrations" "$_builddir/"
     cp "$startdir/Cargo.toml" "$_builddir/"
     cp "$startdir/Cargo.lock" "$_builddir/"
 
