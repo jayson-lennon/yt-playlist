@@ -580,9 +580,9 @@ mod tests {
 
     use super::*;
     use crate::keymap::{Action, Keymap};
-    use crate::launcher::{LaunchResult, Launcher, LauncherService};
-    use crate::media::{MediaError, MediaQuery, MediaQueryBackend};
-    use crate::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher, MpvLauncherService};
+    use crate::feat::launcher::{LaunchResult, Launcher, LauncherService};
+    use crate::feat::media_query::{MediaError, MediaQuery, MediaQueryBackend};
+    use crate::feat::mpv::{MpvBackend, MpvClient, MpvError, MpvLauncher, MpvLauncherService};
     use crate::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageBackend};
 
     struct FakeMpvBackend;
@@ -670,7 +670,7 @@ mod tests {
             _path: &Path,
             _command: Option<&str>,
             _socket_path: &str,
-        ) -> Result<LaunchResult, Report<crate::launcher::LaunchError>> {
+        ) -> Result<LaunchResult, Report<crate::feat::launcher::LaunchError>> {
             Ok(LaunchResult {
                 used_default_opener: false,
             })

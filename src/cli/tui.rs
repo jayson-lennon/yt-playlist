@@ -16,11 +16,10 @@ use error_stack::{Report, ResultExt};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::{
-    analysis,
     app::App,
     config::{load, Config},
-    media::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
-    mpv::MpvipcBackend,
+    feat::media_query::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
+    feat::mpv::MpvipcBackend,
     notes::{Editor, NoteDb, PathResolver, SystemServicesHandle},
     playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
@@ -57,7 +56,7 @@ pub fn run_tui(
     let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
 
     let result =
-        analysis::analyze_files(&all_files, playlist_data.files, ffprobe_backend.as_ref()).change_context(RunError)?;
+        crate::feat::media_duration_analysis::analyze_files(&all_files, playlist_data.files, ffprobe_backend.as_ref()).change_context(RunError)?;
 
     let durations: std::collections::HashMap<PathBuf, std::time::Duration> = result
         .files
@@ -146,11 +145,11 @@ fn build_services(
     notes: SystemServicesHandle,
 ) -> Services {
     use crate::{
-        launcher::{FileLauncher, LauncherService},
-        mpv::{MpvClient, MpvLauncherService, RealMpvLauncher},
+        feat::launcher::{FileLauncher, LauncherService},
+        feat::mpv::{MpvClient, MpvLauncherService, RealMpvLauncher},
     };
 
-    let mpv_backend: Arc<dyn crate::mpv::MpvBackend> = Arc::new(MpvipcBackend::new(socket));
+    let mpv_backend: Arc<dyn crate::feat::mpv::MpvBackend> = Arc::new(MpvipcBackend::new(socket));
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
         Arc::new(TomlBackend::new(playlist.to_path_buf()));
 

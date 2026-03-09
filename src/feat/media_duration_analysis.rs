@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use error_stack::Report;
 
-use crate::media::{MediaError, MediaQueryBackend};
+use super::media_query::{MediaError, MediaQueryBackend};
 use crate::playlist::FileMetadata;
 
 pub struct AnalysisResult {

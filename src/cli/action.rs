@@ -3,7 +3,7 @@ use std::path::Path;
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
-use crate::mpv::{MpvBackend, MpvipcBackend};
+use crate::feat::mpv::{MpvBackend, MpvipcBackend};
 
 use super::RunError;
 

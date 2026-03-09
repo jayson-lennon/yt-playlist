@@ -1,8 +1,8 @@
 use derive_more::Debug;
 
-use crate::launcher::LauncherService;
-use crate::media::MediaQuery;
-use crate::mpv::{MpvClient, MpvLauncherService};
+use crate::feat::launcher::LauncherService;
+use crate::feat::media_query::MediaQuery;
+use crate::feat::mpv::{MpvClient, MpvLauncherService};
 use crate::notes::SystemServicesHandle;
 use crate::playlist::PlaylistStorage;
 
