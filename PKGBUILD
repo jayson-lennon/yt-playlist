@@ -1,9 +1,9 @@
 # Maintainer: Jayson Lennon <jayson@jaysonlennon.dev>
 
 pkgname=shownotes
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc='manage playlists for mpv'
+pkgdesc='manage shownotes for podcast/video'
 url=''
 license=(GPL-3.0-only)
 makedepends=('cargo')
