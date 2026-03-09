@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::keymap::Key;
-use crate::ui::{
+use crate::tui::{
     ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput, WhichKey,
 };
 

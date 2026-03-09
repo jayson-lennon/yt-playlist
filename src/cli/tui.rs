@@ -23,7 +23,7 @@ use crate::{
     feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage},
     feat::{ExternalEditor, NoteDb, PathResolver, sources::SourceDb},
     services::Services,
-    ui,
+    tui,
 };
 
 use super::{RunError, utils::create_symlink_with_suffix};
@@ -46,8 +46,7 @@ pub fn run_tui(
 ) -> Result<(), Report<RunError>> {
     let config = load().change_context(RunError)?;
 
-    let storage_backend: Arc<dyn PlaylistStorage> =
-        Arc::new(TomlStorage::new(playlist.clone()));
+    let storage_backend: Arc<dyn PlaylistStorage> = Arc::new(TomlStorage::new(playlist.clone()));
     let playlist_storage = PlaylistStorageService::new(storage_backend.clone());
 
     let playlist_data = playlist_storage.load().change_context(RunError)?;
@@ -67,8 +66,7 @@ pub fn run_tui(
         .filter_map(|(k, v)| v.duration.map(|d| (k.clone(), d)))
         .collect();
 
-    let media_backend: Arc<dyn MediaQuery> =
-        Arc::new(CachedMedia::new(durations, ffprobe_backend));
+    let media_backend: Arc<dyn MediaQuery> = Arc::new(CachedMedia::new(durations, ffprobe_backend));
 
     let core_services = tokio::runtime::Runtime::new()
         .change_context(RunError)?
@@ -190,7 +188,7 @@ fn run_app(
         }
         let keymap = app.keymap.clone();
         terminal
-            .draw(|f| ui::render(f, &app.tui_state, &keymap))
+            .draw(|f| tui::render(f, &app.tui_state, &keymap))
             .change_context(RunError)?;
 
         if event::poll(std::time::Duration::from_millis(100)).change_context(RunError)? {
@@ -221,7 +219,7 @@ fn run_app(
             terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
             terminal
-                .draw(|f| ui::render(f, &app.tui_state, &keymap))
+                .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
 
             match result {
@@ -258,7 +256,7 @@ fn run_app(
             terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
             terminal
-                .draw(|f| ui::render(f, &app.tui_state, &keymap))
+                .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
 
             match result {
@@ -294,7 +292,7 @@ fn run_app(
             terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
             terminal
-                .draw(|f| ui::render(f, &app.tui_state, &keymap))
+                .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
 
             match result {

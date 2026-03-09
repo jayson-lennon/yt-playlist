@@ -2,7 +2,7 @@ use std::fmt;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
-use crate::ui::Pane;
+use crate::tui::Pane;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ShowNoteKind {
@@ -810,11 +810,7 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches {
-                    Some(*action)
-                } else {
-                    None
-                }
+                if context_matches { Some(*action) } else { None }
             }
             KeyNode::Branch { .. } => None,
         }
@@ -873,7 +869,7 @@ impl Default for Keymap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::Pane;
+    use crate::tui::Pane;
 
     #[test]
     fn key_display_shows_char() {

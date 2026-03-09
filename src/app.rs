@@ -6,8 +6,7 @@ use crate::config::Config;
 use crate::feat::playlist::PlaylistData;
 use crate::keymap::{Action, Keymap};
 use crate::services::Services;
-use crate::tui_state::TuiState;
-use crate::ui::{Pane, PlaylistItem, get_mime_type};
+use crate::tui::{Pane, PlaylistItem, TuiState, get_mime_type};
 
 pub struct App {
     /// External service dependencies (mpv client, media query, playlist storage, mpv launcher, file launcher).
@@ -586,9 +585,7 @@ mod tests {
     use crate::feat::mpv::{
         MpvClient, MpvClientService, MpvError, MpvLauncher, MpvLauncherService,
     };
-    use crate::feat::playlist::{
-        IoError, PlaylistData, PlaylistStorage, PlaylistStorageService,
-    };
+    use crate::feat::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageService};
     use crate::keymap::{Action, Keymap};
 
     struct FakeMpvBackend;

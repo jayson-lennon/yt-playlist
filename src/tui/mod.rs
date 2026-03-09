@@ -4,18 +4,19 @@ mod filter;
 mod library_pane;
 mod playlist_pane;
 mod rename;
+mod tui_state;
 mod url_input;
 mod which_key;
 
-use crate::keymap::Keymap;
+pub use crate::{keymap::Keymap, tui::tui_state::TuiState};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::Paragraph,
-    Frame,
 };
 
-pub use common::{get_mime_type, Pane, PlaylistItem};
+pub use common::{Pane, PlaylistItem, get_mime_type};
 pub use error_popup::ErrorPopup;
 pub use filter::Filter;
 pub use library_pane::LibraryPane;
@@ -24,7 +25,7 @@ pub use rename::Rename;
 pub use url_input::UrlInput;
 pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
 
-pub fn render(frame: &mut Frame, state: &crate::tui_state::TuiState, keymap: &Keymap) {
+pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(1)])

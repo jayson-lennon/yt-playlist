@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::Pane;
+use crate::tui::Pane;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WhichKeyPosition {
