@@ -1,5 +1,6 @@
 use super::{Action, Key};
 
+/// Where a keybind can be used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyContext {
     Global,
@@ -7,6 +8,7 @@ pub enum KeyContext {
     Library,
 }
 
+/// Group that the keybind will be displayed in the help box.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCategory {
     Navigation,

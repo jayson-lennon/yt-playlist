@@ -46,42 +46,42 @@ impl Keymap {
     #[rustfmt::skip]
     #[allow(clippy::too_many_lines, clippy::missing_panics_doc)]
     pub fn new() -> Self {
+        use super::KeyContext as Ctx;
+        use super::KeyCategory as Cat;
+
         let mut keymap = Self {
             bindings: Vec::new(),
         };
 
         keymap
-            .bind("?", Action::ShowHelp, "show help", KeyCategory::General, KeyContext::Global)
-            .bind("/", Action::StartFilter, "filter", KeyCategory::General, KeyContext::Global)
-            .bind("q", Action::Quit, "quit", KeyCategory::General, KeyContext::Global)
-            .bind("s", Action::Save, "save", KeyCategory::General, KeyContext::Global)
-            .bind("j", Action::MoveDown, "down", KeyCategory::Navigation, KeyContext::Global)
-            .bind("k", Action::MoveUp, "up", KeyCategory::Navigation, KeyContext::Global)
-            .bind("<Tab>", Action::SwitchPane, "switch pane", KeyCategory::PaneSwitch, KeyContext::Global)
-            .bind("h", Action::FocusPlaylist, "focus playlist", KeyCategory::PaneSwitch, KeyContext::Global)
-            .bind("l", Action::FocusLibrary, "focus library", KeyCategory::PaneSwitch, KeyContext::Global)
-            .bind("<Space>", Action::ToggleItem, "add/remove", KeyCategory::ItemActions, KeyContext::Global)
-            .bind("r", Action::Rename, "rename", KeyCategory::ItemActions, KeyContext::Global)
-            .bind("e", Action::EditSources, "edit sources", KeyCategory::ItemActions, KeyContext::Global)
-            .bind("n", Action::Notes, "notes", KeyCategory::ItemActions, KeyContext::Global)
-            .bind("J", Action::ReorderDown, "move down", KeyCategory::PlaylistActions, KeyContext::Playlist)
-            .bind("K", Action::ReorderUp, "move up", KeyCategory::PlaylistActions, KeyContext::Playlist)
-            .bind("o", Action::LaunchFile, "open file", KeyCategory::PlaylistActions, KeyContext::Playlist)
-            .bind("p", Action::LoadPlaylist, "load playlist", KeyCategory::PlaylistActions, KeyContext::Playlist)
-            .bind("L", Action::MoveToLibrary, "to library", KeyCategory::ItemActions, KeyContext::Playlist)
-            .bind("H", Action::MoveToPlaylist, "to playlist", KeyCategory::ItemActions, KeyContext::Library)
-            .bind("x", Action::Delete, "delete", KeyCategory::ItemActions, KeyContext::Library)
-            .describe("g", "general", |g| {
-                g.bind("m", Action::LaunchMpv, "launch mpv", KeyCategory::General, KeyContext::Global)
-                 .bind("f", Action::FuzzyNotes, "fuzzy search notes", KeyCategory::General, KeyContext::Global)
-                 .describe("n", "generate show notes", |n| {
-                    n.bind("h", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", KeyCategory::General, KeyContext::Global)
-                     .bind("m", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", KeyCategory::General, KeyContext::Global);
-                    });
-            })
-            .describe("a", "add", |a| {
-                a.bind("u", Action::AddUrl, "add url", KeyCategory::General, KeyContext::Global);
-            });
+            .bind("?", Action::ShowHelp, "show help", Cat::General, Ctx::Global)
+            .bind("/", Action::StartFilter, "filter", Cat::General, Ctx::Global)
+            .bind("q", Action::Quit, "quit", Cat::General, Ctx::Global)
+            .bind("s", Action::Save, "save", Cat::General, Ctx::Global)
+            .bind("j", Action::MoveDown, "down", Cat::Navigation, Ctx::Global)
+            .bind("k", Action::MoveUp, "up", Cat::Navigation, Ctx::Global)
+            .bind("<Tab>", Action::SwitchPane, "switch pane", Cat::PaneSwitch, Ctx::Global)
+            .bind("h", Action::FocusPlaylist, "focus playlist", Cat::PaneSwitch, Ctx::Global)
+            .bind("l", Action::FocusLibrary, "focus library", Cat::PaneSwitch, Ctx::Global)
+            .bind("<Space>", Action::ToggleItem, "add/remove", Cat::ItemActions, Ctx::Global)
+            .bind("r", Action::Rename, "rename", Cat::ItemActions, Ctx::Global)
+            .bind("e", Action::EditSources, "edit sources", Cat::ItemActions, Ctx::Global)
+            .bind("n", Action::Notes, "notes", Cat::ItemActions, Ctx::Global)
+            .bind("J", Action::ReorderDown, "move down", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("K", Action::ReorderUp, "move up", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("o", Action::LaunchFile, "open file", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("p", Action::LoadPlaylist, "load playlist", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("L", Action::MoveToLibrary, "to library", Cat::ItemActions, Ctx::Playlist)
+            .bind("H", Action::MoveToPlaylist, "to playlist", Cat::ItemActions, Ctx::Library)
+            .bind("x", Action::Delete, "delete", Cat::ItemActions, Ctx::Library)
+            .describe_prefix("g", "general")
+            .bind("gm", Action::LaunchMpv, "launch mpv", Cat::General, Ctx::Global)
+            .bind("gf", Action::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global)
+            .describe_prefix("gn", "generate show notes")
+            .bind("gnh", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
+            .bind("gnm", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
+            .describe_prefix("a", "add")
+            .bind("au", Action::AddUrl, "add url", Cat::General, Ctx::Global);
 
         keymap.finalize().expect("keymap has missing descriptions");
         keymap
@@ -104,6 +104,15 @@ impl Keymap {
         self.ensure_branch_with_description(&prefix_keys, description);
         let mut builder = super::GroupBuilder::new(self, prefix_keys);
         bindings(&mut builder);
+        self
+    }
+
+    pub fn describe_prefix(&mut self, prefix: &str, description: &'static str) -> &mut Self {
+        let prefix_keys = parse_key_sequence(prefix);
+        if prefix_keys.is_empty() {
+            return self;
+        }
+        self.ensure_branch_with_description(&prefix_keys, description);
         self
     }
 

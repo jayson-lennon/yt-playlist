@@ -46,4 +46,16 @@ impl<'a> GroupBuilder<'a> {
         bindings(&mut builder);
         self
     }
+
+    pub fn describe_prefix(&mut self, prefix: &str, description: &'static str) -> &mut Self {
+        let keys = parse_key_sequence(prefix);
+        if keys.is_empty() {
+            return self;
+        }
+
+        let full_prefix: Vec<Key> = self.prefix.iter().copied().chain(keys).collect();
+        self.keymap
+            .ensure_branch_with_description(&full_prefix, description);
+        self
+    }
 }
