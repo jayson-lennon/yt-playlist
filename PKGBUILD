@@ -1,7 +1,7 @@
 # Maintainer: Jayson Lennon <jayson@jaysonlennon.dev>
 
 pkgname=shownotes
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc='manage shownotes for podcast/video'
 url=''
