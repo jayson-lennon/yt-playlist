@@ -832,30 +832,12 @@ fn run_app(
 
         if app.pending_generate_notes {
             app.pending_generate_notes = false;
-            disable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
 
             let result = run_generate_notes(app);
 
-            enable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                EnterAlternateScreen,
-                EnableMouseCapture
-            )?;
-            terminal.hide_cursor()?;
-            terminal.clear()?;
-            let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
-
             match result {
                 Ok(()) => {
-                    app.tui_state.status_message = Some("Show notes generated to stdout".to_string());
+                    app.tui_state.status_message = Some("Show notes copied to clipboard".to_string());
                 }
                 Err(e) => {
                     app.tui_state.status_message = Some(format!("Failed to generate notes: {e}"));
@@ -1079,6 +1061,8 @@ fn run_generate_notes(app: &App) -> Result<(), String> {
         })
         .collect();
 
-    println!("{}", formatter.format(&entries));
+    let output = formatter.format(&entries);
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;
+    clipboard.set_text(&output).map_err(|e| format!("Clipboard error: {e}"))?;
     Ok(())
 }
