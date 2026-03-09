@@ -742,9 +742,8 @@ mod tests {
 
         fn build(self) -> App {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let notes = rt.block_on(async {
-                use crate::notes::SystemServicesHandle;
-                SystemServicesHandle::new("sqlite::memory:").await.unwrap()
+            let core = rt.block_on(async {
+                Services::new("sqlite::memory:").await.unwrap()
             });
 
             let services = Services {
@@ -753,7 +752,10 @@ mod tests {
                 storage: PlaylistStorage::new(Arc::new(self.storage_backend)),
                 mpv_launcher: MpvLauncherService::new(Arc::new(self.mpv_launcher)),
                 file_launcher: LauncherService::new(Arc::new(self.file_launcher)),
-                notes,
+                db: core.db,
+                editor: core.editor,
+                path_resolver: core.path_resolver,
+                sources: core.sources,
             };
 
             let mut app = App {

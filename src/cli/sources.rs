@@ -4,8 +4,8 @@ use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
 use crate::{
-    notes::{Editor, NoteDb, PathResolver, SystemServicesHandle},
-    sources::SourceDb,
+    feat::{sources::SourceDb, ExternalEditor, NoteDb, PathResolver},
+    services::Services,
 };
 
 use super::RunError;
@@ -51,7 +51,7 @@ async fn run_sources_command_async(
     cmd: SourcesCommands,
     db_path: &std::path::Path,
 ) -> Result<(), Report<RunError>> {
-    let services = SystemServicesHandle::new(&db_path.to_string_lossy())
+    let services = Services::new(&db_path.to_string_lossy())
         .await
         .change_context(RunError)?;
 

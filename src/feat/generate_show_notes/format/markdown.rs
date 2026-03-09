@@ -1,8 +1,8 @@
-use crate::format::{ShowNotesEntry, ShowNotesFormat};
+use super::{ShowNotesEntry, ShowNotesFormat};
 
-pub struct HtmlFormat;
+pub struct MarkdownFormat;
 
-impl ShowNotesFormat for HtmlFormat {
+impl ShowNotesFormat for MarkdownFormat {
     fn format(&self, entries: &[ShowNotesEntry]) -> String {
         entries
             .iter()
@@ -11,14 +11,14 @@ impl ShowNotesFormat for HtmlFormat {
                 entry
                     .sources
                     .iter()
-                    .map(move |url| format!("<a href=\"{}\">{}</a>", url, entry.display_name()))
+                    .map(move |url| format!("- [{}]({})", entry.display_name(), url))
             })
             .collect::<Vec<_>>()
             .join("\n")
     }
 
     fn name(&self) -> &'static str {
-        "html"
+        "markdown"
     }
 }
 
@@ -36,10 +36,10 @@ mod tests {
     }
 
     #[test]
-    fn format_creates_html_links() {
+    fn format_creates_markdown_links() {
         let entries = vec![entry("video.mp4", None, vec!["https://example.com"])];
-        let output = HtmlFormat.format(&entries);
-        assert_eq!(output, "<a href=\"https://example.com\">video.mp4</a>");
+        let output = MarkdownFormat.format(&entries);
+        assert_eq!(output, "- [video.mp4](https://example.com)");
     }
 
     #[test]
@@ -49,8 +49,8 @@ mod tests {
             Some("My Video"),
             vec!["https://example.com"],
         )];
-        let output = HtmlFormat.format(&entries);
-        assert_eq!(output, "<a href=\"https://example.com\">My Video</a>");
+        let output = MarkdownFormat.format(&entries);
+        assert_eq!(output, "- [My Video](https://example.com)");
     }
 
     #[test]
@@ -60,10 +60,10 @@ mod tests {
             None,
             vec!["https://a.com", "https://b.com"],
         )];
-        let output = HtmlFormat.format(&entries);
+        let output = MarkdownFormat.format(&entries);
         assert_eq!(
             output,
-            "<a href=\"https://a.com\">video.mp4</a>\n<a href=\"https://b.com\">video.mp4</a>"
+            "- [video.mp4](https://a.com)\n- [video.mp4](https://b.com)"
         );
     }
 
@@ -73,14 +73,14 @@ mod tests {
             entry("video.mp4", None, vec!["https://example.com"]),
             entry("no-source.mp4", None, vec![]),
         ];
-        let output = HtmlFormat.format(&entries);
-        assert_eq!(output, "<a href=\"https://example.com\">video.mp4</a>");
+        let output = MarkdownFormat.format(&entries);
+        assert_eq!(output, "- [video.mp4](https://example.com)");
     }
 
     #[test]
     fn format_empty_entries() {
         let entries: Vec<ShowNotesEntry> = vec![];
-        let output = HtmlFormat.format(&entries);
+        let output = MarkdownFormat.format(&entries);
         assert!(output.is_empty());
     }
 }

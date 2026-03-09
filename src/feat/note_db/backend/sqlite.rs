@@ -7,7 +7,7 @@ use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
 use wherror::Error;
 
-use crate::notes::{NoteDb, NoteDbError};
+use super::super::{NoteDb, NoteDbError};
 
 #[derive(Debug, Error)]
 pub enum SqliteNoteDbError {
@@ -24,11 +24,6 @@ pub struct SqliteNoteDb {
     pool: SqlitePool,
 }
 
-/// Connects to the `SQLite` database and runs migrations.
-///
-/// # Errors
-///
-/// Returns an error if the database connection fails or migrations cannot be run.
 pub async fn connect_and_migrate(database_url: &str) -> Result<SqlitePool, Report<SqliteNoteDbError>> {
     let options = SqliteConnectOptions::from_str(database_url)
         .map_err(|_| Report::new(SqliteNoteDbError::Connect))?
@@ -51,11 +46,6 @@ impl SqliteNoteDb {
         &self.pool
     }
 
-    /// Creates a new `SQLite` note database connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database connection fails or migrations cannot be run.
     pub async fn new(database_url: &str) -> Result<Self, Report<SqliteNoteDbError>> {
         let pool = connect_and_migrate(database_url).await?;
         Ok(Self { pool })
@@ -181,111 +171,90 @@ mod tests {
 
     #[tokio::test]
     async fn get_or_create_file_path_creates_new_path() {
-        // Given a new database and a file path.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
 
-        // When getting or creating the file path.
         let id = db.get_or_create_file_path(path).await.unwrap();
 
-        // Then a valid ID is returned.
         assert!(id > 0);
     }
 
     #[tokio::test]
     async fn get_or_create_file_path_returns_same_id_for_same_path() {
-        // Given a database with a registered file path.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
 
-        // When getting the file path twice.
         let id1 = db.get_or_create_file_path(path).await.unwrap();
         let id2 = db.get_or_create_file_path(path).await.unwrap();
 
-        // Then both calls return the same ID.
         assert_eq!(id1, id2);
     }
 
     #[tokio::test]
     async fn get_or_create_file_path_returns_different_ids_for_different_paths() {
-        // Given a database.
         let db = create_test_db().await;
         let temp1 = create_temp_file();
         let temp2 = create_temp_file();
         let path1 = temp1.path().to_str().unwrap();
         let path2 = temp2.path().to_str().unwrap();
 
-        // When registering two different file paths.
         let id1 = db.get_or_create_file_path(path1).await.unwrap();
         let id2 = db.get_or_create_file_path(path2).await.unwrap();
 
-        // Then each path gets a unique ID.
         assert_ne!(id1, id2);
     }
 
     #[tokio::test]
     async fn get_note_returns_none_when_no_note_exists() {
-        // Given a file path with no associated note.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
 
-        // When fetching the note.
         let result = db.get_note(file_path_id).await.unwrap();
 
-        // Then no note is found.
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn get_note_returns_content_when_note_exists() {
-        // Given a file path with an existing note.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
         db.upsert_note(file_path_id, "test content").await.unwrap();
 
-        // When fetching the note.
         let result = db.get_note(file_path_id).await.unwrap();
 
-        // Then the note content is returned.
         assert_eq!(result, Some("test content".to_string()));
     }
 
     #[tokio::test]
     async fn upsert_note_inserts_new_note() {
-        // Given a file path with no existing note.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
 
-        // When upserting a new note.
         db.upsert_note(file_path_id, "new note").await.unwrap();
         let result = db.get_note(file_path_id).await.unwrap();
 
-        // Then the note is created.
         assert_eq!(result, Some("new note".to_string()));
     }
 
     #[tokio::test]
     async fn upsert_note_updates_existing_note() {
-        // Given a file path with an existing note.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
         db.upsert_note(file_path_id, "original content").await.unwrap();
 
-        // When upserting updated content.
         db.upsert_note(file_path_id, "updated content").await.unwrap();
         let result = db.get_note(file_path_id).await.unwrap();
 
-        // Then the note is updated.
         assert_eq!(result, Some("updated content".to_string()));
     }
 
@@ -296,52 +265,43 @@ mod tests {
     #[case::unicode("Hello 世界 🌍")]
     #[tokio::test]
     async fn upsert_note_handles_various_content(#[case] content: &str) {
-        // Given a file path.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
 
-        // When upserting various content types.
         db.upsert_note(file_path_id, content).await.unwrap();
         let result = db.get_note(file_path_id).await.unwrap();
 
-        // Then the content is stored and retrieved correctly.
         assert_eq!(result, Some(content.to_string()));
     }
 
     #[tokio::test]
     async fn full_workflow_create_path_and_note() {
-        // Given a new database and file.
         let db = create_test_db().await;
         let temp = create_temp_file();
         let path = temp.path().to_str().unwrap();
 
-        // When creating a path and adding a note.
         let file_path_id = db.get_or_create_file_path(path).await.unwrap();
         db.upsert_note(file_path_id, "my note content").await.unwrap();
         let note = db.get_note(file_path_id).await.unwrap();
 
-        // Then the workflow completes successfully.
         assert_eq!(note, Some("my note content".to_string()));
     }
 
     #[tokio::test]
     async fn multiple_file_paths_with_separate_notes() {
-        // Given two file paths.
         let db = create_test_db().await;
         let temp1 = create_temp_file();
         let temp2 = create_temp_file();
         let path1 = temp1.path().to_str().unwrap();
         let path2 = temp2.path().to_str().unwrap();
 
-        // When adding notes to each path.
         let id1 = db.get_or_create_file_path(path1).await.unwrap();
         let id2 = db.get_or_create_file_path(path2).await.unwrap();
         db.upsert_note(id1, "note for file 1").await.unwrap();
         db.upsert_note(id2, "note for file 2").await.unwrap();
 
-        // Then each path has its own note.
         let note1 = db.get_note(id1).await.unwrap();
         let note2 = db.get_note(id2).await.unwrap();
         assert_eq!(note1, Some("note for file 1".to_string()));

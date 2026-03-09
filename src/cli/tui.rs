@@ -20,10 +20,9 @@ use crate::{
     config::{load, Config},
     feat::media_query::{CachedMediaBackend, FfprobeBackend, MediaQuery, MediaQueryBackend},
     feat::mpv::MpvipcBackend,
-    notes::{Editor, NoteDb, PathResolver, SystemServicesHandle},
+    feat::{sources::SourceDb, ExternalEditor, NoteDb, PathResolver},
     playlist::{PlaylistData, PlaylistStorage, PlaylistStorageBackend, TomlBackend},
     services::Services,
-    sources::SourceDb,
     ui,
 };
 
@@ -67,12 +66,12 @@ pub fn run_tui(
     let media_backend: Arc<dyn MediaQueryBackend> =
         Arc::new(CachedMediaBackend::new(durations, ffprobe_backend));
 
-    let notes_handle = tokio::runtime::Runtime::new()
+    let core_services = tokio::runtime::Runtime::new()
         .change_context(RunError)?
-        .block_on(SystemServicesHandle::new(&db_path.to_string_lossy()))
+        .block_on(Services::new(&db_path.to_string_lossy()))
         .change_context(RunError)?;
 
-    let services = build_services(&playlist, &socket, media_backend, notes_handle);
+    let services = build_services(&playlist, &socket, media_backend, core_services);
 
     enable_raw_mode().change_context(RunError)?;
     let mut stdout = std::io::stdout();
@@ -142,7 +141,7 @@ fn build_services(
     playlist: &Path,
     socket: &Path,
     media_backend: Arc<dyn MediaQueryBackend>,
-    notes: SystemServicesHandle,
+    core: Services,
 ) -> Services {
     use crate::{
         feat::launcher::{FileLauncher, LauncherService},
@@ -159,7 +158,10 @@ fn build_services(
         storage: PlaylistStorage::new(storage_backend),
         mpv_launcher: MpvLauncherService::new(Arc::new(RealMpvLauncher)),
         file_launcher: LauncherService::new(Arc::new(FileLauncher::new())),
-        notes,
+        db: core.db,
+        editor: core.editor,
+        path_resolver: core.path_resolver,
+        sources: core.sources,
     }
 }
 
@@ -305,37 +307,37 @@ fn run_app(
 }
 
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let notes = &app.services.notes;
+    let services = &app.services;
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
-        let resolved = notes
+        let resolved = services
             .path_resolver
             .resolve(path)
             .await
             .map_err(|e| format!("Path resolution failed: {e:?}"))?;
 
         let path_str = resolved.to_string_lossy();
-        let file_path_id = notes
+        let file_path_id = services
             .db
             .get_or_create_file_path(&path_str)
             .await
             .map_err(|e| format!("Database error: {e:?}"))?;
 
-        let existing_note = notes
+        let existing_note = services
             .db
             .get_note(file_path_id)
             .await
             .map_err(|e| format!("Database error: {e:?}"))?;
 
         let initial_content = existing_note.unwrap_or_default();
-        if let Some(new_content) = notes
+        if let Some(new_content) = services
             .editor
             .open(&initial_content)
             .await
             .map_err(|e| format!("Editor error: {e:?}"))?
         {
-            notes
+            services
                 .db
                 .upsert_note(file_path_id, &new_content)
                 .await
@@ -347,11 +349,11 @@ fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
 }
 
 fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
-    let notes = &app.services.notes;
+    let services = &app.services;
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
-        let all_notes = notes
+        let all_notes = services
             .db
             .get_all_notes_with_paths()
             .await
@@ -416,24 +418,24 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
 }
 
 fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let notes = &app.services.notes;
+    let services = &app.services;
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
-        let resolved = notes
+        let resolved = services
             .path_resolver
             .resolve(path)
             .await
             .map_err(|e| format!("Path resolution failed: {e:?}"))?;
 
         let path_str = resolved.to_string_lossy();
-        let file_path_id = notes
+        let file_path_id = services
             .db
             .get_or_create_file_path(&path_str)
             .await
             .map_err(|e| format!("Database error: {e:?}"))?;
 
-        let existing = notes
+        let existing = services
             .sources
             .get_sources(file_path_id)
             .await
@@ -444,14 +446,14 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
             .collect::<Vec<_>>()
             .join("\n");
 
-        if let Some(new_content) = notes
+        if let Some(new_content) = services
             .editor
             .open(&initial_content)
             .await
             .map_err(|e| format!("Editor error: {e:?}"))?
         {
             let urls: Vec<String> = new_content.lines().map(ToString::to_string).collect();
-            notes
+            services
                 .sources
                 .set_sources(file_path_id, &urls)
                 .await
@@ -473,7 +475,7 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
     let output = rt
         .block_on(crate::feat::generate_show_notes(
             &playlist_data,
-            &app.services.notes.sources,
+            &app.services.sources,
             format,
         ))
         .map_err(|e| format!("Generation failed: {e:?}"))?;

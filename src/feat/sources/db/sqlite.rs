@@ -5,7 +5,7 @@ use error_stack::Report;
 use sqlx::SqlitePool;
 use wherror::Error;
 
-use crate::sources::{Source, SourceDb, SourceDbError};
+use crate::feat::sources::{Source, SourceDb, SourceDbError};
 
 #[derive(Debug, Error)]
 pub enum SqliteSourceDbError {
@@ -119,8 +119,8 @@ impl SourceDb for SqliteSourceDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::notes::db::sqlite::SqliteNoteDb;
-    use crate::notes::NoteDb;
+    use crate::feat::note_db::SqliteNoteDb;
+    use crate::feat::NoteDb;
     use tempfile::NamedTempFile;
 
     async fn create_test_db() -> (SqliteSourceDb, SqliteNoteDb) {

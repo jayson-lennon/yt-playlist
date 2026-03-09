@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use derive_more::Debug;
 use error_stack::Report;
 
-use crate::notes::{NoteDb, NoteDbError};
+use super::{NoteDb, NoteDbError};
 
 pub mod sqlite;
 

@@ -1,12 +1,14 @@
+pub mod format;
+
 use std::collections::HashMap;
 
 use error_stack::{Report, ResultExt};
 use wherror::Error;
 
 use crate::{
-    format::{FormatRegistry, ShowNotesEntry},
+    feat::generate_show_notes::format::{FormatRegistry, ShowNotesEntry},
     playlist::PlaylistData,
-    sources::{Source, SourceDb},
+    feat::sources::{Source, SourceDb},
 };
 
 #[derive(Debug, Error)]

@@ -1,4 +1,4 @@
-use crate::format::{ShowNotesEntry, ShowNotesFormat};
+use super::{ShowNotesEntry, ShowNotesFormat};
 
 pub struct PlainFormat;
 

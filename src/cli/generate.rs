@@ -4,8 +4,8 @@ use error_stack::{Report, ResultExt};
 
 use crate::{
     feat::generate_show_notes,
-    notes::SystemServicesHandle,
     playlist::{PlaylistStorage, PlaylistStorageBackend, TomlBackend},
+    services::Services,
 };
 
 use super::RunError;
@@ -30,7 +30,7 @@ pub fn run_generate(
 
     let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async {
-        let services = SystemServicesHandle::new(&db_path.to_string_lossy())
+        let services = Services::new(&db_path.to_string_lossy())
             .await
             .change_context(RunError)?;
 
