@@ -37,8 +37,7 @@ build() {
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR="$_builddir/target"
     # needed if using sqlx+sqlite
-    # CFLAGS+=" -ffat-lto-objects" cargo build --frozen --release --all-features
-    cargo build --frozen --release --all-features
+    CFLAGS+=" -ffat-lto-objects" cargo build --frozen --release --all-features
 }
 
 check() {
