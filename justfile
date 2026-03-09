@@ -12,6 +12,9 @@ clean:
 coverage:
   cargo llvm-cov --lcov --output-path coverage.lcov
 
+coverage-report:
+  cargo llvm-cov report --html
+
 debt: coverage
   debtmap analyze . --lcov coverage.lcov
 
