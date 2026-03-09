@@ -5,7 +5,7 @@ use crate::ui::{
 };
 
 pub struct TuiState {
-    pub pending_key: Option<char>,
+    pub pending_keys: Vec<char>,
     pub playlist_pane: PlaylistPane,
     pub library_pane: LibraryPane,
     pub focused_pane: Pane,
@@ -20,7 +20,7 @@ pub struct TuiState {
 impl TuiState {
     pub fn new() -> Self {
         Self {
-            pending_key: None,
+            pending_keys: Vec::new(),
             playlist_pane: PlaylistPane::new(),
             library_pane: LibraryPane::new(),
             focused_pane: Pane::Playlist,
@@ -288,7 +288,7 @@ mod tests {
         let state = TuiState::new();
 
         // Then defaults are set.
-        assert!(state.pending_key.is_none());
+        assert!(state.pending_keys.is_empty());
         assert!(state.playlist_pane.items.is_empty());
         assert!(state.library_pane.items.is_empty());
         assert_eq!(state.focused_pane, Pane::Playlist);

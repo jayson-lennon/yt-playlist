@@ -1,4 +1,4 @@
-use crate::keymap::{KeyBinding, KeyCategory, Keymap, PrefixKeyBinding};
+use crate::keymap::{KeyBinding, KeyCategory, Keymap};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -35,7 +35,7 @@ impl Default for WhichKeyConfig {
 pub struct WhichKey {
     pub active: bool,
     pub config: WhichKeyConfig,
-    pub pending_prefix: Option<char>,
+    pub pending_keys: Vec<char>,
 }
 
 struct ColumnData<'a> {
@@ -47,21 +47,21 @@ struct ColumnData<'a> {
 #[derive(Debug, Clone)]
 enum DisplayItem<'a> {
     Binding(&'a KeyBinding),
-    Prefix { key: char, description: &'a str },
+    Sequence { key: char, description: String },
 }
 
 impl DisplayItem<'_> {
     fn key_display(&self) -> String {
         match self {
             DisplayItem::Binding(b) => b.key_display(),
-            DisplayItem::Prefix { key, .. } => key.to_string(),
+            DisplayItem::Sequence { key, .. } => key.to_string(),
         }
     }
 
     fn description(&self) -> &str {
         match self {
             DisplayItem::Binding(b) => b.description,
-            DisplayItem::Prefix { description, .. } => description,
+            DisplayItem::Sequence { description, .. } => description,
         }
     }
 }
@@ -77,7 +77,7 @@ impl WhichKey {
         Self {
             active: false,
             config,
-            pending_prefix: None,
+            pending_keys: Vec::new(),
         }
     }
 
@@ -87,44 +87,62 @@ impl WhichKey {
 
     pub fn dismiss(&mut self) {
         self.active = false;
-        self.pending_prefix = None;
+        self.pending_keys.clear();
     }
 
-    pub fn show_followup(&mut self, prefix: char) {
+    pub fn push_key(&mut self, key: char) {
         self.active = true;
-        self.pending_prefix = Some(prefix);
+        self.pending_keys.push(key);
+    }
+
+    pub fn pop_key(&mut self) -> bool {
+        self.pending_keys.pop().is_some()
+    }
+
+    pub fn is_pending(&self) -> bool {
+        !self.pending_keys.is_empty()
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn render(&self, frame: &mut Frame, keymap: &Keymap, pane: Pane) {
-        if let Some(prefix) = self.pending_prefix {
-            if let Some(prefix_binding) = keymap.get_prefix_binding(prefix) {
-                self.render_followup(frame, prefix_binding);
-            }
+        if self.is_pending() {
+            self.render_sequence(frame, keymap);
         } else {
             self.render_main(frame, keymap, pane);
         }
     }
 
+    fn format_path(&self) -> String {
+        self.pending_keys
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(" > ")
+    }
+
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    fn render_followup(&self, frame: &mut Frame, prefix_binding: &PrefixKeyBinding) {
+    fn render_sequence(&self, frame: &mut Frame, keymap: &Keymap) {
+        let children = keymap.get_children_at_path(&self.pending_keys);
+
+        let items: Vec<(char, &str)> = match children {
+            Some(children) => children
+                .iter()
+                .map(|c| (c.key, c.node.description()))
+                .collect(),
+            None => return,
+        };
+
+        if items.is_empty() {
+            return;
+        }
+
         let max_height = self
             .config
             .max_height
             .min((f32::from(frame.area().height) * 0.3).ceil() as u16);
 
-        let max_key_width = prefix_binding
-            .followups
-            .iter()
-            .map(|_| 1)
-            .max()
-            .unwrap_or(1);
-        let max_desc_width = prefix_binding
-            .followups
-            .iter()
-            .map(|f| f.description.len())
-            .max()
-            .unwrap_or(10);
+        let max_key_width = items.iter().map(|(k, _)| k.len_utf8()).max().unwrap_or(1);
+        let max_desc_width = items.iter().map(|(_, d)| d.len()).max().unwrap_or(10);
 
         let content_width = max_key_width + 1 + max_desc_width;
         #[allow(clippy::cast_possible_truncation)]
@@ -150,7 +168,7 @@ impl WhichKey {
 
         frame.render_widget(Clear, popup_area);
 
-        let title = format!(" {} ", prefix_binding.description);
+        let title = format!(" {} ", self.format_path());
         let block = Block::default()
             .title(title.as_str())
             .borders(Borders::ALL)
@@ -160,16 +178,16 @@ impl WhichKey {
         frame.render_widget(block, popup_area);
 
         let mut y = inner_area.y;
-        for followup in &prefix_binding.followups {
+        for (key, desc) in &items {
             if y >= inner_area.bottom() {
                 break;
             }
 
             let key_span = Span::styled(
-                format!("{:>width$}", followup.key, width = max_key_width),
+                format!("{:>width$}", key, width = max_key_width),
                 Style::default().fg(Color::Cyan),
             );
-            let desc_span = Span::raw(format!(" {}", followup.description));
+            let desc_span = Span::raw(format!(" {}", desc));
             let line = Line::from(vec![key_span, desc_span]);
             let para = Paragraph::new(line);
             frame.render_widget(para, Rect::new(inner_area.x, y, inner_area.width, 1));
@@ -224,21 +242,21 @@ impl WhichKey {
             }
         }
 
-        for prefix in keymap.get_prefix_bindings() {
+        for child in keymap.get_sequence_bindings() {
             if let Some((_, items)) = categories
                 .iter_mut()
                 .find(|(cat, _)| *cat == KeyCategory::General)
             {
-                items.push(DisplayItem::Prefix {
-                    key: prefix.prefix,
-                    description: prefix.description,
+                items.push(DisplayItem::Sequence {
+                    key: child.key,
+                    description: child.node.description().to_string(),
                 });
             } else if categories.is_empty() {
                 categories.push((
                     KeyCategory::General,
-                    vec![DisplayItem::Prefix {
-                        key: prefix.prefix,
-                        description: prefix.description,
+                    vec![DisplayItem::Sequence {
+                        key: child.key,
+                        description: child.node.description().to_string(),
                     }],
                 ));
             }

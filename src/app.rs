@@ -208,7 +208,7 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
             self.tui_state.status_message = None;
-            if self.tui_state.which_key.active && self.tui_state.which_key.pending_prefix.is_none()
+            if self.tui_state.which_key.active && !self.tui_state.which_key.is_pending()
             {
                 self.tui_state.which_key.dismiss();
                 return;
@@ -276,27 +276,48 @@ impl App {
                 return;
             }
 
-            if let KeyCode::Char(c) = key.code {
-                if let Some(prefix) = self.tui_state.pending_key {
-                    self.tui_state.pending_key = None;
-                    self.tui_state.which_key.dismiss();
-                    if let Some(prefix_binding) = self.keymap.get_prefix_binding(prefix) {
-                        if let Some(followup) = prefix_binding.followups.iter().find(|f| f.key == c)
-                        {
-                            self.execute_action(followup.action);
-                            return;
+            if self.tui_state.which_key.is_pending() {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.tui_state.which_key.dismiss();
+                        self.tui_state.pending_keys.clear();
+                    }
+                    KeyCode::Backspace => {
+                        self.tui_state.which_key.pop_key();
+                        self.tui_state.pending_keys.pop();
+                        if !self.tui_state.which_key.is_pending() {
+                            self.tui_state.which_key.dismiss();
                         }
                     }
-                } else if self.keymap.get_prefix_binding(c).is_some() {
-                    self.tui_state.pending_key = Some(c);
-                    self.tui_state.which_key.show_followup(c);
-                    return;
+                    KeyCode::Char(c) => {
+                        self.tui_state.pending_keys.push(c);
+                        if let Some(node) = self.keymap.get_node_at_path(&self.tui_state.pending_keys) {
+                            match node {
+                                crate::keymap::KeyNode::Leaf { action, .. } => {
+                                    self.tui_state.which_key.dismiss();
+                                    self.tui_state.pending_keys.clear();
+                                    self.execute_action(*action);
+                                }
+                                crate::keymap::KeyNode::Branch { .. } => {
+                                    self.tui_state.which_key.push_key(c);
+                                }
+                            }
+                        } else {
+                            self.tui_state.which_key.dismiss();
+                            self.tui_state.pending_keys.clear();
+                        }
+                    }
+                    _ => {}
                 }
+                return;
             }
 
-            if self.tui_state.pending_key.is_some() {
-                self.tui_state.pending_key = None;
-                self.tui_state.which_key.dismiss();
+            if let KeyCode::Char(c) = key.code {
+                if self.keymap.is_prefix_key(c) {
+                    self.tui_state.pending_keys.push(c);
+                    self.tui_state.which_key.push_key(c);
+                    return;
+                }
             }
 
             if let Some(action) =
@@ -1436,31 +1457,26 @@ mod tests {
 
     #[test]
     fn g_key_sets_pending_and_shows_followup() {
-        // Given an app.
         let mut app = TestAppBuilder::new().build();
-        assert!(app.tui_state.pending_key.is_none());
+        assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
 
-        // When pressing 'g' key.
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('g'),
             KeyModifiers::empty(),
         )));
 
-        // Then pending_key is set and which_key shows followup.
-        assert_eq!(app.tui_state.pending_key, Some('g'));
+        assert_eq!(app.tui_state.pending_keys, vec!['g']);
         assert!(app.tui_state.which_key.active);
-        assert_eq!(app.tui_state.which_key.pending_prefix, Some('g'));
+        assert_eq!(app.tui_state.which_key.pending_keys, vec!['g']);
     }
 
     #[test]
     fn gm_keys_launches_mpv() {
-        // Given an app with mpv not running.
         let mut app = TestAppBuilder::new()
             .mpv_launcher(FakeMpvLauncher::new().running(false))
             .build();
 
-        // When pressing 'g' then 'm'.
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('g'),
             KeyModifiers::empty(),
@@ -1470,63 +1486,54 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        // Then mpv is launched and popup is dismissed.
         assert!(app
             .tui_state
             .status_message
             .unwrap()
             .contains("MPV launched"));
-        assert!(app.tui_state.pending_key.is_none());
+        assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
 
     #[test]
     fn g_then_invalid_key_dismisses_popup() {
-        // Given an app with 'g' pending.
         let mut app = TestAppBuilder::new().build();
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('g'),
             KeyModifiers::empty(),
         )));
-        assert_eq!(app.tui_state.pending_key, Some('g'));
+        assert_eq!(app.tui_state.pending_keys, vec!['g']);
 
-        // When pressing a non-followup key.
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('x'),
             KeyModifiers::empty(),
         )));
 
-        // Then popup is dismissed without action.
-        assert!(app.tui_state.pending_key.is_none());
+        assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
 
     #[test]
     fn a_key_sets_pending_and_shows_followup() {
-        // Given an app.
         let mut app = TestAppBuilder::new().build();
-        assert!(app.tui_state.pending_key.is_none());
+        assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
 
-        // When pressing 'a' key.
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('a'),
             KeyModifiers::empty(),
         )));
 
-        // Then pending_key is set and which_key shows followup.
-        assert_eq!(app.tui_state.pending_key, Some('a'));
+        assert_eq!(app.tui_state.pending_keys, vec!['a']);
         assert!(app.tui_state.which_key.active);
-        assert_eq!(app.tui_state.which_key.pending_prefix, Some('a'));
+        assert_eq!(app.tui_state.which_key.pending_keys, vec!['a']);
     }
 
     #[test]
     fn au_keys_starts_url_input() {
-        // Given an app.
         let mut app = TestAppBuilder::new().build();
         assert!(!app.tui_state.is_url_input());
 
-        // When pressing 'a' then 'u'.
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('a'),
             KeyModifiers::empty(),
@@ -1536,30 +1543,26 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        // Then url input is active and popup is dismissed.
         assert!(app.tui_state.is_url_input());
-        assert!(app.tui_state.pending_key.is_none());
+        assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
 
     #[test]
     fn a_then_invalid_key_dismisses_popup() {
-        // Given an app with 'a' pending.
         let mut app = TestAppBuilder::new().build();
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('a'),
             KeyModifiers::empty(),
         )));
-        assert_eq!(app.tui_state.pending_key, Some('a'));
+        assert_eq!(app.tui_state.pending_keys, vec!['a']);
 
-        // When pressing a non-followup key.
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('x'),
             KeyModifiers::empty(),
         )));
 
-        // Then popup is dismissed without action.
-        assert!(app.tui_state.pending_key.is_none());
+        assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
         assert!(!app.tui_state.is_url_input());
     }
