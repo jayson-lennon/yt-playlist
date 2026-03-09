@@ -5,3 +5,4 @@ shownotes.toml
 *.zst
 /pkg
 coverage.lcov
+debt.json
