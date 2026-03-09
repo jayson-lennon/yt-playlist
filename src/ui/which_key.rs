@@ -1,4 +1,4 @@
-use crate::keymap::{KeyBinding, KeyCategory, Keymap};
+use crate::keymap::{Key, KeyCategory, Keymap, LeafBinding};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -35,7 +35,7 @@ impl Default for WhichKeyConfig {
 pub struct WhichKey {
     pub active: bool,
     pub config: WhichKeyConfig,
-    pub pending_keys: Vec<char>,
+    pub pending_keys: Vec<Key>,
 }
 
 struct ColumnData<'a> {
@@ -46,15 +46,15 @@ struct ColumnData<'a> {
 
 #[derive(Debug, Clone)]
 enum DisplayItem<'a> {
-    Binding(&'a KeyBinding),
-    Sequence { key: char, description: String },
+    Binding(&'a LeafBinding),
+    Sequence { key: Key, description: String },
 }
 
 impl DisplayItem<'_> {
     fn key_display(&self) -> String {
         match self {
-            DisplayItem::Binding(b) => b.key_display(),
-            DisplayItem::Sequence { key, .. } => key.to_string(),
+            DisplayItem::Binding(b) => b.key.display(),
+            DisplayItem::Sequence { key, .. } => key.display(),
         }
     }
 
@@ -90,7 +90,7 @@ impl WhichKey {
         self.pending_keys.clear();
     }
 
-    pub fn push_key(&mut self, key: char) {
+    pub fn push_key(&mut self, key: Key) {
         self.active = true;
         self.pending_keys.push(key);
     }
@@ -115,7 +115,7 @@ impl WhichKey {
     fn format_path(&self) -> String {
         self.pending_keys
             .iter()
-            .map(|c| c.to_string())
+            .map(|k| k.display())
             .collect::<Vec<_>>()
             .join(" > ")
     }
@@ -124,7 +124,7 @@ impl WhichKey {
     fn render_sequence(&self, frame: &mut Frame, keymap: &Keymap) {
         let children = keymap.get_children_at_path(&self.pending_keys);
 
-        let items: Vec<(char, &str)> = match children {
+        let items: Vec<(Key, &str)> = match children {
             Some(children) => children
                 .iter()
                 .map(|c| (c.key, c.node.description()))
@@ -141,7 +141,11 @@ impl WhichKey {
             .max_height
             .min((f32::from(frame.area().height) * 0.3).ceil() as u16);
 
-        let max_key_width = items.iter().map(|(k, _)| k.len_utf8()).max().unwrap_or(1);
+        let max_key_width = items
+            .iter()
+            .map(|(k, _)| k.display().len())
+            .max()
+            .unwrap_or(1);
         let max_desc_width = items.iter().map(|(_, d)| d.len()).max().unwrap_or(10);
 
         let content_width = max_key_width + 1 + max_desc_width;
@@ -183,8 +187,9 @@ impl WhichKey {
                 break;
             }
 
+            let key_display = key.display();
             let key_span = Span::styled(
-                format!("{:>width$}", key, width = max_key_width),
+                format!("{:>width$}", key_display, width = max_key_width),
                 Style::default().fg(Color::Cyan),
             );
             let desc_span = Span::raw(format!(" {}", desc));
@@ -226,7 +231,7 @@ impl WhichKey {
     }
 
     fn group_by_category<'a>(
-        bindings: &[&'a KeyBinding],
+        bindings: &'a [LeafBinding],
         keymap: &'a Keymap,
     ) -> Vec<(KeyCategory, Vec<DisplayItem<'a>>)> {
         let mut categories: Vec<(KeyCategory, Vec<DisplayItem<'a>>)> = Vec::new();
@@ -242,23 +247,29 @@ impl WhichKey {
             }
         }
 
-        for child in keymap.get_sequence_bindings() {
-            if let Some((_, items)) = categories
-                .iter_mut()
-                .find(|(cat, _)| *cat == KeyCategory::General)
-            {
-                items.push(DisplayItem::Sequence {
-                    key: child.key,
-                    description: child.node.description().to_string(),
-                });
-            } else if categories.is_empty() {
-                categories.push((
-                    KeyCategory::General,
-                    vec![DisplayItem::Sequence {
+        for child in keymap.get_bindings() {
+            if child.node.is_branch() {
+                if let Some((_, items)) = categories
+                    .iter_mut()
+                    .find(|(cat, _)| *cat == KeyCategory::General)
+                {
+                    items.push(DisplayItem::Sequence {
                         key: child.key,
                         description: child.node.description().to_string(),
-                    }],
-                ));
+                    });
+                } else if categories.is_empty()
+                    || !categories
+                        .iter()
+                        .any(|(cat, _)| *cat == KeyCategory::General)
+                {
+                    categories.push((
+                        KeyCategory::General,
+                        vec![DisplayItem::Sequence {
+                            key: child.key,
+                            description: child.node.description().to_string(),
+                        }],
+                    ));
+                }
             }
         }
 

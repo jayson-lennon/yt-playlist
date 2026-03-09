@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
+use crate::keymap::Key;
 use crate::ui::{
     ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput, WhichKey,
 };
 
 pub struct TuiState {
-    pub pending_keys: Vec<char>,
+    pub pending_keys: Vec<Key>,
     pub playlist_pane: PlaylistPane,
     pub library_pane: LibraryPane,
     pub focused_pane: Pane,

@@ -277,45 +277,46 @@ impl App {
             }
 
             if self.tui_state.which_key.is_pending() {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.tui_state.which_key.dismiss();
-                        self.tui_state.pending_keys.clear();
-                    }
-                    KeyCode::Backspace => {
-                        self.tui_state.which_key.pop_key();
-                        self.tui_state.pending_keys.pop();
-                        if !self.tui_state.which_key.is_pending() {
-                            self.tui_state.which_key.dismiss();
-                        }
-                    }
-                    KeyCode::Char(c) => {
-                        self.tui_state.pending_keys.push(c);
-                        if let Some(node) = self.keymap.get_node_at_path(&self.tui_state.pending_keys) {
-                            match node {
-                                crate::keymap::KeyNode::Leaf { action, .. } => {
-                                    self.tui_state.which_key.dismiss();
-                                    self.tui_state.pending_keys.clear();
-                                    self.execute_action(*action);
-                                }
-                                crate::keymap::KeyNode::Branch { .. } => {
-                                    self.tui_state.which_key.push_key(c);
-                                }
-                            }
-                        } else {
+                if let Some(key) = crate::keymap::Key::from_keycode(key.code) {
+                    match key {
+                        crate::keymap::Key::Esc => {
                             self.tui_state.which_key.dismiss();
                             self.tui_state.pending_keys.clear();
                         }
+                        crate::keymap::Key::Backspace => {
+                            self.tui_state.which_key.pop_key();
+                            self.tui_state.pending_keys.pop();
+                            if !self.tui_state.which_key.is_pending() {
+                                self.tui_state.which_key.dismiss();
+                            }
+                        }
+                        _ => {
+                            self.tui_state.pending_keys.push(key);
+                            if let Some(node) = self.keymap.get_node_at_path(&self.tui_state.pending_keys) {
+                                match node {
+                                    crate::keymap::KeyNode::Leaf { action, .. } => {
+                                        self.tui_state.which_key.dismiss();
+                                        self.tui_state.pending_keys.clear();
+                                        self.execute_action(*action);
+                                    }
+                                    crate::keymap::KeyNode::Branch { .. } => {
+                                        self.tui_state.which_key.push_key(key);
+                                    }
+                                }
+                            } else {
+                                self.tui_state.which_key.dismiss();
+                                self.tui_state.pending_keys.clear();
+                            }
+                        }
                     }
-                    _ => {}
                 }
                 return;
             }
 
-            if let KeyCode::Char(c) = key.code {
-                if self.keymap.is_prefix_key(c) {
-                    self.tui_state.pending_keys.push(c);
-                    self.tui_state.which_key.push_key(c);
+            if let Some(key) = crate::keymap::Key::from_keycode(key.code) {
+                if self.keymap.is_prefix_key(key) {
+                    self.tui_state.pending_keys.push(key);
+                    self.tui_state.which_key.push_key(key);
                     return;
                 }
             }
@@ -1466,9 +1467,9 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        assert_eq!(app.tui_state.pending_keys, vec!['g']);
+        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('g')]);
         assert!(app.tui_state.which_key.active);
-        assert_eq!(app.tui_state.which_key.pending_keys, vec!['g']);
+        assert_eq!(app.tui_state.which_key.pending_keys, vec![crate::keymap::Key::Char('g')]);
     }
 
     #[test]
@@ -1502,7 +1503,7 @@ mod tests {
             KeyCode::Char('g'),
             KeyModifiers::empty(),
         )));
-        assert_eq!(app.tui_state.pending_keys, vec!['g']);
+        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('g')]);
 
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('x'),
@@ -1524,9 +1525,9 @@ mod tests {
             KeyModifiers::empty(),
         )));
 
-        assert_eq!(app.tui_state.pending_keys, vec!['a']);
+        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('a')]);
         assert!(app.tui_state.which_key.active);
-        assert_eq!(app.tui_state.which_key.pending_keys, vec!['a']);
+        assert_eq!(app.tui_state.which_key.pending_keys, vec![crate::keymap::Key::Char('a')]);
     }
 
     #[test]
@@ -1555,7 +1556,7 @@ mod tests {
             KeyCode::Char('a'),
             KeyModifiers::empty(),
         )));
-        assert_eq!(app.tui_state.pending_keys, vec!['a']);
+        assert_eq!(app.tui_state.pending_keys, vec![crate::keymap::Key::Char('a')]);
 
         app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
             KeyCode::Char('x'),
