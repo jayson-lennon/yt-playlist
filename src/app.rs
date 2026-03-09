@@ -8,29 +8,37 @@ use crate::keymap::{Action, Keymap};
 use crate::services::Services;
 use crate::tui::{Pane, PlaylistItem, TuiState, get_mime_type};
 
-pub struct App {
-    /// External service dependencies (mpv client, media query, playlist storage, mpv launcher, file launcher).
-    pub services: Services,
-    /// All UI state for the terminal interface (panes, focus, popups, filters, etc.).
-    pub tui_state: TuiState,
-    /// User configuration settings (file opener commands, video/audio extensions, etc.).
-    pub config: Config,
-    /// Flag signaling the main loop should exit.
-    pub should_quit: bool,
-    /// Path to file for which to open notes; signals the main loop to spawn an editor.
-    pub pending_notes_path: Option<PathBuf>,
-    /// Flag to trigger fuzzy notes search; signals the main loop to spawn skim.
-    pub pending_fuzzy_notes: bool,
-    /// Path to file for which to edit sources; signals the main loop to spawn an editor.
-    pub pending_sources_path: Option<PathBuf>,
-    /// Format for show notes generation; signals the main loop to generate and copy to clipboard.
-    pub pending_generate_notes: Option<String>,
-    /// Key bindings mapping key combinations to actions.
+pub struct Fork {
+    pub notes_path: Option<PathBuf>,
+    pub fuzzy_notes: bool,
+    pub sources_path: Option<PathBuf>,
+    pub generate_notes: Option<String>,
+}
+
+impl Default for Fork {
+    fn default() -> Self {
+        Self {
+            notes_path: None,
+            fuzzy_notes: false,
+            sources_path: None,
+            generate_notes: None,
+        }
+    }
+}
+
+pub struct RuntimeSettings {
     pub keymap: Keymap,
-    /// Path to mpv's IPC socket for remote control communication.
     pub socket_path: String,
-    /// Directory path for scanning library files.
     pub library_path: PathBuf,
+}
+
+pub struct App {
+    pub services: Services,
+    pub tui_state: TuiState,
+    pub config: Config,
+    pub should_quit: bool,
+    pub fork: Fork,
+    pub runtime: RuntimeSettings,
 }
 
 impl App {
@@ -45,13 +53,12 @@ impl App {
             tui_state: TuiState::new(),
             config,
             should_quit: false,
-            pending_notes_path: None,
-            pending_fuzzy_notes: false,
-            pending_sources_path: None,
-            pending_generate_notes: None,
-            keymap: Keymap::new(),
-            socket_path,
-            library_path,
+            fork: Fork::default(),
+            runtime: RuntimeSettings {
+                keymap: Keymap::new(),
+                socket_path,
+                library_path,
+            },
         };
         app.load_playlist();
         app.refresh_library();
@@ -182,7 +189,7 @@ impl App {
 
     pub fn refresh_library(&mut self) {
         let mut entries = Vec::new();
-        if let Ok(read_dir) = std::fs::read_dir(&self.library_path) {
+        if let Ok(read_dir) = std::fs::read_dir(&self.runtime.library_path) {
             for entry in read_dir.flatten() {
                 let path = entry.path();
                 if path.is_file() {
@@ -291,7 +298,7 @@ impl App {
                         _ => {
                             self.tui_state.pending_keys.push(key);
                             if let Some(node) =
-                                self.keymap.get_node_at_path(&self.tui_state.pending_keys)
+                                self.runtime.keymap.get_node_at_path(&self.tui_state.pending_keys)
                             {
                                 match node {
                                     crate::keymap::KeyNode::Leaf { action, .. } => {
@@ -314,7 +321,7 @@ impl App {
             }
 
             if let Some(key) = crate::keymap::Key::from_keycode(key.code) {
-                if self.keymap.is_prefix_key(key) {
+                if self.runtime.keymap.is_prefix_key(key) {
                     self.tui_state.pending_keys.push(key);
                     self.tui_state.which_key.push_key(key);
                     return;
@@ -322,7 +329,7 @@ impl App {
             }
 
             if let Some(action) =
-                self.keymap
+                self.runtime.keymap
                     .get_action(key.code, key.modifiers, self.tui_state.focused_pane)
             {
                 self.execute_action(action);
@@ -379,7 +386,7 @@ impl App {
             }
             Action::Notes => {
                 if let Some(item) = self.tui_state.get_selected_item() {
-                    self.pending_notes_path = Some(item.path.clone());
+                    self.fork.notes_path = Some(item.path.clone());
                 }
             }
             Action::ReorderUp => {
@@ -416,15 +423,15 @@ impl App {
                 self.delete_library_item();
             }
             Action::FuzzyNotes => {
-                self.pending_fuzzy_notes = true;
+                self.fork.fuzzy_notes = true;
             }
             Action::EditSources => {
                 if let Some(item) = self.tui_state.get_selected_item() {
-                    self.pending_sources_path = Some(item.path.clone());
+                    self.fork.sources_path = Some(item.path.clone());
                 }
             }
             Action::GenerateShowNotes(kind) => {
-                self.pending_generate_notes = Some(kind.as_str().to_string());
+                self.fork.generate_notes = Some(kind.as_str().to_string());
             }
         }
     }
@@ -507,7 +514,7 @@ impl App {
             match self
                 .services
                 .file_launcher
-                .launch(&item.path, cmd, &self.socket_path)
+                .launch(&item.path, cmd, &self.runtime.socket_path)
             {
                 Ok(result) => {
                     if result.used_default_opener {
@@ -555,10 +562,10 @@ impl App {
     }
 
     fn launch_mpv(&mut self) {
-        if self.services.mpv_launcher.is_running(&self.socket_path) {
+        if self.services.mpv_launcher.is_running(&self.runtime.socket_path) {
             self.tui_state.status_message = Some("MPV already running".to_string());
         } else {
-            match self.services.mpv_launcher.spawn(&self.socket_path) {
+            match self.services.mpv_launcher.spawn(&self.runtime.socket_path) {
                 Ok(()) => {
                     self.tui_state.status_message = Some("MPV launched".to_string());
                 }
@@ -746,13 +753,12 @@ mod tests {
                 tui_state: TuiState::new(),
                 config: Config::default(),
                 should_quit: false,
-                pending_notes_path: None,
-                pending_fuzzy_notes: false,
-                pending_sources_path: None,
-                pending_generate_notes: None,
-                keymap: Keymap::new(),
-                socket_path: String::from("/tmp/mpvsocket"),
-                library_path: self.library_path,
+                fork: Fork::default(),
+                runtime: RuntimeSettings {
+                    keymap: Keymap::new(),
+                    socket_path: String::from("/tmp/mpvsocket"),
+                    library_path: self.library_path,
+                },
             };
 
             for path in self.playlist_items {
@@ -1381,14 +1387,14 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("/path/to/video.mp4")])
             .build();
-        assert!(app.pending_notes_path.is_none());
+        assert!(app.fork.notes_path.is_none());
 
         // When executing Notes action.
         app.execute_action(Action::Notes);
 
         // Then pending notes path is set to the selected item's path.
         assert_eq!(
-            app.pending_notes_path,
+            app.fork.notes_path,
             Some(PathBuf::from("/path/to/video.mp4"))
         );
     }
@@ -1397,13 +1403,13 @@ mod tests {
     fn notes_does_nothing_when_no_selection() {
         // Given an app with no items selected and no pending notes path.
         let mut app = TestAppBuilder::new().build();
-        assert!(app.pending_notes_path.is_none());
+        assert!(app.fork.notes_path.is_none());
 
         // When executing Notes action.
         app.execute_action(Action::Notes);
 
         // Then pending notes path remains unset.
-        assert!(app.pending_notes_path.is_none());
+        assert!(app.fork.notes_path.is_none());
     }
 
     #[test]

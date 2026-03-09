@@ -186,7 +186,7 @@ fn run_app(
             terminal.clear().change_context(RunError)?;
             app.tui_state.needs_clear = false;
         }
-        let keymap = app.keymap.clone();
+        let keymap = app.runtime.keymap.clone();
         terminal
             .draw(|f| tui::render(f, &app.tui_state, &keymap))
             .change_context(RunError)?;
@@ -196,7 +196,7 @@ fn run_app(
             app.handle_event(event);
         }
 
-        if let Some(path) = app.pending_notes_path.take() {
+        if let Some(path) = app.fork.notes_path.take() {
             disable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
@@ -217,7 +217,7 @@ fn run_app(
             .change_context(RunError)?;
             terminal.hide_cursor().change_context(RunError)?;
             terminal.clear().change_context(RunError)?;
-            let keymap = app.keymap.clone();
+            let keymap = app.runtime.keymap.clone();
             terminal
                 .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
@@ -232,8 +232,8 @@ fn run_app(
             }
         }
 
-        if app.pending_fuzzy_notes {
-            app.pending_fuzzy_notes = false;
+        if app.fork.fuzzy_notes {
+            app.fork.fuzzy_notes = false;
             disable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
@@ -254,7 +254,7 @@ fn run_app(
             .change_context(RunError)?;
             terminal.hide_cursor().change_context(RunError)?;
             terminal.clear().change_context(RunError)?;
-            let keymap = app.keymap.clone();
+            let keymap = app.runtime.keymap.clone();
             terminal
                 .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
@@ -269,7 +269,7 @@ fn run_app(
             }
         }
 
-        if let Some(path) = app.pending_sources_path.take() {
+        if let Some(path) = app.fork.sources_path.take() {
             disable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
@@ -290,7 +290,7 @@ fn run_app(
             .change_context(RunError)?;
             terminal.hide_cursor().change_context(RunError)?;
             terminal.clear().change_context(RunError)?;
-            let keymap = app.keymap.clone();
+            let keymap = app.runtime.keymap.clone();
             terminal
                 .draw(|f| tui::render(f, &app.tui_state, &keymap))
                 .change_context(RunError)?;
@@ -306,7 +306,7 @@ fn run_app(
             }
         }
 
-        if let Some(format) = app.pending_generate_notes.take() {
+        if let Some(format) = app.fork.generate_notes.take() {
             let result = run_generate_notes(app, &format);
 
             match result {

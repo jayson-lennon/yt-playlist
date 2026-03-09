@@ -4,11 +4,11 @@ mod filter;
 mod library_pane;
 mod playlist_pane;
 mod rename;
-mod tui_state;
+mod state;
 mod url_input;
 mod which_key;
 
-pub use crate::{keymap::Keymap, tui::tui_state::TuiState};
+pub use crate::{keymap::Keymap, tui::state::TuiState};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
