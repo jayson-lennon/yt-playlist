@@ -148,24 +148,10 @@ enum SourcesCommands {
 }
 
 #[derive(Debug, wherror::Error)]
-pub enum AppError {
-    #[error("failed to initialize database")]
-    DbInit,
-    #[error("no file paths provided")]
-    NoPaths,
-    #[error("failed to resolve path")]
-    PathResolution,
-    #[error("database operation failed")]
-    Database,
-    #[error("editor operation failed")]
-    Editor,
-    #[error("fuzzy search failed")]
-    FuzzySearch,
-    #[error("symlink creation failed")]
-    Symlink,
-}
+#[error(debug)]
+pub struct RunError;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Report<RunError>> {
     Report::set_color_mode(ColorMode::None);
 
     let args = Args::parse();
@@ -185,15 +171,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn run_action_mpv(path: &Path, socket: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn run_action_mpv(path: &Path, socket: &Path) -> Result<(), Report<RunError>> {
     let backend = MpvipcBackend::new(socket);
-    backend.load_file(path)?;
+    backend.load_file(path).change_context(RunError)?;
     println!("Loaded: {}", path.display());
     Ok(())
 }
 
-fn run_notes_command(cmd: NotesCommands, db_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let rt = tokio::runtime::Runtime::new()?;
+fn run_notes_command(cmd: NotesCommands, db_path: &Path) -> Result<(), Report<RunError>> {
+    let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async { run_notes_command_async(cmd, db_path).await })
 }
 
@@ -201,18 +187,15 @@ fn run_notes_command(cmd: NotesCommands, db_path: &Path) -> Result<(), Box<dyn s
 async fn run_notes_command_async(
     cmd: NotesCommands,
     db_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Report<RunError>> {
     let services = SystemServicesHandle::new(&db_path.to_string_lossy())
         .await
-        .change_context(AppError::DbInit)?;
+        .change_context(RunError)?;
 
     match cmd {
         NotesCommands::Add { paths } => {
             if paths.is_empty() {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "no file paths provided",
-                )));
+                return Err(Report::new(RunError));
             }
 
             let mut resolved_paths = Vec::with_capacity(paths.len());
@@ -221,7 +204,7 @@ async fn run_notes_command_async(
                     .path_resolver
                     .resolve(&path)
                     .await
-                    .change_context(AppError::PathResolution)?;
+                    .change_context(RunError)?;
                 resolved_paths.push(resolved);
             }
 
@@ -232,32 +215,32 @@ async fn run_notes_command_async(
                     .db
                     .get_or_create_file_path(&path_str)
                     .await
-                    .change_context(AppError::Database)?;
+                    .change_context(RunError)?;
 
                 let existing_note = services
                     .db
                     .get_note(file_path_id)
                     .await
-                    .change_context(AppError::Database)?;
+                    .change_context(RunError)?;
 
                 let initial_content = existing_note.unwrap_or_default();
                 if let Some(new_content) = services
                     .editor
                     .open(&initial_content)
                     .await
-                    .change_context(AppError::Editor)?
+                    .change_context(RunError)?
                 {
                     services
                         .db
                         .upsert_note(file_path_id, &new_content)
                         .await
-                        .change_context(AppError::Database)?;
+                        .change_context(RunError)?;
                 }
             } else if let Some(new_content) = services
                 .editor
                 .open("")
                 .await
-                .change_context(AppError::Editor)?
+                .change_context(RunError)?
             {
                 for resolved_path in resolved_paths {
                     let path_str = resolved_path.to_string_lossy();
@@ -265,13 +248,13 @@ async fn run_notes_command_async(
                         .db
                         .get_or_create_file_path(&path_str)
                         .await
-                        .change_context(AppError::Database)?;
+                        .change_context(RunError)?;
 
                     let existing_note = services
                         .db
                         .get_note(file_path_id)
                         .await
-                        .change_context(AppError::Database)?;
+                        .change_context(RunError)?;
 
                     let final_content = match existing_note {
                         Some(existing) => format!("{existing}\n\n{new_content}"),
@@ -282,7 +265,7 @@ async fn run_notes_command_async(
                         .db
                         .upsert_note(file_path_id, &final_content)
                         .await
-                        .change_context(AppError::Database)?;
+                        .change_context(RunError)?;
                 }
             }
         }
@@ -291,9 +274,9 @@ async fn run_notes_command_async(
                 .db
                 .search_notes(&query)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
-            let cwd = std::env::current_dir().change_context(AppError::Symlink)?;
+            let cwd = std::env::current_dir().change_context(RunError)?;
 
             for path in &results {
                 println!("{path}");
@@ -314,7 +297,7 @@ async fn run_notes_command_async(
                 .db
                 .get_all_notes_with_paths()
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
             if notes.is_empty() {
                 return Ok(());
@@ -340,17 +323,17 @@ async fn run_notes_command_async(
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
-                .change_context(AppError::FuzzySearch)?;
+                .change_context(RunError)?;
 
             if let Some(mut stdin) = child.stdin.take() {
                 stdin
                     .write_all(input.as_bytes())
-                    .change_context(AppError::FuzzySearch)?;
+                    .change_context(RunError)?;
             }
 
             let output = child
                 .wait_with_output()
-                .change_context(AppError::FuzzySearch)?;
+                .change_context(RunError)?;
 
             let selected = String::from_utf8_lossy(&output.stdout);
             let selected_paths: Vec<&str> = selected
@@ -363,7 +346,7 @@ async fn run_notes_command_async(
             }
 
             if symlink {
-                let cwd = std::env::current_dir().change_context(AppError::Symlink)?;
+                let cwd = std::env::current_dir().change_context(RunError)?;
                 for path in &selected_paths {
                     let src = PathBuf::from(path);
                     match create_symlink_with_suffix(&src, &cwd) {
@@ -378,10 +361,10 @@ async fn run_notes_command_async(
     Ok(())
 }
 
-fn create_symlink_with_suffix(target: &Path, dest_dir: &Path) -> Result<PathBuf, Report<AppError>> {
+fn create_symlink_with_suffix(target: &Path, dest_dir: &Path) -> Result<PathBuf, Report<RunError>> {
     let basename = target
         .file_name()
-        .ok_or_else(|| Report::new(AppError::Symlink))?;
+        .ok_or_else(|| Report::new(RunError))?;
 
     let mut dest_path = dest_dir.join(basename);
     let mut suffix = 0;
@@ -390,7 +373,7 @@ fn create_symlink_with_suffix(target: &Path, dest_dir: &Path) -> Result<PathBuf,
         suffix += 1;
         let stem = target
             .file_stem()
-            .ok_or_else(|| Report::new(AppError::Symlink))?;
+            .ok_or_else(|| Report::new(RunError))?;
         let new_name = if let Some(ext) = target.extension() {
             format!(
                 "{}_{}.{}",
@@ -404,12 +387,12 @@ fn create_symlink_with_suffix(target: &Path, dest_dir: &Path) -> Result<PathBuf,
         dest_path = dest_dir.join(new_name);
     }
 
-    unix_fs::symlink(target, &dest_path).change_context(AppError::Symlink)?;
+    unix_fs::symlink(target, &dest_path).change_context(RunError)?;
     Ok(dest_path)
 }
 
-fn run_sources_command(cmd: SourcesCommands, db_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let rt = tokio::runtime::Runtime::new()?;
+fn run_sources_command(cmd: SourcesCommands, db_path: &Path) -> Result<(), Report<RunError>> {
+    let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async { run_sources_command_async(cmd, db_path).await })
 }
 
@@ -417,10 +400,10 @@ fn run_sources_command(cmd: SourcesCommands, db_path: &Path) -> Result<(), Box<d
 async fn run_sources_command_async(
     cmd: SourcesCommands,
     db_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Report<RunError>> {
     let services = SystemServicesHandle::new(&db_path.to_string_lossy())
         .await
-        .change_context(AppError::DbInit)?;
+        .change_context(RunError)?;
 
     match cmd {
         SourcesCommands::Add { path, url } => {
@@ -428,20 +411,20 @@ async fn run_sources_command_async(
                 .path_resolver
                 .resolve(&path)
                 .await
-                .change_context(AppError::PathResolution)?;
+                .change_context(RunError)?;
 
             let path_str = resolved.to_string_lossy();
             let file_path_id = services
                 .db
                 .get_or_create_file_path(&path_str)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
             let mut existing = services
                 .sources
                 .get_sources(file_path_id)
                 .await
-                .change_context(AppError::Database)?
+                .change_context(RunError)?
                 .into_iter()
                 .map(|s| s.source_url)
                 .collect::<Vec<_>>();
@@ -451,7 +434,7 @@ async fn run_sources_command_async(
                 .sources
                 .set_sources(file_path_id, &existing)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
             println!("Added source to: {}", path.display());
         }
@@ -460,20 +443,20 @@ async fn run_sources_command_async(
                 .path_resolver
                 .resolve(&path)
                 .await
-                .change_context(AppError::PathResolution)?;
+                .change_context(RunError)?;
 
             let path_str = resolved.to_string_lossy();
             let file_path_id = services
                 .db
                 .get_or_create_file_path(&path_str)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
             let sources = services
                 .sources
                 .get_sources(file_path_id)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
             if sources.is_empty() {
                 println!("No sources found for: {}", path.display());
@@ -488,20 +471,20 @@ async fn run_sources_command_async(
                 .path_resolver
                 .resolve(&path)
                 .await
-                .change_context(AppError::PathResolution)?;
+                .change_context(RunError)?;
 
             let path_str = resolved.to_string_lossy();
             let file_path_id = services
                 .db
                 .get_or_create_file_path(&path_str)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
 
             let existing = services
                 .sources
                 .get_sources(file_path_id)
                 .await
-                .change_context(AppError::Database)?;
+                .change_context(RunError)?;
             let initial_content = existing
                 .iter()
                 .map(|s| s.source_url.as_str())
@@ -512,14 +495,14 @@ async fn run_sources_command_async(
                 .editor
                 .open(&initial_content)
                 .await
-                .change_context(AppError::Editor)?
+                .change_context(RunError)?
             {
                 let urls: Vec<String> = new_content.lines().map(ToString::to_string).collect();
                 services
                     .sources
                     .set_sources(file_path_id, &urls)
                     .await
-                    .change_context(AppError::Database)?;
+                    .change_context(RunError)?;
                 println!("Updated sources for: {}", path.display());
             }
         }
@@ -532,17 +515,17 @@ fn run_generate(
     format: &str,
     playlist_path: &Path,
     db_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Report<RunError>> {
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
         Arc::new(TomlBackend::new(playlist_path.to_path_buf()));
     let playlist_storage = PlaylistStorage::new(storage_backend);
-    let playlist_data = playlist_storage.load()?;
+    let playlist_data = playlist_storage.load().change_context(RunError)?;
 
-    let rt = tokio::runtime::Runtime::new()?;
+    let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
     rt.block_on(async {
         let services = SystemServicesHandle::new(&db_path.to_string_lossy())
             .await
-            .change_context(AppError::DbInit)?;
+            .change_context(RunError)?;
 
         let paths: Vec<String> = playlist_data
             .playlist
@@ -554,12 +537,12 @@ fn run_generate(
             .sources
             .get_sources_for_paths(&paths)
             .await
-            .change_context(AppError::Database)?;
+            .change_context(RunError)?;
 
         let registry = shownotes::format::FormatRegistry::new();
         let formatter = registry
             .get(format)
-            .ok_or_else(|| format!("Unknown format: {format}. Available: {:?}", registry.available_formats()))?;
+            .ok_or_else(|| Report::new(RunError))?;
 
         let entries: Vec<shownotes::format::ShowNotesEntry> = playlist_data
             .playlist
@@ -602,19 +585,19 @@ fn run_tui(
     socket: PathBuf,
     db_path: &Path,
     library_path: PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let config = load()?;
+) -> Result<(), Report<RunError>> {
+    let config = load().change_context(RunError)?;
 
     let storage_backend: Arc<dyn PlaylistStorageBackend> =
         Arc::new(TomlBackend::new(playlist.clone()));
     let playlist_storage = PlaylistStorage::new(storage_backend.clone());
 
-    let playlist_data = playlist_storage.load()?;
+    let playlist_data = playlist_storage.load().change_context(RunError)?;
     let all_files = collect_all_files(&playlist_data, &config, &library_path);
     let ffprobe_backend: Arc<dyn MediaQueryBackend> = Arc::new(FfprobeBackend);
 
     let result =
-        analysis::analyze_files(&all_files, playlist_data.files, ffprobe_backend.as_ref())?;
+        analysis::analyze_files(&all_files, playlist_data.files, ffprobe_backend.as_ref()).change_context(RunError)?;
 
     let durations: std::collections::HashMap<PathBuf, std::time::Duration> = result
         .files
@@ -625,28 +608,30 @@ fn run_tui(
     let media_backend: Arc<dyn MediaQueryBackend> =
         Arc::new(CachedMediaBackend::new(durations, ffprobe_backend));
 
-    let notes_handle = tokio::runtime::Runtime::new()?
+    let notes_handle = tokio::runtime::Runtime::new()
+        .change_context(RunError)?
         .block_on(SystemServicesHandle::new(&db_path.to_string_lossy()))
-        .map_err(|e| format!("Failed to initialize notes database: {e:?}"))?;
+        .change_context(RunError)?;
 
     let services = build_services(&playlist, &socket, media_backend, notes_handle);
 
-    enable_raw_mode()?;
+    enable_raw_mode().change_context(RunError)?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).change_context(RunError)?;
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = Terminal::new(backend).change_context(RunError)?;
 
     let mut app = App::new(services, config, socket.to_string_lossy().into_owned(), library_path);
     let res = run_app(&mut terminal, &mut app);
 
-    disable_raw_mode()?;
+    disable_raw_mode().change_context(RunError)?;
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
+    )
+    .change_context(RunError)?;
+    terminal.show_cursor().change_context(RunError)?;
 
     if let Err(err) = res {
         eprintln!("Error: {err:?}");
@@ -718,41 +703,43 @@ fn build_services(
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Report<RunError>> {
     loop {
         if app.tui_state.needs_clear {
-            terminal.clear()?;
+            terminal.clear().change_context(RunError)?;
             app.tui_state.needs_clear = false;
         }
         let keymap = app.keymap.clone();
-        terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+        terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            let event = event::read()?;
+        if event::poll(std::time::Duration::from_millis(100)).change_context(RunError)? {
+            let event = event::read().change_context(RunError)?;
             app.handle_event(event);
         }
 
         if let Some(path) = app.pending_notes_path.take() {
-            disable_raw_mode()?;
+            disable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
                 LeaveAlternateScreen,
                 DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
+            )
+            .change_context(RunError)?;
+            terminal.show_cursor().change_context(RunError)?;
 
             let result = add_note_for_path(app, &path);
 
-            enable_raw_mode()?;
+            enable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
                 EnterAlternateScreen,
                 EnableMouseCapture
-            )?;
-            terminal.hide_cursor()?;
-            terminal.clear()?;
+            )
+            .change_context(RunError)?;
+            terminal.hide_cursor().change_context(RunError)?;
+            terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
 
             match result {
                 Ok(()) => {
@@ -766,26 +753,28 @@ fn run_app(
 
         if app.pending_fuzzy_notes {
             app.pending_fuzzy_notes = false;
-            disable_raw_mode()?;
+            disable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
                 LeaveAlternateScreen,
                 DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
+            )
+            .change_context(RunError)?;
+            terminal.show_cursor().change_context(RunError)?;
 
             let result = run_fuzzy_notes(app);
 
-            enable_raw_mode()?;
+            enable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
                 EnterAlternateScreen,
                 EnableMouseCapture
-            )?;
-            terminal.hide_cursor()?;
-            terminal.clear()?;
+            )
+            .change_context(RunError)?;
+            terminal.hide_cursor().change_context(RunError)?;
+            terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
 
             match result {
                 Ok(count) => {
@@ -798,26 +787,28 @@ fn run_app(
         }
 
         if let Some(path) = app.pending_sources_path.take() {
-            disable_raw_mode()?;
+            disable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
                 LeaveAlternateScreen,
                 DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
+            )
+            .change_context(RunError)?;
+            terminal.show_cursor().change_context(RunError)?;
 
             let result = edit_sources_for_path(app, &path);
 
-            enable_raw_mode()?;
+            enable_raw_mode().change_context(RunError)?;
             execute!(
                 terminal.backend_mut(),
                 EnterAlternateScreen,
                 EnableMouseCapture
-            )?;
-            terminal.hide_cursor()?;
-            terminal.clear()?;
+            )
+            .change_context(RunError)?;
+            terminal.hide_cursor().change_context(RunError)?;
+            terminal.clear().change_context(RunError)?;
             let keymap = app.keymap.clone();
-            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap))?;
+            terminal.draw(|f| ui::render(f, &app.tui_state, &keymap)).change_context(RunError)?;
 
             match result {
                 Ok(()) => {
