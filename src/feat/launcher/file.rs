@@ -1,69 +1,15 @@
 use std::{
+    borrow::Cow,
     path::Path,
     process::{Command, Stdio},
-    sync::Arc,
 };
 
-use derive_more::Debug;
 use error_stack::{Report, ResultExt};
-use wherror::Error;
 
-#[derive(Debug, Error)]
-#[error(debug)]
-pub struct LaunchError {
-    pub stderr: Option<String>,
-}
-
-pub struct LaunchResult {
-    pub used_default_opener: bool,
-}
-
-pub trait FileLauncherBackend: Send + Sync {
-    /// Returns the name identifier for this launcher implementation.
-    fn name(&self) -> &'static str;
-
-    /// Opens a file using either a custom shell command or the system's default application.
-    /// The command template supports `{{path}}` and `{{socket_path}}` placeholders.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be launched, either due to command
-    /// execution failure or if the command exits with a non-zero status.
-    fn launch(
-        &self,
-        path: &Path,
-        command: Option<&str>,
-        socket_path: &str,
-    ) -> Result<LaunchResult, Report<LaunchError>>;
-}
-
-#[derive(Debug, Clone)]
-pub struct FileLauncherService {
-    #[debug("backend<{}>", self.backend.name())]
-    backend: Arc<dyn FileLauncherBackend>,
-}
-
-impl FileLauncherService {
-    pub fn new(backend: Arc<dyn FileLauncherBackend>) -> Self {
-        Self { backend }
-    }
-
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be launched by the backend.
-    pub fn launch(
-        &self,
-        path: &Path,
-        command: Option<&str>,
-        socket_path: &str,
-    ) -> Result<LaunchResult, Report<LaunchError>> {
-        self.backend.launch(path, command, socket_path)
-    }
-}
+use super::{FileLauncherBackend, LaunchError, LaunchResult};
 
 #[derive(Debug, Clone)]
 pub struct FileLauncher {
-    #[debug(skip)]
     shell: String,
 }
 
@@ -96,7 +42,7 @@ impl FileLauncherBackend for FileLauncher {
         let escaped_path = shell_escape::escape(path_str.clone());
 
         if let Some(cmd) = command {
-            let socket_escaped = shell_escape::escape(std::borrow::Cow::Borrowed(socket_path));
+            let socket_escaped = shell_escape::escape(Cow::Borrowed(socket_path));
             let substituted = cmd
                 .replace("{{socket_path}}", &socket_escaped)
                 .replace("{{path}}", &escaped_path);
@@ -160,35 +106,23 @@ mod tests {
 
     #[test]
     fn file_launcher_uses_shell_from_env() {
-        // Given a file launcher.
         let launcher = FileLauncher::new();
-
-        // When checking the shell.
-        // Then it uses the SHELL env var or defaults to /bin/sh.
         assert!(!launcher.shell.is_empty());
     }
 
     #[test]
     fn launch_result_tracks_default_opener_usage() {
-        // Given a launch result with default opener used.
         let result = LaunchResult {
             used_default_opener: true,
         };
-
-        // When checking the flag.
-        // Then it indicates default opener was used.
         assert!(result.used_default_opener);
     }
 
     #[test]
     fn launch_result_tracks_custom_command_usage() {
-        // Given a launch result with custom command used.
         let result = LaunchResult {
             used_default_opener: false,
         };
-
-        // When checking the flag.
-        // Then it indicates default opener was not used.
         assert!(!result.used_default_opener);
     }
 
@@ -246,59 +180,39 @@ mod tests {
 
     #[test]
     fn fake_launcher_records_command() {
-        // Given a fake launcher.
         let launcher = FakeLauncher::new();
-
-        // When launching with a command.
         let _ = launcher.launch(
             &PathBuf::from("test.mp4"),
             Some("mpv {{path}}"),
             "/tmp/socket",
         );
-
-        // Then the command is recorded.
         assert_eq!(launcher.last_command(), Some("mpv {{path}}".to_string()));
     }
 
     #[test]
     fn fake_launcher_records_path() {
-        // Given a fake launcher.
         let launcher = FakeLauncher::new();
-
-        // When launching with a path.
         let _ = launcher.launch(
             &PathBuf::from("/video/test.mp4"),
             Some("mpv"),
             "/tmp/socket",
         );
-
-        // Then the path is recorded.
         assert_eq!(launcher.last_path(), Some(PathBuf::from("/video/test.mp4")));
     }
 
     #[test]
     fn fake_launcher_records_none_when_no_command() {
-        // Given a fake launcher.
         let launcher = FakeLauncher::new();
-
-        // When launching without a command.
         let _ = launcher.launch(&PathBuf::from("test.txt"), None, "/tmp/socket");
-
-        // Then no command is recorded.
         assert!(launcher.last_command().is_none());
     }
 
     #[test]
     fn fake_launcher_returns_used_default_flag() {
-        // Given a fake launcher configured to use default opener.
         let launcher = FakeLauncher::new().with_used_default(true);
-
-        // When launching.
         let result = launcher
             .launch(&PathBuf::from("test.txt"), None, "/tmp/socket")
             .unwrap();
-
-        // Then the result indicates default opener was used.
         assert!(result.used_default_opener);
     }
 }

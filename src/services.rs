@@ -26,6 +26,8 @@ pub struct Services {
 }
 
 impl Services {
+    /// # Errors
+    /// Returns an error if the database connection or migration fails.
     pub async fn new(db_path: &str) -> Result<Self, Report<SqliteNoteDbError>> {
         let note_db = Arc::new(SqliteNoteDb::new(db_path).await?);
         let source_db = Arc::new(SqliteSourceDb::new(note_db.pool().clone()));

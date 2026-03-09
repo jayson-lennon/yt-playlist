@@ -24,6 +24,8 @@ pub struct SqliteNoteDb {
     pool: SqlitePool,
 }
 
+/// # Errors
+/// Returns an error if the connection fails or migrations cannot be run.
 pub async fn connect_and_migrate(
     database_url: &str,
 ) -> Result<SqlitePool, Report<SqliteNoteDbError>> {
@@ -48,6 +50,8 @@ impl SqliteNoteDb {
         &self.pool
     }
 
+    /// # Errors
+    /// Returns an error if the connection fails or migrations cannot be run.
     pub async fn new(database_url: &str) -> Result<Self, Report<SqliteNoteDbError>> {
         let pool = connect_and_migrate(database_url).await?;
         Ok(Self { pool })
