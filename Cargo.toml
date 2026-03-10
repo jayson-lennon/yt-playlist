@@ -54,3 +54,8 @@ arboard = { version = "3", default-features = false, features = ["wayland-data-c
 rstest = "0.24"
 tempfile = "3.26.0"
 temptree = "0.2"
+cucumber = "0.21"
+
+[[test]]
+name = "acceptance"
+harness = false

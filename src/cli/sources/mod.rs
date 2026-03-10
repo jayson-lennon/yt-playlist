@@ -1,7 +1,7 @@
-mod add;
-mod common;
-mod edit;
-mod list;
+pub mod add;
+pub mod common;
+pub mod edit;
+pub mod list;
 
 use std::path::PathBuf;
 

@@ -4,6 +4,10 @@ pub mod feat;
 pub mod services;
 pub mod tui;
 
+pub use cli::sources::add::handle_add_command;
+pub use cli::sources::common::resolve_and_get_file_path;
+pub use cli::sources::edit::handle_edit_command;
+
 pub use app::App;
 pub use feat::config::{Config, ConfigError, load};
 pub use feat::fuzzy_search::{FuzzySearch, FuzzySearchError, FuzzySearchResult, FuzzySearchService};

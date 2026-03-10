@@ -14,13 +14,32 @@ use super::RunError;
 
 #[derive(Subcommand)]
 pub enum NotesCommand {
-    Add { paths: Vec<PathBuf> },
+    /// Add or edit notes for one or more files
+    ///
+    /// Opens an external editor to create or modify notes associated with the
+    /// specified file paths. For a single file, edits the existing note (if any).
+    /// For multiple files, the entered content is prepended to each file's note.
+    Add {
+        /// File paths to add notes for
+        paths: Vec<PathBuf>,
+    },
+    /// Search notes by query string
+    ///
+    /// Searches all stored notes for the given query and prints matching file paths.
+    /// Optionally creates symlinks to matched files in the current directory.
     Search {
+        /// Search query string
         query: String,
+        /// Create symlinks to matched files in current directory
         #[arg(long)]
         symlink: bool,
     },
+    /// Interactive fuzzy search through all notes
+    ///
+    /// Opens an interactive fuzzy finder to search through all stored notes.
+    /// Prints selected file paths and optionally creates symlinks in the current directory.
     Fuzzy {
+        /// Create symlinks to selected files in current directory
         #[arg(long)]
         symlink: bool,
     },

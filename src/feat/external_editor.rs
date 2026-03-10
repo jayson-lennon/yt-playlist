@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+pub mod test;
+pub use test::FakeEditor;
+
 use async_trait::async_trait;
 use derive_more::Debug;
 use dialoguer::Editor;
