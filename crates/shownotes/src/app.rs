@@ -548,26 +548,28 @@ impl App {
     fn launch_file(&mut self) {
         if let Some(item) = self.tui_state.get_selected_item() {
             let cmd = self.config.get_cmd(&item.path);
-            match self
-                .services
-                .file_launcher
-                .launch(&item.path, cmd, &self.runtime.socket_path)
-            {
-                Ok(result) => {
-                    if result.used_default_opener {
+            let path = item.path.clone();
+            let command = Command::LaunchFile {
+                path: path.clone(),
+                command: cmd.map(str::to_string),
+                socket_path: self.runtime.socket_path.clone(),
+            };
+            match self.tokio_runtime.block_on(execute(&self.services, command)) {
+                Ok(CommandResult::FileLaunched { used_default_opener, .. }) => {
+                    if used_default_opener {
                         self.tui_state.status_message = Some(format!(
                             "Opening with default opener: {}",
-                            item.path.display()
+                            path.display()
                         ));
                     } else {
                         self.tui_state.status_message =
-                            Some(format!("Opening: {}", item.path.display()));
+                            Some(format!("Opening: {}", path.display()));
                     }
                 }
                 Err(e) => {
-                    self.tui_state
-                        .show_error(format!("Failed to open file: {e:?}"));
+                    self.tui_state.show_error(format!("Failed to open file: {e:?}"));
                 }
+                _ => unreachable!(),
             }
         }
     }
@@ -581,40 +583,43 @@ impl App {
             .filter(|item| self.config.is_video_or_audio(&item.path))
             .map(|item| item.path.clone())
             .collect();
+
         if paths.is_empty() {
             self.tui_state
                 .show_error("No video or audio files in playlist".to_string());
             return;
         }
-        match self.services.mpv.load_playlist(&paths) {
-            Ok(()) => {
+
+        let command = Command::MpvLoadPlaylist { paths };
+        match self.tokio_runtime.block_on(execute(&self.services, command)) {
+            Ok(CommandResult::MpvPlaylistLoaded { count }) => {
                 self.tui_state.status_message =
-                    Some(format!("Loaded {} items into mpv", paths.len()));
+                    Some(format!("Loaded {count} items into mpv"));
             }
             Err(e) => {
                 self.tui_state
                     .show_error(format!("Failed to load playlist in mpv: {e:?}"));
             }
+            _ => unreachable!(),
         }
     }
 
     fn launch_mpv(&mut self) {
-        if self
-            .services
-            .mpv_launcher
-            .is_running(&self.runtime.socket_path)
-        {
-            self.tui_state.status_message = Some("MPV already running".to_string());
-        } else {
-            match self.services.mpv_launcher.spawn(&self.runtime.socket_path) {
-                Ok(()) => {
-                    self.tui_state.status_message = Some("MPV launched".to_string());
-                }
-                Err(e) => {
-                    self.tui_state
-                        .show_error(format!("Failed to launch mpv: {e:?}"));
-                }
+        let command = Command::MpvSpawn {
+            socket_path: self.runtime.socket_path.clone(),
+        };
+        match self.tokio_runtime.block_on(execute(&self.services, command)) {
+            Ok(CommandResult::MpvSpawned { was_already_running: true }) => {
+                self.tui_state.status_message = Some("MPV already running".to_string());
             }
+            Ok(CommandResult::MpvSpawned { was_already_running: false }) => {
+                self.tui_state.status_message = Some("MPV launched".to_string());
+            }
+            Err(e) => {
+                self.tui_state
+                    .show_error(format!("Failed to launch mpv: {e:?}"));
+            }
+            _ => unreachable!(),
         }
     }
 }

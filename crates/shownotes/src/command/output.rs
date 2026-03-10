@@ -27,5 +27,27 @@ pub fn format_output(result: &CommandResult) -> String {
         CommandResult::MpvLoaded { path } => {
             format!("Loaded: {}", path.display())
         }
+        CommandResult::FileLaunched {
+            path,
+            used_default_opener,
+        } => {
+            if *used_default_opener {
+                format!("Opening with default opener: {}", path.display())
+            } else {
+                format!("Opening: {}", path.display())
+            }
+        }
+        CommandResult::MpvPlaylistLoaded { count } => {
+            format!("Loaded {count} items into mpv")
+        }
+        CommandResult::MpvSpawned {
+            was_already_running,
+        } => {
+            if *was_already_running {
+                "MPV already running".to_string()
+            } else {
+                "MPV launched".to_string()
+            }
+        }
     }
 }

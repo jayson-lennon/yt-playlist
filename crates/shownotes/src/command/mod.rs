@@ -1,4 +1,5 @@
 mod generate;
+mod launcher;
 mod mpv;
 mod notes;
 mod output;
@@ -37,6 +38,12 @@ pub enum Command {
 
     /// Loads a file in mpv via the given socket.
     MpvLoad { path: PathBuf, socket: PathBuf },
+    /// Launches a file with optional custom command or default opener.
+    LaunchFile { path: PathBuf, command: Option<String>, socket_path: String },
+    /// Loads the current playlist into mpv.
+    MpvLoadPlaylist { paths: Vec<PathBuf> },
+    /// Spawns a new mpv process if not already running.
+    MpvSpawn { socket_path: String },
 }
 
 /// Results returned from executing commands.
@@ -61,6 +68,12 @@ pub enum CommandResult {
 
     /// Confirms the file was loaded in mpv.
     MpvLoaded { path: PathBuf },
+    /// Contains result of file launch operation.
+    FileLaunched { path: PathBuf, used_default_opener: bool },
+    /// Confirms playlist was loaded into mpv.
+    MpvPlaylistLoaded { count: usize },
+    /// Confirms mpv was spawned or was already running.
+    MpvSpawned { was_already_running: bool },
 }
 
 /// # Errors
@@ -102,6 +115,18 @@ pub async fn execute(
         Command::MpvLoad { path, socket } => {
             mpv::load(&socket, &path)?;
             Ok(CommandResult::MpvLoaded { path })
+        }
+        Command::LaunchFile { path, command, socket_path } => {
+            let result = launcher::launch(services, &path, command.as_deref(), &socket_path)?;
+            Ok(CommandResult::FileLaunched { path, used_default_opener: result.used_default_opener })
+        }
+        Command::MpvLoadPlaylist { paths } => {
+            mpv::load_playlist(services, &paths)?;
+            Ok(CommandResult::MpvPlaylistLoaded { count: paths.len() })
+        }
+        Command::MpvSpawn { socket_path } => {
+            let was_already_running = mpv::spawn(services, &socket_path)?;
+            Ok(CommandResult::MpvSpawned { was_already_running })
         }
     }
 }
