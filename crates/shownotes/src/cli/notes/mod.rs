@@ -1,13 +1,9 @@
-mod add;
-mod fuzzy;
-mod search;
-mod symlink;
-
 use std::path::PathBuf;
 
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
+use crate::command::{format_output, execute, Command};
 use crate::services::Services;
 
 use super::RunError;
@@ -64,16 +60,22 @@ pub fn run_notes_command(
             .await
             .change_context(RunError)?;
 
-        match cmd {
-            NotesCommand::Add { paths } => {
-                add::handle_add_command(&services, paths).await.change_context(RunError)
-            }
-            NotesCommand::Search { query, symlink } => {
-                search::handle_search_command(&services, &query, symlink).await.change_context(RunError)
-            }
-            NotesCommand::Fuzzy { symlink } => {
-                fuzzy::handle_fuzzy_command(&services, symlink).await.change_context(RunError)
-            }
-        }
+        let command = match cmd {
+            NotesCommand::Add { paths } => Command::NotesAdd { paths },
+            NotesCommand::Search { query, symlink } => Command::NotesSearch {
+                query,
+                create_symlinks: symlink,
+            },
+            NotesCommand::Fuzzy { symlink } => Command::NotesFuzzy {
+                create_symlinks: symlink,
+            },
+        };
+
+        let result = execute(&services, command)
+            .await
+            .change_context(RunError)?;
+
+        println!("{}", format_output(&result));
+        Ok(())
     })
 }

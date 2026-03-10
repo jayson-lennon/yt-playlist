@@ -5,11 +5,8 @@ use std::sync::Arc;
 use cucumber::{World, given, then, when};
 use tempfile::TempDir;
 
+use shownotes::command::{Command, CommandResult, execute, format_output};
 use shownotes::feat::external_editor::{ExternalEditorService, FakeEditor};
-use shownotes::feat::sources::SourceDb;
-use shownotes::handle_add_command;
-use shownotes::handle_edit_command;
-use shownotes::resolve_and_get_file_path;
 use shownotes::services::Services;
 
 #[derive(Debug, World)]
@@ -18,6 +15,7 @@ pub struct SymlinkWorld {
     services: Services,
     temp_dir: TempDir,
     output: String,
+    last_result: Option<CommandResult>,
     fake_editor: Arc<FakeEditor>,
     file_paths: HashMap<String, PathBuf>,
 }
@@ -43,6 +41,7 @@ impl SymlinkWorld {
             services,
             temp_dir,
             output: String::new(),
+            last_result: None,
             fake_editor,
             file_paths: HashMap::new(),
         }
@@ -80,9 +79,16 @@ fn given_symlink(world: &mut SymlinkWorld, target: String, link: String) {
 #[given(expr = r#"the file {string} has source {string}"#)]
 async fn given_file_has_source(world: &mut SymlinkWorld, path: String, url: String) {
     let full_path = world.resolve_path(&path);
-    handle_add_command(&world.services, full_path, url)
-        .await
-        .expect("add command failed");
+
+    execute(
+        &world.services,
+        Command::SourcesAdd {
+            path: full_path,
+            url,
+        },
+    )
+    .await
+    .expect("add command failed");
 }
 
 #[when(expr = r#"I run {string}"#)]
@@ -90,51 +96,40 @@ async fn when_run_command(world: &mut SymlinkWorld, command: String) {
     let parts: Vec<&str> = command.split_whitespace().collect();
     assert!(parts.len() >= 3, "Invalid command format: {command}");
 
-    match (parts[0], parts[1]) {
+    let cmd = match (parts[0], parts[1]) {
         ("sources", "list") => {
             let filename = parts[2].trim_matches('"');
-            let full_path = world.resolve_path(filename);
-
-            let (_resolved, file_path_id) = resolve_and_get_file_path(&world.services, &full_path)
-                .await
-                .expect("failed to resolve path");
-
-            let sources = world
-                .services
-                .sources
-                .get_sources(file_path_id)
-                .await
-                .expect("failed to get sources");
-
-            world.output = if sources.is_empty() {
-                format!("No sources found for: {}", full_path.display())
-            } else {
-                sources
-                    .iter()
-                    .map(|s| s.source_url.clone())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            };
+            Command::SourcesList {
+                path: world.resolve_path(filename),
+            }
         }
         ("sources", "add") => {
             let filename = parts[2].trim_matches('"');
             let url = parts[3].trim_matches('"');
-            let full_path = world.resolve_path(filename);
-            handle_add_command(&world.services, full_path, url.to_string())
-                .await
-                .expect("add command failed");
+            Command::SourcesAdd {
+                path: world.resolve_path(filename),
+                url: url.to_string(),
+            }
         }
         _ => panic!("Unknown command: {command}"),
-    }
+    };
+
+    let result = execute(&world.services, cmd).await.expect("command failed");
+
+    world.output = format_output(&result);
+    world.last_result = Some(result);
 }
 
 #[when(expr = r#"I edit sources for {string} with {string}"#)]
 async fn when_edit_sources(world: &mut SymlinkWorld, path: String, content: String) {
     world.fake_editor.set_content(content);
     let full_path = world.resolve_path(&path);
-    handle_edit_command(&world.services, full_path)
+
+    let result = execute(&world.services, Command::SourcesEdit { path: full_path })
         .await
         .expect("edit command failed");
+
+    world.last_result = Some(result);
 }
 
 #[then(expr = r#"the output contains {string}"#)]
@@ -151,49 +146,49 @@ fn then_output_contains(world: &mut SymlinkWorld, expected: String) {
 async fn then_file_has_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
     let full_path = world.resolve_path(&path);
 
-    let (_resolved, file_path_id) = resolve_and_get_file_path(&world.services, &full_path)
-        .await
-        .expect("failed to resolve path");
+    let result = execute(
+        &world.services,
+        Command::SourcesList {
+            path: full_path.clone(),
+        },
+    )
+    .await
+    .expect("list command failed");
 
-    let sources = world
-        .services
-        .sources
-        .get_sources(file_path_id)
-        .await
-        .expect("failed to get sources");
-
-    let has_source = sources.iter().any(|s| s.source_url == expected_url);
-    assert!(
-        has_source,
-        "expected file '{path}' to have source '{expected_url}', found: {sources:?}"
-    );
+    match result {
+        CommandResult::SourcesList { urls, .. } => {
+            assert!(
+                urls.contains(&expected_url),
+                "expected file '{path}' to have source '{expected_url}', found: {urls:?}"
+            );
+        }
+        _ => panic!("Unexpected result type: {result:?}"),
+    }
 }
 
 #[then(expr = r#"the file {string} shows source {string}"#)]
 async fn then_file_shows_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
     let full_path = world.resolve_path(&path);
 
-    let (_resolved, file_path_id) = resolve_and_get_file_path(&world.services, &full_path)
-        .await
-        .expect("failed to resolve path");
+    let result = execute(
+        &world.services,
+        Command::SourcesList {
+            path: full_path.clone(),
+        },
+    )
+    .await
+    .expect("list command failed");
 
-    let sources = world
-        .services
-        .sources
-        .get_sources(file_path_id)
-        .await
-        .expect("failed to get sources");
-
-    let output: String = sources
-        .iter()
-        .map(|s| s.source_url.clone())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    assert!(
-        output.contains(&expected_url),
-        "expected list output for '{path}' to contain '{expected_url}', but got: '{output}'"
-    );
+    match result {
+        CommandResult::SourcesList { urls, .. } => {
+            let output = urls.join("\n");
+            assert!(
+                output.contains(&expected_url),
+                "expected list output for '{path}' to contain '{expected_url}', but got: '{output}'"
+            );
+        }
+        _ => panic!("Unexpected result type: {result:?}"),
+    }
 }
 
 #[tokio::main]

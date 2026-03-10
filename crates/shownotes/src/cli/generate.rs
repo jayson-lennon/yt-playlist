@@ -1,44 +1,33 @@
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use error_stack::{Report, ResultExt};
 
-use crate::{
-    feat::commands::generate_notes,
-    feat::playlist::{PlaylistStorage, PlaylistStorageService, TomlStorage},
-    services::Services,
-};
+use crate::command::{format_output, execute, Command};
+use crate::services::Services;
 
 use super::RunError;
 
-/// Generates show notes from a playlist.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - The playlist cannot be loaded
-/// - The database cannot be accessed
-/// - The format is not recognized
 pub fn run_generate(
     format: &str,
     playlist_path: &Path,
     db_path: &Path,
     rt: &tokio::runtime::Handle,
 ) -> Result<(), Report<RunError>> {
-    let storage_backend: Arc<dyn PlaylistStorage> =
-        Arc::new(TomlStorage::new(playlist_path.to_path_buf()));
-    let playlist_storage = PlaylistStorageService::new(storage_backend);
-    let playlist_data = playlist_storage.load().change_context(RunError)?;
-
     rt.block_on(async {
         let services = Services::new(&db_path.to_string_lossy(), rt.clone())
             .await
             .change_context(RunError)?;
 
-        let output = generate_notes(&services, &playlist_data, format)
+        let command = Command::GenerateNotes {
+            format: format.to_string(),
+            playlist_path: playlist_path.to_path_buf(),
+        };
+
+        let result = execute(&services, command)
             .await
             .change_context(RunError)?;
 
-        println!("{output}");
+        println!("{}", format_output(&result));
         Ok(())
     })
 }

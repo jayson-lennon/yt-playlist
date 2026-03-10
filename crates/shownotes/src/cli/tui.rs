@@ -14,6 +14,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::{
     app::{App, ForkAction},
+    command::{Command, CommandResult},
     feat::config::{load, Config},
     feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
     feat::mpv::MpvIpc,
@@ -143,6 +144,7 @@ pub fn run_tui(
         config,
         socket.to_string_lossy().into_owned(),
         library_path,
+        playlist,
         rt,
     );
     let res = run_app(&mut terminal, &mut app);
@@ -267,44 +269,75 @@ fn run_app(
 }
 
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
-    app.services
+    let result = app
+        .services
         .rt
-        .block_on(crate::feat::commands::add_note(&app.services, path))
-        .map_err(|e| format!("Add note failed: {e:?}"))
+        .block_on(crate::command::execute(
+            &app.services,
+            Command::NotesAdd {
+                paths: vec![path.to_owned()],
+            },
+        ))
+        .map_err(|e| format!("Add note failed: {e:?}"))?;
+    match result {
+        CommandResult::NotesAdded { .. } => Ok(()),
+        _ => Err("Unexpected result type".to_string()),
+    }
 }
 
 fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
     let result = app
         .services
         .rt
-        .block_on(crate::feat::commands::fuzzy_notes(&app.services, true))
+        .block_on(crate::command::execute(
+            &app.services,
+            Command::NotesFuzzy {
+                create_symlinks: true,
+            },
+        ))
         .map_err(|e| format!("Fuzzy notes failed: {e:?}"))?;
-    Ok(result.symlinks_created)
+    match result {
+        CommandResult::NotesFuzzy {
+            symlinks_created, ..
+        } => Ok(symlinks_created),
+        _ => Err("Unexpected result type".to_string()),
+    }
 }
 
 fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
-    app.services
+    let result = app
+        .services
         .rt
-        .block_on(crate::feat::commands::edit_sources(&app.services, path))
-        .map_err(|e| format!("Edit sources failed: {e:?}"))
+        .block_on(crate::command::execute(
+            &app.services,
+            Command::SourcesEdit {
+                path: path.to_owned(),
+            },
+        ))
+        .map_err(|e| format!("Edit sources failed: {e:?}"))?;
+    match result {
+        CommandResult::SourcesEdited { .. } => Ok(()),
+        _ => Err("Unexpected result type".to_string()),
+    }
 }
 
 fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
-    let playlist_data = app
-        .services
-        .storage
-        .load()
-        .map_err(|e| format!("Failed to load playlist: {e:?}"))?;
-
-    let output = app
+    let result = app
         .services
         .rt
-        .block_on(crate::feat::commands::generate_notes(
+        .block_on(crate::command::execute(
             &app.services,
-            &playlist_data,
-            format,
+            Command::GenerateNotes {
+                format: format.to_owned(),
+                playlist_path: app.runtime.playlist_path.clone(),
+            },
         ))
         .map_err(|e| format!("Generation failed: {e:?}"))?;
+
+    let output = match result {
+        CommandResult::NotesGenerated { output } => output,
+        _ => return Err("Unexpected result type".to_string()),
+    };
 
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;
     clipboard

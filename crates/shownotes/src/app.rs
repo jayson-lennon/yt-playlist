@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use crossterm::event::{Event, KeyCode};
+use error_stack::Report;
 
+use crate::command::{execute, Command, CommandError, CommandResult};
 use crate::feat::config::Config;
 use crate::feat::playlist::PlaylistData;
 use crate::feat::keymap::{Action, Keymap};
@@ -46,6 +48,7 @@ pub struct RuntimeSettings {
     pub keymap: Keymap,
     pub socket_path: String,
     pub library_path: PathBuf,
+    pub playlist_path: PathBuf,
 }
 
 pub struct App {
@@ -64,6 +67,7 @@ impl App {
         config: Config,
         socket_path: String,
         library_path: PathBuf,
+        playlist_path: PathBuf,
         tokio_runtime: tokio::runtime::Runtime,
     ) -> Self {
         let mut app = Self {
@@ -76,6 +80,7 @@ impl App {
                 keymap: Keymap::new(),
                 socket_path,
                 library_path,
+                playlist_path,
             },
             tokio_runtime,
         };
@@ -83,6 +88,13 @@ impl App {
         app.refresh_library();
         app.set_initial_focus();
         app
+    }
+
+    pub async fn execute_command(
+        &mut self,
+        command: Command,
+    ) -> Result<CommandResult, Report<CommandError>> {
+        execute(&self.services, command).await
     }
 
     fn set_initial_focus(&mut self) {
@@ -787,7 +799,8 @@ use crate::feat::keymap::{Action, Keymap};
                 runtime: RuntimeSettings {
                     keymap: Keymap::new(),
                     socket_path: String::from("/tmp/mpvsocket"),
-                    library_path: self.library_path,
+                    library_path: self.library_path.clone(),
+                    playlist_path: self.library_path,
                 },
                 tokio_runtime: rt,
             };

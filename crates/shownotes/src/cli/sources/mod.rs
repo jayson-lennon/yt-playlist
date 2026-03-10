@@ -1,13 +1,9 @@
-pub mod add;
-pub mod common;
-pub mod edit;
-pub mod list;
-
 use std::path::PathBuf;
 
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
+use crate::command::{format_output, execute, Command};
 use crate::services::Services;
 
 use super::RunError;
@@ -53,16 +49,17 @@ pub fn run_sources_command(
             .await
             .change_context(RunError)?;
 
-        match cmd {
-            SourcesCommands::Add { path, url } => {
-                add::handle_add_command(&services, path, url).await.change_context(RunError)
-            }
-            SourcesCommands::List { path } => {
-                list::handle_list_command(&services, path).await.change_context(RunError)
-            }
-            SourcesCommands::Edit { path } => {
-                edit::handle_edit_command(&services, path).await.change_context(RunError)
-            }
-        }
+        let command = match cmd {
+            SourcesCommands::Add { path, url } => Command::SourcesAdd { path, url },
+            SourcesCommands::List { path } => Command::SourcesList { path },
+            SourcesCommands::Edit { path } => Command::SourcesEdit { path },
+        };
+
+        let result = execute(&services, command)
+            .await
+            .change_context(RunError)?;
+
+        println!("{}", format_output(&result));
+        Ok(())
     })
 }

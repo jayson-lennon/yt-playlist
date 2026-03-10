@@ -100,7 +100,9 @@ pub fn run() -> Result<(), Report<RunError>> {
     }) {
         Commands::Tui { playlist, socket, path } => run_tui(playlist, socket, &args.db_path, path, rt),
         Commands::Action { action } => match action {
-            ActionCommands::Mpv { path, socket } => run_action_mpv(&path, &socket),
+            ActionCommands::Mpv { path, socket } => {
+                run_action_mpv(&path, &socket, &args.db_path, &handle)
+            }
         },
         Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path, &handle),
         Commands::Sources { sources_cmd } => {
