@@ -1,6 +1,10 @@
 COPYRIGHT_NAME := "Jayson Lennon"
 COPYRIGHT_YEAR := "2026"
 
+test:
+  cargo nextest run --workspace --exclude acceptance
+  cargo test --package acceptance
+
 package:
   rm -rfv .build/
   makepkg -fi

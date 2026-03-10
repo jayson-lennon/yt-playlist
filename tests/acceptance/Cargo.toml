@@ -1,0 +1,17 @@
+[package]
+name = "acceptance"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+shownotes = { path = "../../crates/shownotes" }
+cucumber = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+
+[[test]]
+name = "symlinks"
+harness = false

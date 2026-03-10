@@ -14,7 +14,7 @@ use shownotes::services::Services;
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
-pub struct AcceptanceWorld {
+pub struct SymlinkWorld {
     services: Services,
     temp_dir: TempDir,
     output: String,
@@ -22,7 +22,7 @@ pub struct AcceptanceWorld {
     file_paths: HashMap<String, PathBuf>,
 }
 
-impl AcceptanceWorld {
+impl SymlinkWorld {
     async fn new_world() -> Self {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
@@ -57,7 +57,7 @@ impl AcceptanceWorld {
 }
 
 #[given(expr = r#"a real file at {string}"#)]
-fn given_real_file(world: &mut AcceptanceWorld, filename: String) {
+fn given_real_file(world: &mut SymlinkWorld, filename: String) {
     let full_path = world.temp_dir.path().join(&filename);
     if let Some(parent) = full_path.parent() {
         std::fs::create_dir_all(parent).expect("failed to create parent dir");
@@ -67,7 +67,7 @@ fn given_real_file(world: &mut AcceptanceWorld, filename: String) {
 }
 
 #[given(expr = r#"a symlink to {string} at {string}"#)]
-fn given_symlink(world: &mut AcceptanceWorld, target: String, link: String) {
+fn given_symlink(world: &mut SymlinkWorld, target: String, link: String) {
     let target_path = world.resolve_path(&target);
     let link_path = world.temp_dir.path().join(&link);
     if let Some(parent) = link_path.parent() {
@@ -78,7 +78,7 @@ fn given_symlink(world: &mut AcceptanceWorld, target: String, link: String) {
 }
 
 #[given(expr = r#"the file {string} has source {string}"#)]
-async fn given_file_has_source(world: &mut AcceptanceWorld, path: String, url: String) {
+async fn given_file_has_source(world: &mut SymlinkWorld, path: String, url: String) {
     let full_path = world.resolve_path(&path);
     handle_add_command(&world.services, full_path, url)
         .await
@@ -86,7 +86,7 @@ async fn given_file_has_source(world: &mut AcceptanceWorld, path: String, url: S
 }
 
 #[when(expr = r#"I run {string}"#)]
-async fn when_run_command(world: &mut AcceptanceWorld, command: String) {
+async fn when_run_command(world: &mut SymlinkWorld, command: String) {
     let parts: Vec<&str> = command.split_whitespace().collect();
     assert!(parts.len() >= 3, "Invalid command format: {command}");
 
@@ -129,7 +129,7 @@ async fn when_run_command(world: &mut AcceptanceWorld, command: String) {
 }
 
 #[when(expr = r#"I edit sources for {string} with {string}"#)]
-async fn when_edit_sources(world: &mut AcceptanceWorld, path: String, content: String) {
+async fn when_edit_sources(world: &mut SymlinkWorld, path: String, content: String) {
     world.fake_editor.set_content(content);
     let full_path = world.resolve_path(&path);
     handle_edit_command(&world.services, full_path)
@@ -138,7 +138,7 @@ async fn when_edit_sources(world: &mut AcceptanceWorld, path: String, content: S
 }
 
 #[then(expr = r#"the output contains {string}"#)]
-fn then_output_contains(world: &mut AcceptanceWorld, expected: String) {
+fn then_output_contains(world: &mut SymlinkWorld, expected: String) {
     assert!(
         world.output.contains(&expected),
         "expected output to contain '{}', but got: '{}'",
@@ -148,7 +148,7 @@ fn then_output_contains(world: &mut AcceptanceWorld, expected: String) {
 }
 
 #[then(expr = r#"the file {string} has source {string}"#)]
-async fn then_file_has_source(world: &mut AcceptanceWorld, path: String, expected_url: String) {
+async fn then_file_has_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
     let full_path = world.resolve_path(&path);
 
     let (_resolved, file_path_id) = resolve_and_get_file_path(&world.services, &full_path)
@@ -170,7 +170,7 @@ async fn then_file_has_source(world: &mut AcceptanceWorld, path: String, expecte
 }
 
 #[then(expr = r#"the file {string} shows source {string}"#)]
-async fn then_file_shows_source(world: &mut AcceptanceWorld, path: String, expected_url: String) {
+async fn then_file_shows_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
     let full_path = world.resolve_path(&path);
 
     let (_resolved, file_path_id) = resolve_and_get_file_path(&world.services, &full_path)
@@ -198,5 +198,5 @@ async fn then_file_shows_source(world: &mut AcceptanceWorld, path: String, expec
 
 #[tokio::main]
 async fn main() {
-    AcceptanceWorld::run("tests/features/").await;
+    SymlinkWorld::run("tests/features/sources_symlinks.feature").await;
 }
