@@ -1,3 +1,4 @@
+pub mod commands;
 pub mod config;
 pub mod external_editor;
 pub mod fuzzy_search;

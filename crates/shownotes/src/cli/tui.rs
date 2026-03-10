@@ -6,18 +6,19 @@ use std::{
 
 use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use error_stack::{Report, ResultExt};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::{
     app::{App, ForkAction},
-    feat::config::{Config, load},
+    feat::config::{load, Config},
     feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
     feat::mpv::MpvIpc,
     feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage},
     feat::terminal::suspend_and_run,
-    feat::{ExternalEditor, NoteDb, PathResolver, create_symlink_with_suffix, sources::SourceDb},
     services::Services,
     tui,
 };
@@ -61,25 +62,25 @@ fn process_fork(
     action: ForkAction,
 ) -> Result<(), Report<RunError>> {
     let needs_suspend = requires_suspend(&action);
-    
+
     let result: Result<ForkResult, std::convert::Infallible> = if needs_suspend {
         suspend_and_run(terminal, || Ok(execute_fork_action(app, action)))
             .unwrap_or(Ok(ForkResult::SuspendFailed))
     } else {
         Ok(execute_fork_action(app, action))
     };
-    
+
     let keymap = app.runtime.keymap.clone();
     terminal
         .draw(|f| tui::render(f, &app.tui_state, &keymap))
         .change_context(RunError)?;
-    
+
     let message = match result {
         Ok(ForkResult::Success(msg) | ForkResult::Failed(msg)) => msg,
         Ok(ForkResult::SuspendFailed) => "Failed to suspend terminal".to_string(),
     };
     app.tui_state.status_message = Some(message);
-    
+
     Ok(())
 }
 
@@ -125,7 +126,8 @@ pub fn run_tui(
     let media_backend: Arc<dyn MediaQuery> = Arc::new(CachedMedia::new(durations, ffprobe_backend));
 
     let handle = rt.handle().clone();
-    let core_services = rt.block_on(Services::new(&db_path.to_string_lossy(), handle))
+    let core_services = rt
+        .block_on(Services::new(&db_path.to_string_lossy(), handle))
         .change_context(RunError)?;
 
     let services = build_services(&playlist, &socket, media_backend, core_services);
@@ -243,7 +245,7 @@ fn run_app(
             terminal.clear().change_context(RunError)?;
             app.tui_state.needs_clear = false;
         }
-        
+
         let keymap = app.runtime.keymap.clone();
         terminal
             .draw(|f| tui::render(f, &app.tui_state, &keymap))
@@ -265,123 +267,26 @@ fn run_app(
 }
 
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let services = &app.services;
-
-    app.services.rt.block_on(async {
-        let resolved = services
-            .path_resolver
-            .resolve(path)
-            .await
-            .map_err(|e| format!("Path resolution failed: {e:?}"))?;
-
-        let path_str = resolved.to_string_lossy();
-        let file_path_id = services
-            .db
-            .get_or_create_file_path(&path_str)
-            .await
-            .map_err(|e| format!("Database error: {e:?}"))?;
-
-        let existing_note = services
-            .db
-            .get_note(file_path_id)
-            .await
-            .map_err(|e| format!("Database error: {e:?}"))?;
-
-        let initial_content = existing_note.unwrap_or_default();
-        if let Some(new_content) = services
-            .editor
-            .open(&initial_content)
-            .await
-            .map_err(|e| format!("Editor error: {e:?}"))?
-        {
-            services
-                .db
-                .upsert_note(file_path_id, &new_content)
-                .await
-                .map_err(|e| format!("Database error: {e:?}"))?;
-        }
-
-        Ok(())
-    })
+    app.services
+        .rt
+        .block_on(crate::feat::commands::add_note(&app.services, path))
+        .map_err(|e| format!("Add note failed: {e:?}"))
 }
 
 fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
-    let services = &app.services;
-
-    app.services.rt.block_on(async {
-        let all_notes = services
-            .db
-            .get_all_notes_with_paths()
-            .await
-            .map_err(|e| format!("Database error: {e:?}"))?;
-
-        if all_notes.is_empty() {
-            return Ok(0);
-        }
-
-        let result = services
-            .fuzzy_search
-            .search(&all_notes)
-            .map_err(|e| format!("Fuzzy search error: {e:?}"))?;
-
-        let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {e}"))?;
-        let mut count = 0;
-        for path in &result.selected_paths {
-            let src = PathBuf::from(path);
-            match create_symlink_with_suffix(&src, &cwd) {
-                Ok(_) => count += 1,
-                Err(e) => eprintln!("Failed to create symlink for {path}: {e:?}"),
-            }
-        }
-
-        Ok(count)
-    })
+    let result = app
+        .services
+        .rt
+        .block_on(crate::feat::commands::fuzzy_notes(&app.services, true))
+        .map_err(|e| format!("Fuzzy notes failed: {e:?}"))?;
+    Ok(result.symlinks_created)
 }
 
 fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let services = &app.services;
-
-    app.services.rt.block_on(async {
-        let resolved = services
-            .path_resolver
-            .resolve(path)
-            .await
-            .map_err(|e| format!("Path resolution failed: {e:?}"))?;
-
-        let path_str = resolved.to_string_lossy();
-        let file_path_id = services
-            .db
-            .get_or_create_file_path(&path_str)
-            .await
-            .map_err(|e| format!("Database error: {e:?}"))?;
-
-        let existing = services
-            .sources
-            .get_sources(file_path_id)
-            .await
-            .map_err(|e| format!("Database error: {e:?}"))?;
-        let initial_content = existing
-            .iter()
-            .map(|s| s.source_url.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        if let Some(new_content) = services
-            .editor
-            .open(&initial_content)
-            .await
-            .map_err(|e| format!("Editor error: {e:?}"))?
-        {
-            let urls: Vec<String> = new_content.lines().map(ToString::to_string).collect();
-            services
-                .sources
-                .set_sources(file_path_id, &urls)
-                .await
-                .map_err(|e| format!("Database error: {e:?}"))?;
-        }
-
-        Ok(())
-    })
+    app.services
+        .rt
+        .block_on(crate::feat::commands::edit_sources(&app.services, path))
+        .map_err(|e| format!("Edit sources failed: {e:?}"))
 }
 
 fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
@@ -394,9 +299,9 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
     let output = app
         .services
         .rt
-        .block_on(crate::feat::generate_show_notes(
+        .block_on(crate::feat::commands::generate_notes(
+            &app.services,
             &playlist_data,
-            &app.services.sources,
             format,
         ))
         .map_err(|e| format!("Generation failed: {e:?}"))?;
@@ -416,7 +321,9 @@ mod tests {
     #[test]
     fn requires_suspend_returns_true_for_add_note() {
         // Given an AddNote action.
-        let action = ForkAction::AddNote { path: PathBuf::from("/test") };
+        let action = ForkAction::AddNote {
+            path: PathBuf::from("/test"),
+        };
 
         // When checking if suspend is required.
         // Then it returns true.
@@ -436,7 +343,9 @@ mod tests {
     #[test]
     fn requires_suspend_returns_true_for_edit_sources() {
         // Given an EditSources action.
-        let action = ForkAction::EditSources { path: PathBuf::from("/test") };
+        let action = ForkAction::EditSources {
+            path: PathBuf::from("/test"),
+        };
 
         // When checking if suspend is required.
         // Then it returns true.
@@ -446,7 +355,9 @@ mod tests {
     #[test]
     fn requires_suspend_returns_false_for_generate_notes() {
         // Given a GenerateNotes action.
-        let action = ForkAction::GenerateNotes { format: "markdown".to_string() };
+        let action = ForkAction::GenerateNotes {
+            format: "markdown".to_string(),
+        };
 
         // When checking if suspend is required.
         // Then it returns false (clipboard-only, no terminal suspend).

@@ -50,34 +50,9 @@ async fn handle_single_path(
     services: &Services,
     resolved_path: &Path,
 ) -> Result<(), Report<AddError>> {
-    let path_str = resolved_path.to_string_lossy();
-    let file_path_id = services
-        .db
-        .get_or_create_file_path(&path_str)
+    crate::feat::commands::add_note(services, resolved_path)
         .await
-        .change_context(AddError)?;
-
-    let existing_note = services
-        .db
-        .get_note(file_path_id)
-        .await
-        .change_context(AddError)?;
-
-    let initial_content = existing_note.unwrap_or_default();
-    if let Some(new_content) = services
-        .editor
-        .open(&initial_content)
-        .await
-        .change_context(AddError)?
-    {
-        services
-            .db
-            .upsert_note(file_path_id, &new_content)
-            .await
-            .change_context(AddError)?;
-    }
-
-    Ok(())
+        .change_context(AddError)
 }
 
 async fn handle_multiple_paths(

@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc};
 use error_stack::{Report, ResultExt};
 
 use crate::{
-    feat::generate_show_notes,
+    feat::commands::generate_notes,
     feat::playlist::{PlaylistStorage, PlaylistStorageService, TomlStorage},
     services::Services,
 };
@@ -34,7 +34,7 @@ pub fn run_generate(
             .await
             .change_context(RunError)?;
 
-        let output = generate_show_notes(&playlist_data, &services.sources, format)
+        let output = generate_notes(&services, &playlist_data, format)
             .await
             .change_context(RunError)?;
 
