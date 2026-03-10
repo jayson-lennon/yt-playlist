@@ -63,6 +63,9 @@ pub enum CommandResult {
     MpvLoaded { path: PathBuf },
 }
 
+/// # Errors
+///
+/// Returns an error if the command execution fails.
 pub async fn execute(
     services: &Services,
     command: Command,

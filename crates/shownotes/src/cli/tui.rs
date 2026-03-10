@@ -334,9 +334,8 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
         ))
         .map_err(|e| format!("Generation failed: {e:?}"))?;
 
-    let output = match result {
-        CommandResult::NotesGenerated { output } => output,
-        _ => return Err("Unexpected result type".to_string()),
+    let CommandResult::NotesGenerated { output } = result else {
+        return Err("Unexpected result type".to_string());
     };
 
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;

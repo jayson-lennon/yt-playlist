@@ -7,6 +7,9 @@ use crate::services::Services;
 
 use super::RunError;
 
+/// # Errors
+///
+/// Returns an error if note generation fails.
 pub fn run_generate(
     format: &str,
     playlist_path: &Path,

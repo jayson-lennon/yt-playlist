@@ -90,6 +90,9 @@ impl App {
         app
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the command execution fails.
     pub async fn execute_command(
         &mut self,
         command: Command,

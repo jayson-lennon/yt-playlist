@@ -21,6 +21,9 @@ pub enum ActionCommands {
     },
 }
 
+/// # Errors
+///
+/// Returns an error if the MPV load command fails.
 pub fn run_action_mpv(
     path: &Path,
     socket: &Path,

@@ -17,6 +17,9 @@ impl FakeEditor {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned.
     pub fn set_content(&self, content: String) {
         let mut guard = self.content.lock().unwrap();
         *guard = Some(content);
