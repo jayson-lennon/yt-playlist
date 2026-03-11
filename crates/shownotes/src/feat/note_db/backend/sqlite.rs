@@ -163,14 +163,10 @@ impl NoteDb for SqliteNoteDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
+    use crate::test_utils::create_temp_file;
 
     async fn create_test_db() -> SqliteNoteDb {
         SqliteNoteDb::new("sqlite::memory:").await.unwrap()
-    }
-
-    fn create_temp_file() -> NamedTempFile {
-        NamedTempFile::new().unwrap()
     }
 
     #[tokio::test]

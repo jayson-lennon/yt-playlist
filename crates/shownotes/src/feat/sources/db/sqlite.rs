@@ -130,16 +130,12 @@ mod tests {
     use super::*;
     use crate::feat::NoteDb;
     use crate::feat::note_db::SqliteNoteDb;
-    use tempfile::NamedTempFile;
+    use crate::test_utils::create_temp_file;
 
     async fn create_test_db() -> (SqliteSourceDb, SqliteNoteDb) {
         let db = SqliteNoteDb::new("sqlite::memory:").await.unwrap();
         let source_db = SqliteSourceDb::new(db.pool().clone());
         (source_db, db)
-    }
-
-    fn create_temp_file() -> NamedTempFile {
-        NamedTempFile::new().unwrap()
     }
 
     #[tokio::test]

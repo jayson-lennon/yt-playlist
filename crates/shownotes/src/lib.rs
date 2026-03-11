@@ -25,3 +25,6 @@ pub use feat::{ExternalEditor, ExternalEditorError};
 pub use feat::{NoteDb, NoteDbError, PathResolutionError, PathResolver};
 pub use services::Services;
 pub use tui::{Filter, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, TuiState};
+
+#[cfg(test)]
+mod test_utils;

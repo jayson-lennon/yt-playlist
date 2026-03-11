@@ -248,161 +248,84 @@ pub async fn fuzzy(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use std::collections::HashMap;
 
-    use crate::feat::note_db::{NoteDb, SqliteNoteDb};
-    use crate::feat::path_resolver::PathResolverService;
-    use crate::feat::path_resolver::SystemPathResolver;
-    use crate::services::Services;
-    use tempfile::NamedTempFile;
-
-    async fn create_test_services() -> Services {
-        let db = Arc::new(SqliteNoteDb::new("sqlite::memory:").await.unwrap());
-        let path_resolver = Arc::new(SystemPathResolver);
-        let rt = tokio::runtime::Handle::current();
-
-        Services {
-            mpv: crate::feat::mpv::MpvClientService::new(Arc::new(
-                crate::feat::mpv::MpvIpc::new(&std::path::PathBuf::new()),
-            )),
-            media: crate::feat::media_query::MediaQueryService::new(Arc::new(
-                crate::feat::media_query::Ffprobe,
-            )),
-            storage: crate::feat::playlist::PlaylistStorageService::new(Arc::new(
-                crate::feat::playlist::TomlStorage::new(std::path::PathBuf::new()),
-            )),
-            mpv_launcher: crate::feat::mpv::MpvLauncherService::new(Arc::new(
-                crate::feat::mpv::RealMpvLauncher,
-            )),
-            file_launcher: crate::feat::launcher::FileLauncherService::new(Arc::new(
-                crate::feat::launcher::XdgLauncher::new(),
-            )),
-            db: crate::feat::note_db::NoteDbService::new(db),
-            editor: crate::feat::external_editor::ExternalEditorService::new(Arc::new(
-                crate::feat::external_editor::SystemEditor,
-            )),
-            path_resolver: PathResolverService::new(path_resolver),
-            sources: crate::feat::sources::SourceDbService::new(Arc::new(
-                crate::feat::sources::db::sqlite::SqliteSourceDb::new(
-                    sqlx::SqlitePool::connect_with(sqlx::sqlite::SqliteConnectOptions::new())
-                        .await
-                        .unwrap(),
-                ),
-            )),
-            fuzzy_search: crate::feat::fuzzy_search::FuzzySearchService::new(Arc::new(
-                crate::feat::fuzzy_search::backend::SkimBackend,
-            )),
-            rt,
-        }
-    }
-
-    fn create_temp_file() -> NamedTempFile {
-        NamedTempFile::new().unwrap()
-    }
+    use crate::feat::note_db::NoteDb;
+    use crate::test_utils::{create_test_services, create_temp_file, NoteTestContext};
 
     #[tokio::test]
     async fn add_alias_as_note_skips_blank_alias() {
-        // Given
-        let services = create_test_services().await;
-        let temp = create_temp_file();
+        let ctx = NoteTestContext::new().await;
 
-        // When
-        let result = super::add_alias_as_note(&services, temp.path(), "").await.unwrap();
+        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "").await.unwrap();
 
-        // Then
         assert!(!result);
     }
 
     #[tokio::test]
     async fn add_alias_as_note_adds_when_no_conflicts() {
-        // Given
-        let services = create_test_services().await;
-        let temp = create_temp_file();
-        let path_str = temp.path().to_string_lossy();
-        let file_path_id = services.db.get_or_create_file_path(&path_str).await.unwrap();
+        let ctx = NoteTestContext::new().await;
 
-        // When
-        let result = super::add_alias_as_note(&services, temp.path(), "my-alias")
+        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "my-alias")
             .await
             .unwrap();
 
-        // Then
         assert!(result);
-        let note = services.db.get_note(file_path_id).await.unwrap();
+        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("my-alias".to_string()));
     }
 
     #[tokio::test]
     async fn add_alias_as_note_skips_exact_match() {
-        // Given
-        let services = create_test_services().await;
-        let temp = create_temp_file();
-        let path_str = temp.path().to_string_lossy();
-        let file_path_id = services.db.get_or_create_file_path(&path_str).await.unwrap();
-        services
+        let ctx = NoteTestContext::new().await;
+        ctx.services
             .db
-            .upsert_note(file_path_id, "foo")
+            .upsert_note(ctx.file_path_id, "foo")
             .await
             .unwrap();
 
-        // When
-        let result = super::add_alias_as_note(&services, temp.path(), "foo")
+        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "foo")
             .await
             .unwrap();
 
-        // Then
         assert!(!result);
-        let note = services.db.get_note(file_path_id).await.unwrap();
+        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("foo".to_string()));
     }
 
     #[tokio::test]
     async fn add_alias_as_note_skips_substring_match() {
-        // Given
-        let services = create_test_services().await;
-        let temp = create_temp_file();
-        let path_str = temp.path().to_string_lossy();
-        let file_path_id = services.db.get_or_create_file_path(&path_str).await.unwrap();
-        services
+        let ctx = NoteTestContext::new().await;
+        ctx.services
             .db
-            .upsert_note(file_path_id, "foo bar")
+            .upsert_note(ctx.file_path_id, "foo bar")
             .await
             .unwrap();
 
-        // When
-        let result = super::add_alias_as_note(&services, temp.path(), "foo")
+        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "foo")
             .await
             .unwrap();
 
-        // Then
         assert!(!result);
-        let note = services.db.get_note(file_path_id).await.unwrap();
+        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("foo bar".to_string()));
     }
 
     #[tokio::test]
     async fn add_alias_as_note_appends_to_existing() {
-        // Given
-        let services = create_test_services().await;
-        let temp = create_temp_file();
-        let path_str = temp.path().to_string_lossy();
-        let file_path_id = services.db.get_or_create_file_path(&path_str).await.unwrap();
-        services
+        let ctx = NoteTestContext::new().await;
+        ctx.services
             .db
-            .upsert_note(file_path_id, "first")
+            .upsert_note(ctx.file_path_id, "first")
             .await
             .unwrap();
 
-        // When
-        let result = super::add_alias_as_note(&services, temp.path(), "second")
+        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "second")
             .await
             .unwrap();
 
-        // Then
         assert!(result);
-        let note = services.db.get_note(file_path_id).await.unwrap();
+        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("first\nsecond".to_string()));
     }
 

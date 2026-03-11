@@ -649,112 +649,19 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, sync::Arc, time::Duration};
+    use std::sync::Arc;
 
     use crossterm::event::KeyModifiers;
-    use error_stack::Report;
 
     use super::*;
     use crate::feat::FileLauncherService;
     use crate::feat::keymap::{Action, Keymap};
-    use crate::feat::launcher::{FileLauncher, LaunchResult};
-    use crate::feat::media_query::{MediaError, MediaQuery, MediaQueryService};
-    use crate::feat::mpv::{
-        MpvClient, MpvClientService, MpvError, MpvLauncher, MpvLauncherService,
+    use crate::feat::media_query::MediaQueryService;
+    use crate::feat::mpv::{MpvClientService, MpvLauncherService};
+    use crate::feat::playlist::PlaylistStorageService;
+    use crate::test_utils::{
+        FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher, FakeStorageBackend,
     };
-    use crate::feat::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageService};
-
-    struct FakeMpvBackend;
-
-    impl MpvClient for FakeMpvBackend {
-        fn name(&self) -> &'static str {
-            "fake"
-        }
-
-        fn load_file(&self, _path: &Path) -> Result<(), Report<MpvError>> {
-            Ok(())
-        }
-
-        fn load_playlist(&self, _paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
-            Ok(())
-        }
-    }
-
-    struct FakeMpvLauncher {
-        running: bool,
-    }
-
-    impl FakeMpvLauncher {
-        fn new() -> Self {
-            Self { running: false }
-        }
-
-        fn running(mut self, value: bool) -> Self {
-            self.running = value;
-            self
-        }
-    }
-
-    impl MpvLauncher for FakeMpvLauncher {
-        fn name(&self) -> &'static str {
-            "fake"
-        }
-
-        fn is_running(&self, _socket_path: &str) -> bool {
-            self.running
-        }
-
-        fn spawn(&self, _socket_path: &str) -> Result<(), Report<MpvError>> {
-            Ok(())
-        }
-    }
-
-    struct FakeMediaBackend;
-
-    impl MediaQuery for FakeMediaBackend {
-        fn name(&self) -> &'static str {
-            "fake"
-        }
-
-        fn get_duration(&self, _path: &Path) -> Result<Duration, Report<MediaError>> {
-            Ok(Duration::from_secs(120))
-        }
-    }
-
-    struct FakeStorageBackend;
-
-    impl PlaylistStorage for FakeStorageBackend {
-        fn name(&self) -> &'static str {
-            "fake"
-        }
-
-        fn load(&self) -> Result<PlaylistData, Report<IoError>> {
-            Ok(PlaylistData::default())
-        }
-
-        fn save(&self, _data: &PlaylistData) -> Result<(), Report<IoError>> {
-            Ok(())
-        }
-    }
-
-    struct FakeLauncher;
-
-    impl FileLauncher for FakeLauncher {
-        fn name(&self) -> &'static str {
-            "fake"
-        }
-
-        fn launch(
-            &self,
-            _path: &Path,
-            _command: Option<&str>,
-            _socket_path: &str,
-        ) -> Result<LaunchResult, Report<crate::feat::launcher::LaunchError>> {
-            Ok(LaunchResult {
-                used_default_opener: false,
-            })
-        }
-    }
 
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
