@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use error_stack::Report;
 
-use super::{ExternalEditor, ExternalEditorError};
+use super::super::{ExternalEditor, ExternalEditorError};
 
 #[derive(Debug, Clone)]
 pub struct FakeEditor {
