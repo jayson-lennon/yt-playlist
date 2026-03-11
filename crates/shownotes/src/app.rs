@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use crossterm::event::{Event, KeyCode};
 use error_stack::Report;
 
-use crate::command::{execute, Command, CommandError, CommandResult};
+use crate::command::{Command, CommandError, CommandResult, execute};
 use crate::feat::config::Config;
-use crate::feat::playlist::PlaylistData;
 use crate::feat::keymap::{Action, Keymap};
+use crate::feat::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui::{ItemDisplayMode, Pane, PlaylistItem, TuiState, get_mime_type};
 
@@ -290,8 +290,9 @@ impl App {
                                     let services = self.services.clone();
                                     self.tokio_runtime.block_on(async {
                                         let _ = crate::command::notes::add_alias_as_note(
-                                            &services, &path, &alias
-                                        ).await;
+                                            &services, &path, &alias,
+                                        )
+                                        .await;
                                     });
                                 }
                             }
@@ -490,10 +491,8 @@ impl App {
                 self.save_playlist();
                 self.tui_state.status_message = Some("Virtual entry deleted".to_string());
             } else {
-                self.tui_state.status_message = Some(
-                    "Only virtual entries (URLs) can be deleted. Use 'd' to move to library."
-                        .to_string(),
-                );
+                self.tui_state.status_message =
+                    Some("Only virtual entries (URLs) can be deleted.".to_string());
             }
         }
     }
@@ -564,20 +563,25 @@ impl App {
                 command: cmd.map(str::to_string),
                 socket_path: self.runtime.socket_path.clone(),
             };
-            match self.tokio_runtime.block_on(execute(&self.services, command)) {
-                Ok(CommandResult::FileLaunched { used_default_opener, .. }) => {
+            match self
+                .tokio_runtime
+                .block_on(execute(&self.services, command))
+            {
+                Ok(CommandResult::FileLaunched {
+                    used_default_opener,
+                    ..
+                }) => {
                     if used_default_opener {
-                        self.tui_state.status_message = Some(format!(
-                            "Opening with default opener: {}",
-                            path.display()
-                        ));
+                        self.tui_state.status_message =
+                            Some(format!("Opening with default opener: {}", path.display()));
                     } else {
                         self.tui_state.status_message =
                             Some(format!("Opening: {}", path.display()));
                     }
                 }
                 Err(e) => {
-                    self.tui_state.show_error(format!("Failed to open file: {e:?}"));
+                    self.tui_state
+                        .show_error(format!("Failed to open file: {e:?}"));
                 }
                 _ => unreachable!(),
             }
@@ -601,10 +605,12 @@ impl App {
         }
 
         let command = Command::MpvLoadPlaylist { paths };
-        match self.tokio_runtime.block_on(execute(&self.services, command)) {
+        match self
+            .tokio_runtime
+            .block_on(execute(&self.services, command))
+        {
             Ok(CommandResult::MpvPlaylistLoaded { count }) => {
-                self.tui_state.status_message =
-                    Some(format!("Loaded {count} items into mpv"));
+                self.tui_state.status_message = Some(format!("Loaded {count} items into mpv"));
             }
             Err(e) => {
                 self.tui_state
@@ -618,11 +624,18 @@ impl App {
         let command = Command::MpvSpawn {
             socket_path: self.runtime.socket_path.clone(),
         };
-        match self.tokio_runtime.block_on(execute(&self.services, command)) {
-            Ok(CommandResult::MpvSpawned { was_already_running: true }) => {
+        match self
+            .tokio_runtime
+            .block_on(execute(&self.services, command))
+        {
+            Ok(CommandResult::MpvSpawned {
+                was_already_running: true,
+            }) => {
                 self.tui_state.status_message = Some("MPV already running".to_string());
             }
-            Ok(CommandResult::MpvSpawned { was_already_running: false }) => {
+            Ok(CommandResult::MpvSpawned {
+                was_already_running: false,
+            }) => {
                 self.tui_state.status_message = Some("MPV launched".to_string());
             }
             Err(e) => {
@@ -643,13 +656,13 @@ mod tests {
 
     use super::*;
     use crate::feat::FileLauncherService;
+    use crate::feat::keymap::{Action, Keymap};
     use crate::feat::launcher::{FileLauncher, LaunchResult};
     use crate::feat::media_query::{MediaError, MediaQuery, MediaQueryService};
     use crate::feat::mpv::{
         MpvClient, MpvClientService, MpvError, MpvLauncher, MpvLauncherService,
     };
     use crate::feat::playlist::{IoError, PlaylistData, PlaylistStorage, PlaylistStorageService};
-use crate::feat::keymap::{Action, Keymap};
 
     struct FakeMpvBackend;
 
