@@ -7,9 +7,9 @@ use fuzzy_matcher::FuzzyMatcher;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ItemDisplayMode {
     /// Show filename as primary (current behavior).
-    #[default]
     Path,
     /// Show alias as primary when available.
+    #[default]
     Alias,
 }
 
