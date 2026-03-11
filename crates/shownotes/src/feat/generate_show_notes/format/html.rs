@@ -7,11 +7,11 @@ impl ShowNotesFormat for HtmlFormat {
         entries
             .iter()
             .filter(|e| !e.sources.is_empty())
-            .flat_map(|entry| {
+            .filter_map(|entry| {
                 entry
                     .sources
-                    .iter()
-                    .map(move |url| format!("<a href=\"{}\">{}</a>", url, entry.display_name()))
+                    .first()
+                    .map(|url| format!("<a href=\"{}\">{}</a>", url, entry.display_name()))
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -61,10 +61,25 @@ mod tests {
             vec!["https://a.com", "https://b.com"],
         )];
         let output = HtmlFormat.format(&entries);
-        assert_eq!(
-            output,
-            "<a href=\"https://a.com\">video.mp4</a>\n<a href=\"https://b.com\">video.mp4</a>"
-        );
+        assert_eq!(output, "<a href=\"https://a.com\">video.mp4</a>");
+    }
+
+    #[test]
+    fn format_uses_only_first_source() {
+        let entries = vec![entry(
+            "video.mp4",
+            None,
+            vec![
+                "https://first.com",
+                "https://second.com",
+                "https://third.com",
+            ],
+        )];
+        let output = HtmlFormat.format(&entries);
+        assert_eq!(output, "<a href=\"https://first.com\">video.mp4</a>");
+        assert!(!output.contains("second.com"));
+        assert!(!output.contains("third.com"));
+        assert_eq!(output.matches("video.mp4").count(), 1);
     }
 
     #[test]

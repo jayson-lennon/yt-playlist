@@ -7,11 +7,11 @@ impl ShowNotesFormat for MarkdownFormat {
         entries
             .iter()
             .filter(|e| !e.sources.is_empty())
-            .flat_map(|entry| {
+            .filter_map(|entry| {
                 entry
                     .sources
-                    .iter()
-                    .map(move |url| format!("- [{}]({})", entry.display_name(), url))
+                    .first()
+                    .map(|url| format!("- [{}]({})", entry.display_name(), url))
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -61,10 +61,25 @@ mod tests {
             vec!["https://a.com", "https://b.com"],
         )];
         let output = MarkdownFormat.format(&entries);
-        assert_eq!(
-            output,
-            "- [video.mp4](https://a.com)\n- [video.mp4](https://b.com)"
-        );
+        assert_eq!(output, "- [video.mp4](https://a.com)");
+    }
+
+    #[test]
+    fn format_uses_only_first_source() {
+        let entries = vec![entry(
+            "video.mp4",
+            None,
+            vec![
+                "https://first.com",
+                "https://second.com",
+                "https://third.com",
+            ],
+        )];
+        let output = MarkdownFormat.format(&entries);
+        assert_eq!(output, "- [video.mp4](https://first.com)");
+        assert!(!output.contains("second.com"));
+        assert!(!output.contains("third.com"));
+        assert_eq!(output.matches("video.mp4").count(), 1);
     }
 
     #[test]
