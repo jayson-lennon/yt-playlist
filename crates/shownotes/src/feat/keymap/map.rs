@@ -83,6 +83,7 @@ impl Keymap {
             .bind("gnm", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
             .describe_prefix("a", "add")
             .bind("au", Action::AddUrl, "add url", Cat::General, Ctx::Global)
+            .describe_prefix("<leader>", "<leader>")
             .describe_prefix("<leader>u", "ui")
             .bind("<leader>ua", Action::ShowAlias, "show alias", Cat::General, Ctx::Global)
             .bind("<leader>up", Action::ShowPath, "show path", Cat::General, Ctx::Global);
