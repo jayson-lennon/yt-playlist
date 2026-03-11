@@ -76,7 +76,6 @@ impl Keymap {
             .bind("q", Action::Quit, "quit", Cat::General, Ctx::Global)
             .bind("j", Action::MoveDown, "down", Cat::Navigation, Ctx::Global)
             .bind("k", Action::MoveUp, "up", Cat::Navigation, Ctx::Global)
-            .bind("<Tab>", Action::SwitchPane, "switch pane", Cat::PaneSwitch, Ctx::Global)
             .bind("h", Action::FocusPlaylist, "focus playlist", Cat::PaneSwitch, Ctx::Global)
             .bind("l", Action::FocusLibrary, "focus library", Cat::PaneSwitch, Ctx::Global)
             .bind("r", Action::Rename, "rename", Cat::ItemActions, Ctx::Global)
