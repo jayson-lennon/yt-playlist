@@ -11,6 +11,9 @@ use crate::services::Services;
 
 use super::CommandError;
 
+/// # Errors
+///
+/// Returns an error if path resolution, database operations, or editor invocation fails.
 pub async fn add(
     services: &Services,
     paths: Vec<std::path::PathBuf>,
@@ -102,6 +105,9 @@ async fn upsert_note_with_prepend(
     Ok(())
 }
 
+/// # Errors
+///
+/// Returns an error if database search or current directory retrieval fails.
 pub async fn search(
     services: &Services,
     query: &str,
@@ -130,6 +136,9 @@ pub async fn search(
     Ok((results, symlinks_created))
 }
 
+/// # Errors
+///
+/// Returns an error if path resolution or database operations fail.
 pub async fn add_alias_as_note(
     services: &Services,
     path: &Path,
@@ -178,10 +187,13 @@ pub async fn add_alias_as_note(
     Ok(true)
 }
 
-pub async fn migrate_aliases_to_notes(
+pub async fn migrate_aliases_to_notes<S>(
     services: &Services,
-    files: &HashMap<std::path::PathBuf, crate::feat::playlist::FileMetadata>,
-) -> (usize, usize) {
+    files: &HashMap<std::path::PathBuf, crate::feat::playlist::FileMetadata, S>,
+) -> (usize, usize)
+where
+    S: std::hash::BuildHasher,
+{
     let mut migrated = 0;
     let mut skipped = 0;
 
@@ -197,6 +209,9 @@ pub async fn migrate_aliases_to_notes(
     (migrated, skipped)
 }
 
+/// # Errors
+///
+/// Returns an error if database operations, fuzzy search, or current directory retrieval fails.
 pub async fn fuzzy(
     services: &Services,
     create_symlinks: bool,

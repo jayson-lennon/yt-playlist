@@ -134,7 +134,7 @@ impl TuiState {
         let new_alias = self.rename.submit();
         if let Some(item) = self.get_selected_item_mut() {
             let old_alias = item.alias.clone();
-            item.alias = new_alias.clone();
+            item.alias.clone_from(&new_alias);
             Some((item.path.clone(), old_alias, new_alias))
         } else {
             None
