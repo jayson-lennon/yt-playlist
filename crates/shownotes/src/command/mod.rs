@@ -1,7 +1,7 @@
 mod generate;
 mod launcher;
 mod mpv;
-mod notes;
+pub mod notes;
 mod output;
 mod sources;
 

@@ -15,3 +15,7 @@ tokio = { workspace = true }
 [[test]]
 name = "symlinks"
 harness = false
+
+[[test]]
+name = "alias_notes"
+harness = false

@@ -110,6 +110,7 @@ pub fn run_tui(
     let playlist_data = playlist_storage.load().change_context(RunError)?;
     let all_files = collect_all_files(&playlist_data, &config, &library_path);
     let ffprobe_backend: Arc<dyn MediaQuery> = Arc::new(Ffprobe);
+    let files_for_migration = playlist_data.files.clone();
 
     let result = crate::feat::media_duration_analysis::analyze_files(
         &all_files,
@@ -147,6 +148,15 @@ pub fn run_tui(
         playlist,
         rt,
     );
+
+    {
+        let services = app.services.clone();
+        let files = files_for_migration;
+        app.tokio_runtime.spawn(async move {
+            let _ = crate::command::notes::migrate_aliases_to_notes(&services, &files).await;
+        });
+    }
+
     let res = run_app(&mut terminal, &mut app);
 
     disable_raw_mode().change_context(RunError)?;

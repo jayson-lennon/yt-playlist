@@ -130,10 +130,14 @@ impl TuiState {
         self.rename.cancel();
     }
 
-    pub fn submit_rename(&mut self) {
-        let alias = self.rename.submit();
+    pub fn submit_rename(&mut self) -> Option<(PathBuf, Option<String>, Option<String>)> {
+        let new_alias = self.rename.submit();
         if let Some(item) = self.get_selected_item_mut() {
-            item.alias = alias;
+            let old_alias = item.alias.clone();
+            item.alias = new_alias.clone();
+            Some((item.path.clone(), old_alias, new_alias))
+        } else {
+            None
         }
     }
 

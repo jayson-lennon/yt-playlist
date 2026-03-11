@@ -283,7 +283,20 @@ impl App {
                         self.tui_state.cancel_rename();
                     }
                     KeyCode::Enter => {
-                        self.tui_state.submit_rename();
+                        if let Some((path, old_alias, new_alias)) = self.tui_state.submit_rename() {
+                            if old_alias != new_alias {
+                                if let Some(ref alias) = new_alias {
+                                    let path = path.clone();
+                                    let alias = alias.clone();
+                                    let services = self.services.clone();
+                                    self.tokio_runtime.block_on(async {
+                                        let _ = crate::command::notes::add_alias_as_note(
+                                            &services, &path, &alias
+                                        ).await;
+                                    });
+                                }
+                            }
+                        }
                     }
                     KeyCode::Backspace => {
                         self.tui_state.pop_rename_char();
