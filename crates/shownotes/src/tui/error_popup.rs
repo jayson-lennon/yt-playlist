@@ -5,6 +5,11 @@ use ratatui::{
     Frame,
 };
 
+/// Error popup display state.
+///
+/// Manages the display of error messages in a modal popup overlay.
+/// When active, any key press dismisses the popup and returns to
+/// normal operation.
 #[derive(Debug, Clone, Default)]
 pub struct ErrorPopup {
     pub active: bool,

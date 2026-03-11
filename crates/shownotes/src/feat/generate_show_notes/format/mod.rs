@@ -6,6 +6,10 @@ use std::path::Path;
 
 use derive_more::Debug;
 
+/// A single entry in generated show notes.
+///
+/// Contains all the information for one media file in the output,
+/// including its path, alias, duration, source URLs, and notes content.
 #[derive(Debug, Clone)]
 pub struct ShowNotesEntry {
     pub path: String,
@@ -34,6 +38,10 @@ pub trait ShowNotesFormat: Send + Sync {
     fn name(&self) -> &'static str;
 }
 
+/// Registry of available output formats for show notes.
+///
+/// Manages the available format implementations (HTML, Markdown, plain text)
+/// and provides lookup by format name for the generate command.
 pub struct FormatRegistry {
     formats: Vec<Box<dyn ShowNotesFormat>>,
 }

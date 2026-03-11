@@ -27,6 +27,11 @@ pub trait ExternalEditor: Send + Sync {
     ) -> Result<Option<String>, Report<ExternalEditorError>>;
 }
 
+/// Service for opening external text editors.
+///
+/// Provides an interface for launching an external editor to edit
+/// text content, such as notes or source URLs. Uses the system's
+/// configured editor (from $EDITOR or $VISUAL).
 #[derive(Debug, Clone)]
 pub struct ExternalEditorService {
     #[debug("<ExternalEditor>")]

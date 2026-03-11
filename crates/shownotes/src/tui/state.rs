@@ -6,6 +6,12 @@ use crate::tui::{
     ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput, WhichKey,
 };
 
+/// Complete terminal UI state for the application.
+///
+/// Holds all mutable state for rendering and interacting with the TUI,
+/// including both panes (playlist and library), the currently focused pane,
+/// input modes (filtering, renaming, URL input), error display, and the
+/// which-key help popup.
 pub struct TuiState {
     pub pending_keys: Vec<Key>,
     pub playlist_pane: PlaylistPane,

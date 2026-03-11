@@ -7,6 +7,11 @@ use ratatui::{
 
 use super::common::PlaylistItem;
 
+/// Rename mode state for editing item aliases.
+///
+/// Manages the rename input mode where the user can set or modify
+/// the alias for a playlist item. The alias is displayed instead of
+/// the filename when showing the item in the TUI.
 #[derive(Debug, Clone, Default)]
 pub struct Rename {
     pub active: bool,

@@ -25,6 +25,10 @@ pub trait MpvClient: Send + Sync {
     fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>>;
 }
 
+/// Service for communicating with mpv via IPC.
+///
+/// Provides an interface for controlling a running mpv instance through
+/// its JSON IPC socket. Supports loading playlists and querying player state.
 #[derive(Debug, Clone)]
 pub struct MpvClientService {
     #[debug("backend<{}>", self.backend.name())]
@@ -59,6 +63,10 @@ pub trait MpvLauncher: Send + Sync {
     fn spawn(&self, socket_path: &str) -> Result<(), Report<MpvError>>;
 }
 
+/// Service for launching the mpv media player.
+///
+/// Handles spawning mpv processes and checking if mpv is already running.
+/// Used to start mpv with the appropriate socket for IPC communication.
 #[derive(Debug, Clone)]
 pub struct MpvLauncherService {
     #[debug("backend<{}>", self.backend.name())]

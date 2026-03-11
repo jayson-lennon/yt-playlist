@@ -13,12 +13,21 @@ pub enum ItemDisplayMode {
     Alias,
 }
 
+/// Which pane is currently focused in the TUI.
+///
+/// The focused pane receives keyboard input for navigation and actions.
+/// Some keybindings are context-sensitive and only apply to specific panes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pane {
     Playlist,
     Library,
 }
 
+/// An item in the playlist or library.
+///
+/// Represents a media file or virtual URL with associated metadata including
+/// duration, optional alias for display, MIME type, and whether it's a virtual
+/// item (URL) that doesn't exist on the local filesystem.
 #[derive(Debug, Clone)]
 pub struct PlaylistItem {
     pub path: PathBuf,

@@ -13,6 +13,11 @@ use crate::feat::path_resolver::{PathResolverService, SystemPathResolver};
 use crate::feat::playlist::PlaylistStorageService;
 use crate::feat::sources::{SourceDbService, db::sqlite::SqliteSourceDb};
 
+/// Container for all injectable service dependencies.
+///
+/// Holds references to all the services used by the application, enabling
+/// dependency injection and making it easy to swap implementations for testing.
+/// Each service wraps a backend trait object that performs the actual work.
 #[derive(Debug, Clone)]
 pub struct Services {
     pub mpv: MpvClientService,

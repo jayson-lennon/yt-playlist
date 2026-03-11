@@ -17,6 +17,10 @@ pub mod notes;
 pub mod sources;
 pub mod tui;
 
+/// CLI arguments for the shownotes application.
+///
+/// Defines the command-line interface including global options like
+/// the database path and subcommands for different modes of operation.
 #[derive(Parser)]
 #[command(name = "shownotes")]
 #[command(about = "TUI playlist manager for mpv with notes support")]
@@ -29,6 +33,10 @@ pub struct Args {
     pub command: Option<Commands>,
 }
 
+/// Available CLI subcommands.
+///
+/// Each variant represents a different mode of operation, from the
+/// interactive TUI to one-shot commands for notes and sources management.
 #[derive(Subcommand)]
 pub enum Commands {
     /// Run the TUI (default when no command specified)

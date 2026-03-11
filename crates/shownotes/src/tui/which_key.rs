@@ -16,6 +16,10 @@ pub enum WhichKeyPosition {
     BottomRight,
 }
 
+/// Configuration for the which-key popup display.
+///
+/// Defines the visual styling and dimensions of the which-key help popup
+/// that shows available keybindings.
 #[derive(Debug, Clone)]
 pub struct WhichKeyConfig {
     pub max_height: u16,
@@ -31,6 +35,11 @@ impl Default for WhichKeyConfig {
     }
 }
 
+/// Which-key popup for showing available keybindings.
+///
+/// Displays a help popup showing available key sequences when the user
+/// presses a prefix key. Supports nested key sequences and shows
+/// descriptions for each binding.
 #[derive(Debug, Clone, Default)]
 pub struct WhichKey {
     pub active: bool,

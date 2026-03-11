@@ -1,5 +1,10 @@
 use super::{parse_key_sequence, Action, Key, KeyCategory, KeyContext, Keymap};
 
+/// Builder for creating keybinding groups under a prefix.
+///
+/// Used within `Keymap::describe()` closures to add bindings under
+/// a common prefix key. Provides a fluent interface for defining
+/// multiple related keybindings.
 pub struct GroupBuilder<'a> {
     keymap: &'a mut Keymap,
     prefix: Vec<Key>,

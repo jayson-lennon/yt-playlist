@@ -12,6 +12,11 @@ use super::common::{
 };
 use super::filter::Filter;
 
+/// The library pane showing available media files.
+///
+/// Displays files from the library directory that are not currently in the playlist,
+/// along with any virtual URL items that have been added. Supports filtering,
+/// selection navigation, and moving items to the playlist.
 #[derive(Debug, Clone)]
 pub struct LibraryPane {
     pub items: Vec<PlaylistItem>,

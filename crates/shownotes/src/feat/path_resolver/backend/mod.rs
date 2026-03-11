@@ -11,6 +11,11 @@ pub mod system;
 
 pub use system::SystemPathResolver;
 
+/// Service for resolving relative paths.
+///
+/// Provides an interface for resolving relative file paths to absolute
+/// paths, handling symlinks and path normalization. Delegates to a
+/// backend implementation for actual path resolution.
 #[derive(Debug, Clone)]
 pub struct PathResolverService {
     #[debug("<PathResolver>")]

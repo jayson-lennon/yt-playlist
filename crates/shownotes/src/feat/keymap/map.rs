@@ -8,6 +8,11 @@ use super::{
 };
 use crate::tui::Pane;
 
+/// Error indicating a key sequence is missing a description.
+///
+/// Created during keymap finalization when a branch node (prefix key)
+/// doesn't have a description set, which is required for the which-key
+/// help display.
 #[derive(Debug, Clone)]
 pub struct MissingDescription {
     pub path: Vec<Key>,
@@ -20,6 +25,10 @@ impl fmt::Display for MissingDescription {
     }
 }
 
+/// Error from keymap finalization with missing descriptions.
+///
+/// Contains a list of all key sequences that are missing descriptions,
+/// collected during the finalization validation step.
 #[derive(Debug, Clone)]
 pub struct FinalizeError {
     pub missing_descriptions: Vec<MissingDescription>,
@@ -37,6 +46,12 @@ impl fmt::Display for FinalizeError {
 
 impl std::error::Error for FinalizeError {}
 
+/// Hierarchical keybinding map with context-aware dispatch.
+///
+/// Stores keybindings in a tree structure to support multi-key sequences
+/// (like "gm" for launching mpv). Supports context-aware bindings that
+/// only apply in specific panes, and provides the which-key help display
+/// with binding descriptions.
 #[derive(Debug, Clone)]
 pub struct Keymap {
     bindings: Vec<KeyChild>,

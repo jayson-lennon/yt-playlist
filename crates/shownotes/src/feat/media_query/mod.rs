@@ -16,6 +16,11 @@ pub trait MediaQuery: Send + Sync {
     fn get_duration(&self, path: &Path) -> Result<Duration, Report<MediaError>>;
 }
 
+/// Service for querying media file metadata.
+///
+/// Provides an interface for extracting metadata from media files,
+/// such as duration. Delegates to a backend implementation (ffprobe)
+/// for actual media analysis.
 #[derive(Debug, Clone)]
 pub struct MediaQueryService {
     #[debug("backend<{}>", self.backend.name())]

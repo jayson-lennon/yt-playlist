@@ -12,6 +12,11 @@ use wherror::Error;
 #[error(debug)]
 pub struct SourceDbError;
 
+/// A source URL associated with a media file.
+///
+/// Represents provenance information tracking where a media file
+/// originated from, such as a YouTube URL or other source link.
+/// Optionally includes a human-readable label.
 #[derive(Debug, Clone)]
 pub struct Source {
     pub id: i64,
@@ -56,6 +61,11 @@ pub trait SourceDb: Send + Sync {
     ) -> Result<HashMap<String, Vec<Source>>, Report<SourceDbError>>;
 }
 
+/// Service for managing source URL database operations.
+///
+/// Provides an interface for storing and retrieving source URLs
+/// associated with media files. Delegates to a backend implementation
+/// for actual database operations.
 #[derive(Debug, Clone)]
 pub struct SourceDbService {
     #[debug("<SourceDb>")]

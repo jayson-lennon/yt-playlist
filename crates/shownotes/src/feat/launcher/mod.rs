@@ -14,6 +14,10 @@ pub struct LaunchError {
     pub stderr: Option<String>,
 }
 
+/// Result of a file launch operation.
+///
+/// Contains information about how the file was opened, including
+/// whether the default system opener was used.
 pub struct LaunchResult {
     pub used_default_opener: bool,
 }
@@ -31,6 +35,11 @@ pub trait FileLauncher: Send + Sync {
     ) -> Result<LaunchResult, Report<LaunchError>>;
 }
 
+/// Service for launching files with external applications.
+///
+/// Provides an interface for opening files using either a configured
+/// command or the system's default application handler. Delegates
+/// to a backend implementation for actual file launching.
 #[derive(Debug, Clone)]
 pub struct FileLauncherService {
     #[debug("backend<{}>", self.backend.name())]

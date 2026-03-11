@@ -10,6 +10,11 @@ use crate::feat::playlist::PlaylistData;
 use crate::services::Services;
 use crate::tui::{ItemDisplayMode, Pane, PlaylistItem, TuiState, get_mime_type};
 
+/// Holds pending actions that require forking from the TUI.
+///
+/// When certain actions need to spawn an external process (like opening an editor
+/// for notes or sources), the TUI must exit and the action is stored here. The
+/// main loop checks this struct and executes any pending action before continuing.
 #[derive(Default)]
 pub struct Fork {
     pub notes_path: Option<PathBuf>,
@@ -18,6 +23,10 @@ pub struct Fork {
     pub generate_notes: Option<String>,
 }
 
+/// Actions that can be taken when forking from the TUI.
+///
+/// Each variant represents an external operation that requires suspending
+/// the terminal UI to interact with an external program or output.
 pub enum ForkAction {
     AddNote { path: PathBuf },
     FuzzyNotes,
@@ -44,6 +53,11 @@ impl Fork {
     }
 }
 
+/// Runtime configuration computed at application startup.
+///
+/// Contains settings that are determined once when the application starts
+/// and remain constant throughout the application's lifetime, such as
+/// the keymap, socket path, and library/playlist paths.
 pub struct RuntimeSettings {
     pub keymap: Keymap,
     pub socket_path: String,
@@ -51,6 +65,11 @@ pub struct RuntimeSettings {
     pub playlist_path: PathBuf,
 }
 
+/// The main application state container.
+///
+/// Holds all the state needed to run the shownotes TUI application, including
+/// services for external interactions, TUI state for rendering, user configuration,
+/// runtime settings, and the tokio runtime for async operations.
 pub struct App {
     pub services: Services,
     pub tui_state: TuiState,

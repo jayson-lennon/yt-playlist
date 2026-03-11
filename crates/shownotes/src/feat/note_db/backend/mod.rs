@@ -11,6 +11,11 @@ pub mod sqlite;
 
 pub use sqlite::{SqliteNoteDb, SqliteNoteDbError};
 
+/// Service for managing file notes database operations.
+///
+/// Provides an interface for storing and retrieving notes associated
+/// with media files. Delegates to a backend implementation (SQLite)
+/// for actual database operations.
 #[derive(Debug, Clone)]
 pub struct NoteDbService {
     #[debug("<NoteDb>")]

@@ -17,7 +17,10 @@ pub use output::format_output;
 #[error(debug)]
 pub struct CommandError;
 
-/// Input commands that can be executed.
+/// All executable commands in the application.
+///
+/// Represents the commands that can be executed by the command system,
+/// including launching files, controlling mpv, and managing playlists.
 pub enum Command {
     /// Adds a source URL to a file.
     SourcesAdd { path: PathBuf, url: String },
@@ -46,7 +49,10 @@ pub enum Command {
     MpvSpawn { socket_path: String },
 }
 
-/// Results returned from executing commands.
+/// Results from command execution.
+///
+/// Contains the outcome of executing a command, providing type-safe
+/// result variants for each possible command outcome.
 #[derive(Debug)]
 pub enum CommandResult {
     /// Confirms a source URL was added for the path.

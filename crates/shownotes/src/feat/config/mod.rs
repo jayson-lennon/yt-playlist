@@ -9,6 +9,11 @@ use wherror::Error;
 #[error(debug)]
 pub struct ConfigError;
 
+/// Definition of a MIME type category with associated extensions.
+///
+/// Groups related MIME types and file extensions together, optionally
+/// specifying a command to use when opening files of this category.
+/// Used to categorize media files as video or audio.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MimeCategory {
     pub mime_types: Vec<String>,
@@ -16,6 +21,11 @@ pub struct MimeCategory {
     pub cmd: Option<String>,
 }
 
+/// Application configuration for MIME types and commands.
+///
+/// Defines how the application categorizes and handles different media types.
+/// Contains separate categories for video and audio files, each with their
+/// associated MIME types, file extensions, and optional launch commands.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub video: MimeCategory,

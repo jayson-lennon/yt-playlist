@@ -1,5 +1,10 @@
 use crossterm::event::KeyCode;
 
+/// A key that can be bound to an action.
+///
+/// Represents keyboard input including characters, special keys like
+/// Tab and Enter, arrow keys, and a leader key placeholder that
+/// resolves to the configured leader key (space by default).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
     Char(char),

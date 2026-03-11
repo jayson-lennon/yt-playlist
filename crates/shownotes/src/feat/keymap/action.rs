@@ -1,3 +1,7 @@
+/// Output format for generating show notes.
+///
+/// Specifies the format to use when exporting playlist notes,
+/// supporting HTML, Markdown, and plain text output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ShowNoteKind {
     Html,
@@ -13,6 +17,10 @@ impl ShowNoteKind {
     }
 }
 
+/// All available actions in the TUI.
+///
+/// Represents every user action that can be triggered by keybindings,
+/// from navigation and pane switching to launching mpv and editing notes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
     Quit,

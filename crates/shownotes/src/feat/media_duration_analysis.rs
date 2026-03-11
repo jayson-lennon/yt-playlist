@@ -5,6 +5,11 @@ use error_stack::Report;
 use super::media_query::{MediaError, MediaQuery};
 use super::playlist::FileMetadata;
 
+/// Result of analyzing media file durations.
+///
+/// Contains statistics about media file duration analysis, including
+/// the number of files analyzed, files with missing durations, and
+/// total duration.
 pub struct AnalysisResult {
     pub files: HashMap<PathBuf, FileMetadata>,
 }

@@ -8,6 +8,11 @@ use wherror::Error;
 #[error(debug)]
 pub struct IoError;
 
+/// Metadata associated with a file in the playlist.
+///
+/// Stores optional information about a file including its duration,
+/// display alias, whether it's a virtual item (URL), deletion status,
+/// and MIME type.
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
     pub duration: Option<std::time::Duration>,
@@ -17,6 +22,11 @@ pub struct FileMetadata {
     pub mime_type: Option<String>,
 }
 
+/// Complete playlist data including order and file metadata.
+///
+/// Contains the ordered list of file paths in the playlist and a map
+/// of metadata for each file. This structure is serialized to and
+/// deserialized from the playlist storage file.
 #[derive(Debug, Clone, Default)]
 pub struct PlaylistData {
     pub playlist: Vec<PathBuf>,
@@ -37,6 +47,11 @@ pub trait PlaylistStorage: Send + Sync {
     fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>>;
 }
 
+/// Service for loading and saving playlist data.
+///
+/// Wraps a storage backend to provide a simple interface for persisting
+/// playlist state. Delegates actual storage operations to the backend
+/// implementation (e.g., TOML file storage).
 #[derive(Debug, Clone)]
 pub struct PlaylistStorageService {
     #[debug("backend<{}>", self.backend.name())]

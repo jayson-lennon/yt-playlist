@@ -5,6 +5,11 @@ use ratatui::{
     Frame,
 };
 
+/// Filter state for searching/filtering items in a pane.
+///
+/// Manages the filter input mode where the user types a search pattern,
+/// and tracks whether a filter has been applied. Uses fuzzy matching
+/// to filter items by their display names.
 #[derive(Debug, Clone, Default)]
 pub struct Filter {
     pub active: bool,

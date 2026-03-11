@@ -12,6 +12,11 @@ use super::common::{
 };
 use super::filter::Filter;
 
+/// The playlist pane showing queued media files.
+///
+/// Displays the current playlist with items in order, supporting reordering,
+/// filtering, selection navigation, and moving items back to the library.
+/// The playlist order determines the sequence for playback in mpv.
 #[derive(Debug, Clone)]
 pub struct PlaylistPane {
     pub items: Vec<PlaylistItem>,

@@ -10,6 +10,10 @@ use wherror::Error;
 #[error(debug)]
 pub struct FuzzySearchError(pub String);
 
+/// Result from a fuzzy search operation.
+///
+/// Contains the matched file path and its associated note content
+/// for display in search results.
 pub struct FuzzySearchResult {
     pub selected_paths: Vec<String>,
 }
@@ -25,6 +29,11 @@ pub trait FuzzySearch: Send + Sync {
     ) -> Result<FuzzySearchResult, Report<FuzzySearchError>>;
 }
 
+/// Service for fuzzy searching through notes.
+///
+/// Provides an interface for searching across all stored notes using
+/// fuzzy matching. Delegates to a backend implementation (skim) for
+/// actual search operations.
 #[derive(Debug, Clone)]
 pub struct FuzzySearchService {
     #[debug("<FuzzySearch>")]

@@ -5,6 +5,11 @@ use ratatui::{
     Frame,
 };
 
+/// URL input mode state for adding virtual items.
+///
+/// Manages the URL input mode where the user can add virtual items
+/// (like YouTube URLs) to the library. Virtual items don't correspond
+/// to local files but can be included in the playlist.
 #[derive(Debug, Clone, Default)]
 pub struct UrlInput {
     pub active: bool,
