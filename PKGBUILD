@@ -22,8 +22,8 @@ prepare() {
     mkdir -p "$_builddir"
 
     # Copy Rust source files to build directory
-    cp -r "$startdir/src" "$_builddir/"
-    cp -r "$startdir/migrations" "$_builddir/"
+    cp -r "$startdir/crates" "$_builddir/"
+    cp -r "$startdir/tests" "$_builddir/"
     cp "$startdir/Cargo.toml" "$_builddir/"
     cp "$startdir/Cargo.lock" "$_builddir/"
 
