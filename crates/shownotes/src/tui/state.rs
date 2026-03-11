@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::common::ItemDisplayMode;
 use crate::feat::keymap::Key;
 use crate::tui::{
     ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput, WhichKey,
@@ -16,6 +17,7 @@ pub struct TuiState {
     pub which_key: WhichKey,
     pub needs_clear: bool,
     pub error_popup: ErrorPopup,
+    pub display_mode: ItemDisplayMode,
 }
 
 impl TuiState {
@@ -31,6 +33,7 @@ impl TuiState {
             which_key: WhichKey::default(),
             needs_clear: false,
             error_popup: ErrorPopup::new(),
+            display_mode: ItemDisplayMode::default(),
         }
     }
 

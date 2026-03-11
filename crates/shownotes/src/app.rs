@@ -8,7 +8,7 @@ use crate::feat::config::Config;
 use crate::feat::playlist::PlaylistData;
 use crate::feat::keymap::{Action, Keymap};
 use crate::services::Services;
-use crate::tui::{Pane, PlaylistItem, TuiState, get_mime_type};
+use crate::tui::{ItemDisplayMode, Pane, PlaylistItem, TuiState, get_mime_type};
 
 #[derive(Default)]
 pub struct Fork {
@@ -410,14 +410,12 @@ impl App {
                     self.tui_state.focused_pane = Pane::Library;
                 }
             }
-            Action::ToggleItem => match self.tui_state.focused_pane {
-                Pane::Library => {
-                    self.move_from_library_to_playlist();
-                }
-                Pane::Playlist => {
-                    self.move_from_playlist_to_library();
-                }
-            },
+            Action::ShowAlias => {
+                self.tui_state.display_mode = ItemDisplayMode::Alias;
+            }
+            Action::ShowPath => {
+                self.tui_state.display_mode = ItemDisplayMode::Path;
+            }
             Action::Rename => {
                 self.tui_state.start_rename();
             }
@@ -1086,61 +1084,6 @@ use crate::feat::keymap::{Action, Keymap};
     }
 
     #[test]
-    fn toggle_item_moves_item_from_library_to_playlist() {
-        // Given a library with one item and empty playlist.
-        let mut app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Library;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then the item moves to the playlist.
-        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
-        assert_eq!(
-            app.tui_state.playlist_pane.items[0].path,
-            PathBuf::from("test.mp4")
-        );
-        assert!(app.tui_state.library_pane.items.is_empty());
-    }
-
-    #[test]
-    fn toggle_item_moves_item_from_playlist_to_library() {
-        // Given a playlist with one item and empty library.
-        let temp_file = tempfile::NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path().to_path_buf();
-        let mut app = TestAppBuilder::new()
-            .playlist_items(vec![temp_path.clone()])
-            .build();
-        app.tui_state.focused_pane = Pane::Playlist;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then the item moves to the library.
-        assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert_eq!(app.tui_state.library_pane.items.len(), 1);
-        assert_eq!(app.tui_state.library_pane.items[0].path, temp_path);
-    }
-
-    #[test]
-    fn toggle_item_removes_missing_file_from_playlist() {
-        // Given a playlist with a missing file.
-        let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("/nonexistent/file.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Playlist;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then the item is removed completely (not added to library).
-        assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert!(app.tui_state.library_pane.items.is_empty());
-    }
-
-    #[test]
     fn launch_file_shows_status_message() {
         // Given a playlist with one item.
         let mut app = TestAppBuilder::new()
@@ -1284,87 +1227,6 @@ use crate::feat::keymap::{Action, Keymap};
         let app = TestAppBuilder::new().build();
 
         // Then focus is on playlist (default).
-        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
-    }
-
-    #[test]
-    fn move_last_library_item_switches_focus_to_playlist() {
-        // Given library with 1 item and playlist with items, focused on library.
-        let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .library_items(vec![PathBuf::from("library.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Library;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then focus switches to playlist.
-        assert!(app.tui_state.library_pane.items.is_empty());
-        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
-    }
-
-    #[test]
-    fn move_last_playlist_item_switches_focus_to_library() {
-        // Given playlist with 1 item and library with items, focused on playlist.
-        let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .library_items(vec![PathBuf::from("library.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Playlist;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then focus switches to library.
-        assert!(app.tui_state.playlist_pane.items.is_empty());
-        assert_eq!(app.tui_state.focused_pane, Pane::Library);
-    }
-
-    #[test]
-    fn move_item_keeps_focus_when_pane_not_empty() {
-        // Given playlist with 2 items and library with items, focused on playlist.
-        let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")])
-            .library_items(vec![PathBuf::from("c.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Playlist;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then focus stays on playlist.
-        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
-        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
-    }
-
-    #[test]
-    fn move_to_empty_library_switches_focus() {
-        // Given playlist with 1 item and empty library, focused on playlist.
-        let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Playlist;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then focus switches to library.
-        assert_eq!(app.tui_state.focused_pane, Pane::Library);
-    }
-
-    #[test]
-    fn move_to_empty_playlist_switches_focus() {
-        // Given library with 1 item and empty playlist, focused on library.
-        let mut app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
-            .build();
-        app.tui_state.focused_pane = Pane::Library;
-
-        // When executing ToggleItem action.
-        app.execute_action(Action::ToggleItem);
-
-        // Then focus switches to playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
@@ -1845,32 +1707,6 @@ use crate::feat::keymap::{Action, Keymap};
                 .unwrap()
                 .contains("virtual")
         );
-    }
-
-    #[test]
-    fn toggle_item_preserves_virtual_when_moving_to_playlist() {
-        // Given a library with a virtual item.
-        let mut app = TestAppBuilder::new().build();
-        let url = PathBuf::from("https://youtube.com/watch?v=test");
-        app.tui_state.library_pane.items.push(PlaylistItem {
-            path: url.clone(),
-            duration: Some(std::time::Duration::from_secs(180)),
-            alias: Some("Test Video".to_string()),
-            mime_type: Some("url".to_string()),
-            is_virtual: true,
-        });
-        app.tui_state.focused_pane = Pane::Library;
-
-        // When toggling (moving to playlist).
-        app.execute_action(Action::ToggleItem);
-
-        // Then the virtual item is in the playlist with all properties.
-        assert!(app.tui_state.library_pane.items.is_empty());
-        assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
-        let item = &app.tui_state.playlist_pane.items[0];
-        assert_eq!(item.path, url);
-        assert!(item.is_virtual);
-        assert_eq!(item.alias, Some("Test Video".to_string()));
     }
 
     #[test]

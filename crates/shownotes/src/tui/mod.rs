@@ -17,7 +17,7 @@ use ratatui::{
     Frame,
 };
 
-pub use common::{get_mime_type, Pane, PlaylistItem};
+pub use common::{get_mime_type, ItemDisplayMode, Pane, PlaylistItem};
 pub use error_popup::ErrorPopup;
 pub use filter::Filter;
 pub use library_pane::LibraryPane;
@@ -40,12 +40,18 @@ pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(panes_area);
 
-    state
-        .playlist_pane
-        .render(frame, chunks[0], state.focused_pane == Pane::Playlist);
-    state
-        .library_pane
-        .render(frame, chunks[1], state.focused_pane == Pane::Library);
+    state.playlist_pane.render(
+        frame,
+        chunks[0],
+        state.focused_pane == Pane::Playlist,
+        state.display_mode,
+    );
+    state.library_pane.render(
+        frame,
+        chunks[1],
+        state.focused_pane == Pane::Library,
+        state.display_mode,
+    );
 
     let status_text = state.status_message.clone().unwrap_or_default();
     let status = Paragraph::new(status_text).style(Style::default().fg(Color::Yellow));

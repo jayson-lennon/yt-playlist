@@ -40,6 +40,7 @@ impl std::error::Error for FinalizeError {}
 #[derive(Debug, Clone)]
 pub struct Keymap {
     bindings: Vec<KeyChild>,
+    leader_key: Key,
 }
 
 impl Keymap {
@@ -51,6 +52,7 @@ impl Keymap {
 
         let mut keymap = Self {
             bindings: Vec::new(),
+            leader_key: Key::Char(' '),
         };
 
         keymap
@@ -63,7 +65,6 @@ impl Keymap {
             .bind("<Tab>", Action::SwitchPane, "switch pane", Cat::PaneSwitch, Ctx::Global)
             .bind("h", Action::FocusPlaylist, "focus playlist", Cat::PaneSwitch, Ctx::Global)
             .bind("l", Action::FocusLibrary, "focus library", Cat::PaneSwitch, Ctx::Global)
-            .bind("<Space>", Action::ToggleItem, "add/remove", Cat::ItemActions, Ctx::Global)
             .bind("r", Action::Rename, "rename", Cat::ItemActions, Ctx::Global)
             .bind("e", Action::EditSources, "edit sources", Cat::ItemActions, Ctx::Global)
             .bind("n", Action::Notes, "notes", Cat::ItemActions, Ctx::Global)
@@ -81,7 +82,10 @@ impl Keymap {
             .bind("gnh", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
             .bind("gnm", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
             .describe_prefix("a", "add")
-            .bind("au", Action::AddUrl, "add url", Cat::General, Ctx::Global);
+            .bind("au", Action::AddUrl, "add url", Cat::General, Ctx::Global)
+            .describe_prefix("<leader>u", "ui")
+            .bind("<leader>ua", Action::ShowAlias, "show alias", Cat::General, Ctx::Global)
+            .bind("<leader>up", Action::ShowPath, "show path", Cat::General, Ctx::Global);
 
         keymap.finalize().expect("keymap has missing descriptions");
         keymap
@@ -90,7 +94,27 @@ impl Keymap {
     pub fn empty() -> Self {
         Self {
             bindings: Vec::new(),
+            leader_key: Key::Char(' '),
         }
+    }
+
+    pub fn with_leader(leader: Key) -> Self {
+        Self {
+            bindings: Vec::new(),
+            leader_key: leader,
+        }
+    }
+
+    fn resolve_leader_keys(&self, keys: &[Key]) -> Vec<Key> {
+        keys.iter()
+            .map(|k| {
+                if *k == Key::Leader {
+                    self.leader_key
+                } else {
+                    *k
+                }
+            })
+            .collect()
     }
 
     pub fn describe<F>(&mut self, prefix: &str, description: &'static str, bindings: F) -> &mut Self
@@ -101,8 +125,9 @@ impl Keymap {
         if prefix_keys.is_empty() {
             return self;
         }
-        self.ensure_branch_with_description(&prefix_keys, description);
-        let mut builder = super::GroupBuilder::new(self, prefix_keys);
+        let resolved_keys = self.resolve_leader_keys(&prefix_keys);
+        self.ensure_branch_with_description(&resolved_keys, description);
+        let mut builder = super::GroupBuilder::new(self, resolved_keys);
         bindings(&mut builder);
         self
     }
@@ -112,7 +137,8 @@ impl Keymap {
         if prefix_keys.is_empty() {
             return self;
         }
-        self.ensure_branch_with_description(&prefix_keys, description);
+        let resolved_keys = self.resolve_leader_keys(&prefix_keys);
+        self.ensure_branch_with_description(&resolved_keys, description);
         self
     }
 
@@ -212,7 +238,8 @@ impl Keymap {
         if keys.is_empty() {
             return self;
         }
-        self.insert_into_tree(&keys, action, description, category, context);
+        let resolved_keys = self.resolve_leader_keys(&keys);
+        self.insert_into_tree(&resolved_keys, action, description, category, context);
         self
     }
 
@@ -338,11 +365,12 @@ impl Keymap {
     }
 
     pub fn get_node_at_path(&self, keys: &[Key]) -> Option<&KeyNode> {
-        if keys.is_empty() {
+        let resolved_keys = self.resolve_leader_keys(keys);
+        if resolved_keys.is_empty() {
             return None;
         }
-        let first_child = self.bindings.iter().find(|c| c.key == keys[0])?;
-        Self::traverse_to_node(first_child, &keys[1..])
+        let first_child = self.bindings.iter().find(|c| c.key == resolved_keys[0])?;
+        Self::traverse_to_node(first_child, &resolved_keys[1..])
     }
 
     fn traverse_to_node<'a>(child: &'a KeyChild, remaining_keys: &[Key]) -> Option<&'a KeyNode> {
@@ -359,7 +387,8 @@ impl Keymap {
     }
 
     pub fn get_children_at_path(&self, keys: &[Key]) -> Option<&[KeyChild]> {
-        let node = self.get_node_at_path(keys)?;
+        let resolved_keys = self.resolve_leader_keys(keys);
+        let node = self.get_node_at_path(&resolved_keys)?;
         match node {
             KeyNode::Branch { children, .. } => Some(children),
             KeyNode::Leaf { .. } => None,
@@ -370,6 +399,13 @@ impl Keymap {
         self.bindings
             .iter()
             .any(|c| c.key == key && c.node.is_branch())
+            || (key == self.leader_key && self.has_leader_bindings())
+    }
+
+    fn has_leader_bindings(&self) -> bool {
+        self.bindings
+            .iter()
+            .any(|c| c.key == self.leader_key && c.node.is_branch())
     }
 
     pub fn get_bindings(&self) -> &[KeyChild] {
@@ -436,5 +472,22 @@ impl Keymap {
 impl Default for Keymap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn leader_key_resolves_to_space_by_default() {
+        let keymap = Keymap::new();
+        assert_eq!(keymap.leader_key, Key::Char(' '));
+    }
+
+    #[test]
+    fn custom_leader_key_resolves_correctly() {
+        let keymap = Keymap::with_leader(Key::Char(','));
+        assert_eq!(keymap.leader_key, Key::Char(','));
     }
 }

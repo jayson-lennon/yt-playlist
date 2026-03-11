@@ -7,7 +7,9 @@ use ratatui::{
     Frame,
 };
 
-use super::common::{filter_items, format_duration, format_item_line, PlaylistItem};
+use super::common::{
+    filter_items, format_duration, format_item_line, ItemDisplayMode, PlaylistItem,
+};
 use super::filter::Filter;
 
 #[derive(Debug, Clone)]
@@ -133,7 +135,13 @@ impl PlaylistPane {
         self.items.iter().map(|item| &item.path).collect()
     }
 
-    pub fn render(&self, frame: &mut Frame, area: Rect, is_focused: bool) {
+    pub fn render(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        is_focused: bool,
+        display_mode: ItemDisplayMode,
+    ) {
         let is_filtering = self.filter.is_active();
         let has_filter = self.filter.has_applied();
 
@@ -170,7 +178,7 @@ impl PlaylistPane {
                 } else {
                     Style::default()
                 };
-                let text = format_item_line(item);
+                let text = format_item_line(item, display_mode);
                 ListItem::new(text).style(style)
             })
             .collect();

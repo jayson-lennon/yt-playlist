@@ -15,6 +15,7 @@ pub enum Key {
     End,
     PageUp,
     PageDown,
+    Leader,
 }
 
 impl Key {
@@ -53,6 +54,7 @@ impl Key {
             Key::End => "End".to_string(),
             Key::PageUp => "PgUp".to_string(),
             Key::PageDown => "PgDn".to_string(),
+            Key::Leader => "Leader".to_string(),
         }
     }
 }
@@ -86,6 +88,7 @@ pub fn parse_key_sequence(s: &str) -> Vec<Key> {
                 "End" => Key::End,
                 "PgUp" => Key::PageUp,
                 "PgDn" => Key::PageDown,
+                "leader" => Key::Leader,
                 _ => Key::Char('<'),
             };
             keys.push(key);
@@ -146,5 +149,23 @@ mod tests {
     fn parse_mixed() {
         let keys = parse_key_sequence("g<Space>m");
         assert_eq!(keys, vec![Key::Char('g'), Key::Char(' '), Key::Char('m')]);
+    }
+
+    #[test]
+    fn parse_leader_key() {
+        // Given a key sequence with leader.
+        let keys = parse_key_sequence("<leader>ua");
+
+        // Then leader is parsed as Key::Leader.
+        assert_eq!(keys, vec![Key::Leader, Key::Char('u'), Key::Char('a')]);
+    }
+
+    #[test]
+    fn leader_display() {
+        // Given a leader key.
+        let key = Key::Leader;
+
+        // Then display shows "Leader".
+        assert_eq!(key.display(), "Leader");
     }
 }

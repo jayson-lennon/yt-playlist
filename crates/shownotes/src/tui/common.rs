@@ -3,6 +3,16 @@ use std::{path::PathBuf, time::Duration};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 
+/// Display mode for showing item names in the TUI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ItemDisplayMode {
+    /// Show filename as primary (current behavior).
+    #[default]
+    Path,
+    /// Show alias as primary when available.
+    Alias,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pane {
     Playlist,
@@ -60,9 +70,11 @@ pub fn format_mime_type(mime: Option<&str>) -> String {
     }
 }
 
-pub fn format_item_line(item: &PlaylistItem) -> String {
+pub fn format_item_line(item: &PlaylistItem, display_mode: ItemDisplayMode) -> String {
     let mime_str = format_mime_type(item.mime_type.as_deref());
-    let name = if item.is_virtual {
+    let duration_str = format_duration(item.duration);
+
+    let filename = if item.is_virtual {
         item.path.to_string_lossy().into_owned()
     } else {
         item.path.file_stem().map_or_else(
@@ -71,21 +83,17 @@ pub fn format_item_line(item: &PlaylistItem) -> String {
         )
     };
 
-    match (item.duration, &item.alias) {
-        (Some(_), Some(alias)) => {
-            let duration_str = format_duration(item.duration);
-            format!("[{mime_str}] {duration_str} {name} / {alias}")
-        }
-        (Some(_), None) => {
-            let duration_str = format_duration(item.duration);
-            format!("[{mime_str}] {duration_str} {name}")
-        }
-        (None, Some(alias)) => {
-            format!("[{mime_str}] {name} / {alias}")
-        }
-        (None, None) => {
-            format!("[{mime_str}] {name}")
-        }
+    let primary = match display_mode {
+        ItemDisplayMode::Alias => item.alias.clone().unwrap_or(filename),
+        ItemDisplayMode::Path => filename,
+    };
+
+    match display_mode {
+        ItemDisplayMode::Alias => format!("[{mime_str}] {duration_str} {primary}"),
+        ItemDisplayMode::Path => match &item.alias {
+            Some(alias) => format!("[{mime_str}] {duration_str} {primary} / {alias}"),
+            None => format!("[{mime_str}] {duration_str} {primary}"),
+        },
     }
 }
 
@@ -406,8 +414,8 @@ mod tests {
             is_virtual: false,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then line is formatted correctly.
         assert_eq!(result, "[video/mp4] [00:01:05] video / My Video");
@@ -424,8 +432,8 @@ mod tests {
             is_virtual: false,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then line is formatted correctly.
         assert_eq!(result, "[video/mp4] [00:01:05] video");
@@ -442,11 +450,11 @@ mod tests {
             is_virtual: false,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then line is formatted correctly.
-        assert_eq!(result, "[pdf] doc / My Doc");
+        assert_eq!(result, "[pdf] [--:--:--] doc / My Doc");
     }
 
     #[test]
@@ -460,11 +468,11 @@ mod tests {
             is_virtual: false,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then line is formatted correctly.
-        assert_eq!(result, "[pdf] doc");
+        assert_eq!(result, "[pdf] [--:--:--] doc");
     }
 
     #[test]
@@ -478,11 +486,11 @@ mod tests {
             is_virtual: false,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then unknown is used.
-        assert_eq!(result, "[unknown] file");
+        assert_eq!(result, "[unknown] [--:--:--] file");
     }
 
     #[test]
@@ -496,11 +504,14 @@ mod tests {
             is_virtual: true,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then full URL is shown (not just filename stem).
-        assert_eq!(result, "[url] https://youtube.com/watch?v=abc123");
+        assert_eq!(
+            result,
+            "[url] [--:--:--] https://youtube.com/watch?v=abc123"
+        );
     }
 
     #[test]
@@ -514,13 +525,13 @@ mod tests {
             is_virtual: true,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then full URL and alias are shown.
         assert_eq!(
             result,
-            "[url] https://youtube.com/watch?v=abc123 / My Video"
+            "[url] [--:--:--] https://youtube.com/watch?v=abc123 / My Video"
         );
     }
 
@@ -535,11 +546,11 @@ mod tests {
             is_virtual: false,
         };
 
-        // When formatting.
-        let result = format_item_line(&item);
+        // When formatting in Path mode.
+        let result = format_item_line(&item, ItemDisplayMode::Path);
 
         // Then only filename stem is shown (not full path or extension).
-        assert_eq!(result, "[video/mp4] video");
+        assert_eq!(result, "[video/mp4] [--:--:--] video");
     }
 
     #[test]
