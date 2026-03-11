@@ -250,7 +250,6 @@ impl App {
             self.tui_state.status_message = None;
             if self.tui_state.which_key.active && !self.tui_state.which_key.is_pending() {
                 self.tui_state.which_key.dismiss();
-                return;
             }
 
             if self.tui_state.is_showing_error() {
