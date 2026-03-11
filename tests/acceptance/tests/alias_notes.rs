@@ -5,11 +5,11 @@ use std::sync::Arc;
 use cucumber::{World, given, then, when};
 use tempfile::TempDir;
 
+use shownotes::NoteDb;
+use shownotes::PathResolver;
 use shownotes::command::notes::add_alias_as_note;
 use shownotes::feat::external_editor::{ExternalEditorService, FakeEditor};
 use shownotes::services::Services;
-use shownotes::NoteDb;
-use shownotes::PathResolver;
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
@@ -147,13 +147,11 @@ async fn then_file_has_note(world: &mut AliasNotesWorld, path: String, expected:
         Some(content) => {
             assert!(
                 content.contains(&expected),
-                "expected note to contain '{}', but got: '{}'",
-                expected,
-                content
+                "expected note to contain '{expected}', but got: '{content}'"
             );
         }
         None => {
-            panic!("expected file '{}' to have note '{}', but no note exists", path, expected);
+            panic!("expected file '{path}' to have note '{expected}', but no note exists");
         }
     }
 }
@@ -184,15 +182,17 @@ async fn then_file_has_no_notes(world: &mut AliasNotesWorld, path: String) {
         .expect("failed to get note");
 
     assert!(
-        note.is_none() || note.as_ref().map_or(true, |n| n.is_empty()),
-        "expected file '{}' to have no notes, but found: '{:?}'",
-        path,
-        note
+        note.is_none() || note.as_ref().is_none_or(String::is_empty),
+        "expected file '{path}' to have no notes, but found: '{note:?}'"
     );
 }
 
 #[then(expr = r#"the file {string} has exactly {int} note line"#)]
-async fn then_file_has_exactly_n_note_lines(world: &mut AliasNotesWorld, path: String, count: usize) {
+async fn then_file_has_exactly_n_note_lines(
+    world: &mut AliasNotesWorld,
+    path: String,
+    count: usize,
+) {
     let full_path = world.resolve_path(&path);
     let resolved = world
         .services
@@ -223,8 +223,7 @@ async fn then_file_has_exactly_n_note_lines(world: &mut AliasNotesWorld, path: S
 
     assert_eq!(
         line_count, count,
-        "expected file '{}' to have exactly {} note lines, but found {}",
-        path, count, line_count
+        "expected file '{path}' to have exactly {count} note lines, but found {line_count}"
     );
 }
 

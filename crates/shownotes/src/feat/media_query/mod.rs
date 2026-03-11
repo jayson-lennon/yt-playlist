@@ -44,7 +44,7 @@ pub use providers::FakeMediaBackend;
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::Ordering;
 
     fn path(s: &str) -> std::path::PathBuf {
         std::path::PathBuf::from(s)
