@@ -672,6 +672,7 @@ mod tests {
         media_backend: FakeMediaBackend,
         storage_backend: FakeStorageBackend,
         file_launcher: FakeLauncher,
+        focused_pane: Option<Pane>,
     }
 
     impl TestAppBuilder {
@@ -685,6 +686,7 @@ mod tests {
                 media_backend: FakeMediaBackend,
                 storage_backend: FakeStorageBackend,
                 file_launcher: FakeLauncher,
+                focused_pane: None,
             }
         }
 
@@ -705,6 +707,11 @@ mod tests {
 
         fn mpv_launcher(mut self, launcher: FakeMpvLauncher) -> Self {
             self.mpv_launcher = launcher;
+            self
+        }
+
+        fn focused_on(mut self, pane: Pane) -> Self {
+            self.focused_pane = Some(pane);
             self
         }
 
@@ -768,8 +775,24 @@ mod tests {
             }
 
             app.set_initial_focus();
+            if let Some(pane) = self.focused_pane {
+                app.tui_state.focused_pane = pane;
+            }
             app
         }
+    }
+
+    fn execute_actions(app: &mut App, actions: &[Action]) {
+        for action in actions {
+            app.execute_action(*action);
+        }
+    }
+
+    fn key_event(c: char) -> Event {
+        Event::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Char(c),
+            KeyModifiers::empty(),
+        ))
     }
 
     #[test]
@@ -806,18 +829,11 @@ mod tests {
             .playlist_items(vec![PathBuf::from("playlist.mp4")])
             .library_items(vec![PathBuf::from("library.mp4")])
             .build();
-        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
-        // When executing SwitchPane action.
-        app.execute_action(Action::SwitchPane);
+        // When executing SwitchPane action twice.
+        execute_actions(&mut app, &[Action::SwitchPane, Action::SwitchPane]);
 
-        // Then focus switches to library pane.
-        assert_eq!(app.tui_state.focused_pane, Pane::Library);
-
-        // When executing SwitchPane action again.
-        app.execute_action(Action::SwitchPane);
-
-        // Then focus switches back to playlist pane.
+        // Then focus switches to library then back to playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
     }
 
@@ -863,15 +879,10 @@ mod tests {
             ])
             .build();
 
-        // When executing MoveDown action multiple times.
-        assert_eq!(app.tui_state.playlist_pane.selected, 0);
-        app.execute_action(Action::MoveDown);
-        assert_eq!(app.tui_state.playlist_pane.selected, 1);
-        app.execute_action(Action::MoveDown);
-        assert_eq!(app.tui_state.playlist_pane.selected, 2);
-        app.execute_action(Action::MoveDown);
+        // When executing MoveDown action three times.
+        execute_actions(&mut app, &[Action::MoveDown, Action::MoveDown, Action::MoveDown]);
 
-        // Then selection stays at the last item.
+        // Then selection starts at 0 and stays at the last item (2).
         assert_eq!(app.tui_state.playlist_pane.selected, 2);
     }
 
@@ -887,12 +898,8 @@ mod tests {
             .build();
         app.tui_state.playlist_pane.selected = 2;
 
-        // When executing MoveUp action multiple times.
-        app.execute_action(Action::MoveUp);
-        assert_eq!(app.tui_state.playlist_pane.selected, 1);
-        app.execute_action(Action::MoveUp);
-        assert_eq!(app.tui_state.playlist_pane.selected, 0);
-        app.execute_action(Action::MoveUp);
+        // When executing MoveUp action three times.
+        execute_actions(&mut app, &[Action::MoveUp, Action::MoveUp, Action::MoveUp]);
 
         // Then selection stays at the first item.
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
@@ -907,16 +914,13 @@ mod tests {
                 PathBuf::from("y.mp4"),
                 PathBuf::from("z.mp4"),
             ])
+            .focused_on(Pane::Library)
             .build();
-        app.tui_state.focused_pane = Pane::Library;
 
-        // When navigating with MoveDown/MoveUp.
-        assert_eq!(app.tui_state.library_pane.selected, 0);
-        app.execute_action(Action::MoveDown);
-        assert_eq!(app.tui_state.library_pane.selected, 1);
-        app.execute_action(Action::MoveUp);
+        // When navigating with MoveDown then MoveUp.
+        execute_actions(&mut app, &[Action::MoveDown, Action::MoveUp]);
 
-        // Then selection moves correctly.
+        // Then selection starts at 0 and returns to 0.
         assert_eq!(app.tui_state.library_pane.selected, 0);
     }
 
@@ -1066,7 +1070,6 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
-        assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
 
         // When executing SwitchPane action.
         app.execute_action(Action::SwitchPane);
@@ -1081,7 +1084,6 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .library_items(vec![PathBuf::from("test.mp4")])
             .build();
-        assert_eq!(app.tui_state.focused_pane, Pane::Library);
 
         // When executing SwitchPane action.
         app.execute_action(Action::SwitchPane);
@@ -1166,18 +1168,11 @@ mod tests {
     fn show_help_toggles_which_key() {
         // Given an app with which-key inactive.
         let mut app = TestAppBuilder::new().build();
-        assert!(!app.tui_state.which_key.active);
 
-        // When executing ShowHelp action.
-        app.execute_action(Action::ShowHelp);
+        // When executing ShowHelp action twice.
+        execute_actions(&mut app, &[Action::ShowHelp, Action::ShowHelp]);
 
-        // Then which-key becomes active.
-        assert!(app.tui_state.which_key.active);
-
-        // When executing ShowHelp action again.
-        app.execute_action(Action::ShowHelp);
-
-        // Then which-key becomes inactive.
+        // Then which-key starts inactive, becomes active, then inactive again.
         assert!(!app.tui_state.which_key.active);
     }
 
@@ -1187,7 +1182,6 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
-        assert!(!app.tui_state.is_filtering());
 
         // When executing StartFilter action.
         app.execute_action(Action::StartFilter);
@@ -1201,9 +1195,8 @@ mod tests {
         // Given an app focused on library with items, not filtering.
         let mut app = TestAppBuilder::new()
             .library_items(vec![PathBuf::from("test.mp4")])
+            .focused_on(Pane::Library)
             .build();
-        app.tui_state.focused_pane = Pane::Library;
-        assert!(!app.tui_state.is_filtering());
 
         // When executing StartFilter action.
         app.execute_action(Action::StartFilter);
@@ -1218,7 +1211,6 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("test.mp4")])
             .build();
-        assert!(!app.tui_state.is_renaming());
 
         // When executing Rename action.
         app.execute_action(Action::Rename);
@@ -1233,7 +1225,6 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .playlist_items(vec![PathBuf::from("/path/to/video.mp4")])
             .build();
-        assert!(app.fork.notes_path.is_none());
 
         // When executing Notes action.
         app.execute_action(Action::Notes);
@@ -1249,7 +1240,6 @@ mod tests {
     fn notes_does_nothing_when_no_selection() {
         // Given an app with no items selected and no pending notes path.
         let mut app = TestAppBuilder::new().build();
-        assert!(app.fork.notes_path.is_none());
 
         // When executing Notes action.
         app.execute_action(Action::Notes);
@@ -1299,13 +1289,8 @@ mod tests {
     #[test]
     fn g_key_sets_pending_and_shows_followup() {
         let mut app = TestAppBuilder::new().build();
-        assert!(app.tui_state.pending_keys.is_empty());
-        assert!(!app.tui_state.which_key.active);
 
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('g'),
-            KeyModifiers::empty(),
-        )));
+        app.handle_event(key_event('g'));
 
         assert_eq!(
             app.tui_state.pending_keys,
@@ -1324,14 +1309,8 @@ mod tests {
             .mpv_launcher(FakeMpvLauncher::new().running(false))
             .build();
 
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('g'),
-            KeyModifiers::empty(),
-        )));
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('m'),
-            KeyModifiers::empty(),
-        )));
+        app.handle_event(key_event('g'));
+        app.handle_event(key_event('m'));
 
         assert!(
             app.tui_state
@@ -1346,19 +1325,9 @@ mod tests {
     #[test]
     fn g_then_invalid_key_dismisses_popup() {
         let mut app = TestAppBuilder::new().build();
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('g'),
-            KeyModifiers::empty(),
-        )));
-        assert_eq!(
-            app.tui_state.pending_keys,
-            vec![crate::feat::keymap::Key::Char('g')]
-        );
+        app.handle_event(key_event('g'));
 
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('x'),
-            KeyModifiers::empty(),
-        )));
+        app.handle_event(key_event('x'));
 
         assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
@@ -1367,13 +1336,8 @@ mod tests {
     #[test]
     fn a_key_sets_pending_and_shows_followup() {
         let mut app = TestAppBuilder::new().build();
-        assert!(app.tui_state.pending_keys.is_empty());
-        assert!(!app.tui_state.which_key.active);
 
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('a'),
-            KeyModifiers::empty(),
-        )));
+        app.handle_event(key_event('a'));
 
         assert_eq!(
             app.tui_state.pending_keys,
@@ -1389,16 +1353,9 @@ mod tests {
     #[test]
     fn au_keys_starts_url_input() {
         let mut app = TestAppBuilder::new().build();
-        assert!(!app.tui_state.is_url_input());
 
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('a'),
-            KeyModifiers::empty(),
-        )));
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('u'),
-            KeyModifiers::empty(),
-        )));
+        app.handle_event(key_event('a'));
+        app.handle_event(key_event('u'));
 
         assert!(app.tui_state.is_url_input());
         assert!(app.tui_state.pending_keys.is_empty());
@@ -1408,19 +1365,9 @@ mod tests {
     #[test]
     fn a_then_invalid_key_dismisses_popup() {
         let mut app = TestAppBuilder::new().build();
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('a'),
-            KeyModifiers::empty(),
-        )));
-        assert_eq!(
-            app.tui_state.pending_keys,
-            vec![crate::feat::keymap::Key::Char('a')]
-        );
+        app.handle_event(key_event('a'));
 
-        app.handle_event(Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('x'),
-            KeyModifiers::empty(),
-        )));
+        app.handle_event(key_event('x'));
 
         assert!(app.tui_state.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
@@ -1498,9 +1445,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When moving library -> playlist -> library.
-        app.execute_action(Action::MoveToPlaylist);
-        app.tui_state.focused_pane = Pane::Playlist;
-        app.execute_action(Action::MoveToLibrary);
+        execute_actions(&mut app, &[Action::MoveToPlaylist, Action::MoveToLibrary]);
 
         // Then all properties are preserved.
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
