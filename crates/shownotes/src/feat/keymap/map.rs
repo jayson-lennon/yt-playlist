@@ -74,7 +74,6 @@ impl Keymap {
             .bind("?", Action::ShowHelp, "show help", Cat::General, Ctx::Global)
             .bind("/", Action::StartFilter, "filter", Cat::General, Ctx::Global)
             .bind("q", Action::Quit, "quit", Cat::General, Ctx::Global)
-            .bind("s", Action::Save, "save", Cat::General, Ctx::Global)
             .bind("j", Action::MoveDown, "down", Cat::Navigation, Ctx::Global)
             .bind("k", Action::MoveUp, "up", Cat::Navigation, Ctx::Global)
             .bind("<Tab>", Action::SwitchPane, "switch pane", Cat::PaneSwitch, Ctx::Global)
@@ -92,7 +91,6 @@ impl Keymap {
             .bind("x", Action::Delete, "delete", Cat::ItemActions, Ctx::Library)
             .describe_prefix("g", "general")
             .bind("gm", Action::LaunchMpv, "launch mpv", Cat::General, Ctx::Global)
-            .bind("gf", Action::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global)
             .describe_prefix("gn", "generate show notes")
             .bind("gnh", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
             .bind("gnm", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
@@ -101,7 +99,9 @@ impl Keymap {
             .describe_prefix("<leader>", "<leader>")
             .describe_prefix("<leader>u", "ui")
             .bind("<leader>ua", Action::ShowAlias, "show alias", Cat::General, Ctx::Global)
-            .bind("<leader>up", Action::ShowPath, "show path", Cat::General, Ctx::Global);
+            .bind("<leader>up", Action::ShowPath, "show path", Cat::General, Ctx::Global)
+            .describe_prefix("<leader>s", "search")
+            .bind("<leader>sf", Action::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global);
 
         keymap.finalize().expect("keymap has missing descriptions");
         keymap

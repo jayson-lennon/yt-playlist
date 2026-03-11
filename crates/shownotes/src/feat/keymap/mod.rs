@@ -436,22 +436,27 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When describing a prefix with multiple bindings
-        keymap.describe("g", "general", |g| {
-            g.bind(
-                "m",
-                Action::LaunchMpv,
-                "launch mpv",
-                KeyCategory::General,
-                KeyContext::Global,
-            )
-            .bind(
-                "f",
-                Action::FuzzyNotes,
-                "fuzzy notes",
-                KeyCategory::General,
-                KeyContext::Global,
-            );
-        });
+        keymap
+            .describe("g", "general", |g| {
+                g.bind(
+                    "m",
+                    Action::LaunchMpv,
+                    "launch mpv",
+                    KeyCategory::General,
+                    KeyContext::Global,
+                );
+            })
+            .describe(" ", "leader", |leader| {
+                leader.describe("s", "search", |s| {
+                    s.bind(
+                        "f",
+                        Action::FuzzyNotes,
+                        "fuzzy notes",
+                        KeyCategory::General,
+                        KeyContext::Global,
+                    );
+                });
+            });
 
         // Then the branch has the description
         let node = keymap.get_node_at_path(&[Key::Char('g')]).unwrap();
@@ -460,28 +465,33 @@ mod tests {
 
     #[rstest::rstest]
     #[case(&[Key::Char('g'), Key::Char('m')], Action::LaunchMpv)]
-    #[case(&[Key::Char('g'), Key::Char('f')], Action::FuzzyNotes)]
+    #[case(&[Key::Char(' '), Key::Char('s'), Key::Char('f')], Action::FuzzyNotes)]
     fn describe_creates_leaf_children(#[case] path: &[Key], #[case] expected_action: Action) {
         // Given an empty keymap
         let mut keymap = Keymap::empty();
 
         // When describing a prefix with multiple bindings
-        keymap.describe("g", "general", |g| {
-            g.bind(
-                "m",
-                Action::LaunchMpv,
-                "launch mpv",
-                KeyCategory::General,
-                KeyContext::Global,
-            )
-            .bind(
-                "f",
-                Action::FuzzyNotes,
-                "fuzzy notes",
-                KeyCategory::General,
-                KeyContext::Global,
-            );
-        });
+        keymap
+            .describe("g", "general", |g| {
+                g.bind(
+                    "m",
+                    Action::LaunchMpv,
+                    "launch mpv",
+                    KeyCategory::General,
+                    KeyContext::Global,
+                );
+            })
+            .describe(" ", "leader", |leader| {
+                leader.describe("s", "search", |s| {
+                    s.bind(
+                        "f",
+                        Action::FuzzyNotes,
+                        "fuzzy notes",
+                        KeyCategory::General,
+                        KeyContext::Global,
+                    );
+                });
+            });
 
         // Then each path has the correct leaf action
         let node = keymap.get_node_at_path(path).unwrap();
@@ -570,9 +580,9 @@ mod tests {
                 KeyContext::Global,
             )
             .bind(
-                "f",
-                Action::FuzzyNotes,
-                "fuzzy notes",
+                "d",
+                Action::Delete,
+                "delete",
                 KeyCategory::General,
                 KeyContext::Global,
             );
