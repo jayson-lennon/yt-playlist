@@ -3,8 +3,8 @@ use std::fmt;
 use crossterm::event::{KeyCode, KeyModifiers};
 
 use super::{
-    parse_key_sequence, Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding,
-    ShowNoteKind,
+    Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding, ShowNoteKind,
+    parse_key_sequence,
 };
 use crate::tui::Pane;
 
@@ -85,12 +85,12 @@ impl Keymap {
             .bind("J", Action::ReorderDown, "move down", Cat::PlaylistActions, Ctx::Playlist)
             .bind("K", Action::ReorderUp, "move up", Cat::PlaylistActions, Ctx::Playlist)
             .bind("o", Action::LaunchFile, "open file", Cat::ItemActions, Ctx::Global)
-            .bind("p", Action::LoadPlaylist, "load playlist", Cat::PlaylistActions, Ctx::Playlist)
             .bind("L", Action::MoveToLibrary, "to library", Cat::ItemActions, Ctx::Playlist)
             .bind("H", Action::MoveToPlaylist, "to playlist", Cat::ItemActions, Ctx::Library)
             .bind("x", Action::Delete, "delete", Cat::ItemActions, Ctx::Library)
             .describe_prefix("g", "general")
             .bind("gm", Action::LaunchMpv, "launch mpv", Cat::General, Ctx::Global)
+            .bind("gp", Action::LoadPlaylist, "playlist to mpv", Cat::PlaylistActions, Ctx::Playlist)
             .describe_prefix("gn", "generate show notes")
             .bind("gnh", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
             .bind("gnm", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
@@ -440,11 +440,7 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches {
-                    Some(*action)
-                } else {
-                    None
-                }
+                if context_matches { Some(*action) } else { None }
             }
             KeyNode::Branch { .. } => None,
         }
