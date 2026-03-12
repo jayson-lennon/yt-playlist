@@ -7,7 +7,7 @@ use error_stack::Report;
 
 use super::{PathResolutionError, PathResolver};
 
-pub mod system;
+mod system;
 
 pub use system::SystemPathResolver;
 

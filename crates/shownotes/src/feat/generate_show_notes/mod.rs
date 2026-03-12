@@ -1,4 +1,6 @@
-pub mod format;
+mod format;
+
+pub use format::{FormatRegistry, ShowNotesEntry, ShowNotesFormat};
 
 use std::collections::HashMap;
 
@@ -6,7 +8,6 @@ use error_stack::{Report, ResultExt};
 use wherror::Error;
 
 use crate::{
-    feat::generate_show_notes::format::{FormatRegistry, ShowNotesEntry},
     feat::playlist::PlaylistData,
     feat::sources::{Source, SourceDb},
 };

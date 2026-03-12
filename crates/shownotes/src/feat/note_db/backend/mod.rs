@@ -7,7 +7,7 @@ use error_stack::Report;
 
 use super::{NoteDb, NoteDbError};
 
-pub mod sqlite;
+mod sqlite;
 
 pub use sqlite::{SqliteNoteDb, SqliteNoteDbError};
 

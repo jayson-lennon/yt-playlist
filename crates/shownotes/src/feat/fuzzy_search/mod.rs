@@ -1,4 +1,6 @@
-pub mod backend;
+mod backend;
+
+pub use backend::SkimBackend;
 
 use std::sync::Arc;
 

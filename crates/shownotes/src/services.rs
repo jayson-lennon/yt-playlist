@@ -4,14 +4,14 @@ use derive_more::Debug;
 use error_stack::Report;
 
 use crate::feat::external_editor::{ExternalEditorService, SystemEditor};
-use crate::feat::fuzzy_search::{FuzzySearchService, backend::SkimBackend};
+use crate::feat::fuzzy_search::{FuzzySearchService, SkimBackend};
 use crate::feat::launcher::FileLauncherService;
 use crate::feat::media_query::MediaQueryService;
 use crate::feat::mpv::{MpvClientService, MpvLauncherService};
 use crate::feat::note_db::{NoteDb, NoteDbService, SqliteNoteDb, SqliteNoteDbError};
 use crate::feat::path_resolver::{PathResolverService, SystemPathResolver};
 use crate::feat::playlist::{PlaylistStorageService, SqliteStorage};
-use crate::feat::sources::{SourceDbService, db::sqlite::SqliteSourceDb};
+use crate::feat::sources::{SourceDbService, SqliteSourceDb};
 
 /// Container for all injectable service dependencies.
 ///

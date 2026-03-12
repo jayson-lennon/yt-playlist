@@ -1,6 +1,6 @@
-pub mod html;
-pub mod markdown;
-pub mod plain;
+mod html;
+mod markdown;
+mod plain;
 
 use std::path::Path;
 

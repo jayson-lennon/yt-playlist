@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::feat::external_editor::{ExternalEditorService, SystemEditor};
-use crate::feat::fuzzy_search::{FuzzySearchService, backend::SkimBackend};
+use crate::feat::fuzzy_search::{FuzzySearchService, SkimBackend};
 use crate::feat::launcher::FileLauncherService;
 use crate::feat::media_query::MediaQueryService;
 use crate::feat::mpv::{MpvClientService, MpvLauncherService};
 use crate::feat::note_db::{NoteDbService, SqliteNoteDb};
 use crate::feat::path_resolver::{PathResolverService, SystemPathResolver};
 use crate::feat::playlist::PlaylistStorageService;
-use crate::feat::sources::{SourceDbService, db::sqlite::SqliteSourceDb};
+use crate::feat::sources::{SourceDbService, SqliteSourceDb};
 use crate::services::Services;
 
 use super::fakes::{FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher, FakeStorageBackend};

@@ -125,6 +125,6 @@ pub fn spawn_mpv(socket_path: &str) -> Result<(), Report<MpvError>> {
     Ok(())
 }
 
-pub mod clients;
+mod clients;
 
 pub use clients::{MpvIpc, RealMpvLauncher};

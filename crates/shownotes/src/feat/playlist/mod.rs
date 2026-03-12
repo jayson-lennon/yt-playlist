@@ -212,7 +212,7 @@ impl PlaylistStorageService {
     }
 }
 
-pub mod storage;
+mod storage;
 pub use storage::FakeStorageBackend;
 pub use storage::SqliteStorage;
 

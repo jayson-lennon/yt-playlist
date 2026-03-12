@@ -5,7 +5,7 @@ use derive_more::Debug;
 use error_stack::Report;
 use wherror::Error;
 
-pub mod editors;
+mod editors;
 
 pub use editors::{FakeEditor, SystemEditor};
 

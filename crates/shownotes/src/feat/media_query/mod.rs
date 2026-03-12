@@ -39,7 +39,7 @@ impl MediaQueryService {
     }
 }
 
-pub mod providers;
+mod providers;
 
 pub use providers::{CachedMedia, Ffprobe};
 

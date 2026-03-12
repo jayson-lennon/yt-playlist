@@ -1,4 +1,6 @@
-pub mod db;
+mod db;
+
+pub use db::{SqliteSourceDb, SqliteSourceDbError};
 
 use std::collections::HashMap;
 use std::sync::Arc;
