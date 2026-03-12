@@ -63,7 +63,6 @@ fn build_entries(
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let alias = playlist_data.files.get(path).and_then(|m| m.alias.clone());
             let sources: Vec<String> = sources_map
                 .get(&*path_str)
                 .map(|v| v.iter().map(|s| s.source_url.clone()).collect())
@@ -75,7 +74,7 @@ fn build_entries(
                 Some(ShowNotesEntry {
                     path: path_str.into_owned(),
                     filename,
-                    alias,
+                    alias: None,
                     sources,
                 })
             }

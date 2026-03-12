@@ -18,6 +18,7 @@ ffprobe = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 infer = { workspace = true }
+jiff = { workspace = true }
 mpvipc = { workspace = true }
 ratatui = { workspace = true }
 serde = { workspace = true }
@@ -29,6 +30,7 @@ toml = { workspace = true }
 wherror = { workspace = true }
 fuzzy-matcher = { workspace = true }
 sysinfo = { workspace = true }
+marked-path = { workspace = true }
 arboard = { workspace = true }
 
 [dev-dependencies]

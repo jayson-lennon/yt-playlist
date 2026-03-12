@@ -1,57 +1,47 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use async_trait::async_trait;
 use derive_more::Debug;
 use error_stack::Report;
+use jiff::Timestamp;
+use marked_path::CanonicalPath;
 use wherror::Error;
 
 #[derive(Debug, Error)]
 #[error(debug)]
 pub struct IoError;
 
-/// Metadata associated with a file in the playlist.
-///
-/// Stores optional information about a file including its duration,
-/// display alias, whether it's a virtual item (URL), deletion status,
-/// and MIME type.
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
     pub duration: Option<std::time::Duration>,
-    pub alias: Option<String>,
     pub is_virtual: bool,
     pub deleted: bool,
     pub mime_type: Option<String>,
+    pub time_added: Option<Timestamp>,
 }
 
-/// Complete playlist data including order and file metadata.
-///
-/// Contains the ordered list of file paths in the playlist and a map
-/// of metadata for each file. This structure is serialized to and
-/// deserialized from the playlist storage file.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PlaylistData {
+    pub working_directory: CanonicalPath,
     pub playlist: Vec<PathBuf>,
     pub files: HashMap<PathBuf, FileMetadata>,
 }
 
+#[async_trait]
 pub trait PlaylistStorage: Send + Sync {
     fn name(&self) -> &'static str;
 
     /// # Errors
     ///
     /// Returns an error if the playlist data cannot be loaded.
-    fn load(&self) -> Result<PlaylistData, Report<IoError>>;
+    async fn load(&self, working_directory: &CanonicalPath) -> Result<PlaylistData, Report<IoError>>;
 
     /// # Errors
     ///
     /// Returns an error if the playlist data cannot be saved.
-    fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>>;
+    async fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>>;
 }
 
-/// Service for loading and saving playlist data.
-///
-/// Wraps a storage backend to provide a simple interface for persisting
-/// playlist state. Delegates actual storage operations to the backend
-/// implementation (e.g., TOML file storage).
 #[derive(Debug, Clone)]
 pub struct PlaylistStorageService {
     #[debug("backend<{}>", self.backend.name())]
@@ -66,33 +56,35 @@ impl PlaylistStorageService {
     /// # Errors
     ///
     /// Returns an error if the playlist data cannot be loaded.
-    pub fn load(&self) -> Result<PlaylistData, Report<IoError>> {
-        self.backend.load()
+    pub async fn load(&self, working_directory: &CanonicalPath) -> Result<PlaylistData, Report<IoError>> {
+        self.backend.load(working_directory).await
     }
 
     /// # Errors
     ///
     /// Returns an error if the playlist data cannot be saved.
-    pub fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
-        self.backend.save(data)
+    pub async fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
+        self.backend.save(data).await
     }
 }
 
 pub mod storage;
-pub use storage::TomlStorage;
-
 pub use storage::FakeStorageBackend;
+pub use storage::SqliteStorage;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
+    use tempfile::TempDir;
 
-    #[test]
-    fn playlist_storage_delegates_to_backend() {
+    #[tokio::test]
+    async fn playlist_storage_delegates_to_backend() {
+        let temp = TempDir::new().unwrap();
+        let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
-        let result = storage.load();
+        let result = storage.load(&working_dir).await;
         assert!(result.is_ok());
         assert_eq!(
             backend
@@ -102,12 +94,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn playlist_storage_save_delegates_to_backend() {
+    #[tokio::test]
+    async fn playlist_storage_save_delegates_to_backend() {
+        let temp = TempDir::new().unwrap();
+        let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
-        let data = PlaylistData::default();
-        let result = storage.save(&data);
+        let data = PlaylistData {
+            working_directory: working_dir,
+            playlist: Vec::new(),
+            files: HashMap::new(),
+        };
+        let result = storage.save(&data).await;
         assert!(result.is_ok());
         assert_eq!(
             backend
@@ -121,20 +119,13 @@ mod tests {
     fn file_metadata_can_be_cloned() {
         let metadata = FileMetadata {
             duration: Some(Duration::from_secs(120)),
-            alias: Some("test".to_string()),
             is_virtual: false,
             deleted: false,
             mime_type: None,
+            time_added: None,
         };
         let cloned = metadata.clone();
         assert_eq!(cloned.duration, metadata.duration);
-        assert_eq!(cloned.alias, metadata.alias);
-    }
-
-    #[test]
-    fn playlist_data_default_is_empty() {
-        let data = PlaylistData::default();
-        assert!(data.playlist.is_empty());
-        assert!(data.files.is_empty());
+        assert_eq!(cloned.time_added, metadata.time_added);
     }
 }

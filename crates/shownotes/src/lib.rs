@@ -17,7 +17,7 @@ pub use feat::launcher::{
 pub use feat::media_query::{CachedMedia, MediaError, MediaQuery, MediaQueryService};
 pub use feat::mpv::{MpvClient, MpvClientService, MpvError, MpvLauncherService};
 pub use feat::playlist::{
-    FileMetadata, IoError, PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage,
+    FileMetadata, IoError, PlaylistData, PlaylistStorage, PlaylistStorageService,
 };
 pub use feat::sources::{Source, SourceDb, SourceDbService};
 pub use feat::terminal::{TerminalGuard, TerminalSuspendError, suspend_and_run};

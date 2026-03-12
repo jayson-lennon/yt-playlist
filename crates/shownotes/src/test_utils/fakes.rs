@@ -1,6 +1,8 @@
 use std::{path::Path, time::Duration};
 
+use async_trait::async_trait;
 use error_stack::Report;
+use marked_path::CanonicalPath;
 use std::path::PathBuf;
 
 use crate::feat::launcher::{FileLauncher, LaunchResult};
@@ -73,16 +75,21 @@ impl MediaQuery for FakeMediaBackend {
 
 pub struct FakeStorageBackend;
 
+#[async_trait]
 impl PlaylistStorage for FakeStorageBackend {
     fn name(&self) -> &'static str {
         "fake"
     }
 
-    fn load(&self) -> Result<PlaylistData, Report<IoError>> {
-        Ok(PlaylistData::default())
+    async fn load(&self, working_directory: &CanonicalPath) -> Result<PlaylistData, Report<IoError>> {
+        Ok(PlaylistData {
+            working_directory: working_directory.clone(),
+            playlist: Vec::new(),
+            files: std::collections::HashMap::new(),
+        })
     }
 
-    fn save(&self, _data: &PlaylistData) -> Result<(), Report<IoError>> {
+    async fn save(&self, _data: &PlaylistData) -> Result<(), Report<IoError>> {
         Ok(())
     }
 }

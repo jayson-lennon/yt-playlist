@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{Event, KeyCode};
 use error_stack::Report;
+use marked_path::CanonicalPath;
 
 use crate::command::{Command, CommandError, CommandResult, execute};
 use crate::feat::config::Config;
@@ -130,7 +131,14 @@ impl App {
     }
 
     pub fn load_playlist(&mut self) {
-        match self.services.storage.load() {
+        let Ok(library_path) = CanonicalPath::from_path(&self.runtime.library_path) else {
+            self.tui_state.show_error("Failed to canonicalize library path".to_string());
+            return;
+        };
+        let result = self.tokio_runtime.block_on(async {
+            self.services.storage.load(&library_path).await
+        });
+        match result {
             Ok(data) => {
                 let playlist_paths: std::collections::HashSet<_> =
                     data.playlist.iter().cloned().collect();
@@ -142,14 +150,13 @@ impl App {
                         let metadata = data.files.get(&path);
                         let is_virtual = metadata.is_some_and(|m| m.is_virtual);
                         let duration = metadata.and_then(|m| m.duration);
-                        let alias = metadata.and_then(|m| m.alias.clone());
                         let mime_type = metadata
                             .and_then(|m| m.mime_type.clone())
                             .or_else(|| get_mime_type(&path));
                         PlaylistItem {
                             path,
                             duration,
-                            alias,
+                            alias: None,
                             mime_type,
                             is_virtual,
                         }
@@ -167,7 +174,7 @@ impl App {
                         PlaylistItem {
                             path,
                             duration: metadata.duration,
-                            alias: metadata.alias,
+                            alias: None,
                             mime_type,
                             is_virtual: true,
                         }
@@ -193,16 +200,20 @@ impl App {
     }
 
     pub fn save_playlist(&mut self) {
+        let Ok(library_path) = CanonicalPath::from_path(&self.runtime.library_path) else {
+            self.tui_state.show_error("Failed to canonicalize library path".to_string());
+            return;
+        };
         let mut files = std::collections::HashMap::new();
         for item in &self.tui_state.playlist_pane.items {
             files.insert(
                 item.path.clone(),
                 crate::feat::playlist::FileMetadata {
                     duration: item.duration,
-                    alias: item.alias.clone(),
                     is_virtual: item.is_virtual,
                     deleted: false,
                     mime_type: item.mime_type.clone(),
+                    time_added: None,
                 },
             );
         }
@@ -211,10 +222,10 @@ impl App {
                 item.path.clone(),
                 crate::feat::playlist::FileMetadata {
                     duration: item.duration,
-                    alias: item.alias.clone(),
                     is_virtual: item.is_virtual,
                     deleted: false,
                     mime_type: item.mime_type.clone(),
+                    time_added: None,
                 },
             );
         }
@@ -226,10 +237,14 @@ impl App {
             .map(|item| item.path.clone())
             .collect();
         let data = PlaylistData {
+            working_directory: library_path,
             playlist: playlist_paths,
             files,
         };
-        match self.services.storage.save(&data) {
+        let result = self.tokio_runtime.block_on(async {
+            self.services.storage.save(&data).await
+        });
+        match result {
             Ok(()) => {
                 self.tui_state.status_message = Some("Playlist saved".to_string());
             }

@@ -33,7 +33,7 @@ pub use path_resolver::{
 };
 pub use playlist::{
     FileMetadata, IoError, PlaylistData, PlaylistStorage, PlaylistStorageService,
-    TomlStorage,
+    SqliteStorage,
 };
 pub use sources::{Source, SourceDb, SourceDbService};
 pub use symlink::{SymlinkError, SymlinkResult, create_symlink_with_suffix};

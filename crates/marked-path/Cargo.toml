@@ -1,0 +1,12 @@
+[package]
+name = "marked-path"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wherror = { workspace = true }
+error-stack = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tempfile = { workspace = true }

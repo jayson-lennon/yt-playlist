@@ -48,6 +48,7 @@ pub use providers::FakeMediaBackend;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use marked_path::CanonicalPath;
     use std::collections::HashMap;
     use std::sync::atomic::Ordering;
 
@@ -68,12 +69,14 @@ mod tests {
 
     #[test]
     fn cached_backend_returns_cached_duration() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let canonical = CanonicalPath::from_path(temp_file.path()).unwrap();
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
-        cache.insert(path("cached.mp4"), Duration::from_secs(60));
+        cache.insert(canonical.clone(), Duration::from_secs(60));
         let cached = CachedMedia::new(cache, fake.clone());
 
-        let result = cached.get_duration(&path("cached.mp4"));
+        let result = cached.get_duration(temp_file.path());
 
         assert_eq!(result.unwrap(), Duration::from_secs(60));
         assert_eq!(fake.call_count.load(Ordering::SeqCst), 0);
@@ -93,13 +96,13 @@ mod tests {
     #[test]
     fn cached_backend_uses_canonical_path_for_lookup() {
         let temp_file = tempfile::NamedTempFile::new().unwrap();
-        let canonical_path = temp_file.path().canonicalize().unwrap();
+        let canonical = CanonicalPath::from_path(temp_file.path()).unwrap();
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
-        cache.insert(canonical_path.clone(), Duration::from_secs(60));
+        cache.insert(canonical.clone(), Duration::from_secs(60));
         let cached = CachedMedia::new(cache, fake.clone());
 
-        let result = cached.get_duration(&canonical_path);
+        let result = cached.get_duration(temp_file.path());
 
         assert_eq!(result.unwrap(), Duration::from_secs(60));
         assert_eq!(fake.call_count.load(Ordering::SeqCst), 0);
@@ -135,26 +138,30 @@ mod tests {
 
     #[test]
     fn cached_backend_multiple_lookups_use_cache() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let canonical = CanonicalPath::from_path(temp_file.path()).unwrap();
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
-        cache.insert(path("video.mp4"), Duration::from_secs(60));
+        cache.insert(canonical, Duration::from_secs(60));
         let cached = CachedMedia::new(cache, fake.clone());
 
-        let _ = cached.get_duration(&path("video.mp4"));
-        let _ = cached.get_duration(&path("video.mp4"));
-        let _ = cached.get_duration(&path("video.mp4"));
+        let _ = cached.get_duration(temp_file.path());
+        let _ = cached.get_duration(temp_file.path());
+        let _ = cached.get_duration(temp_file.path());
 
         assert_eq!(fake.call_count.load(Ordering::SeqCst), 0);
     }
 
     #[test]
     fn cached_backend_different_paths_use_fallback() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let canonical = CanonicalPath::from_path(temp_file.path()).unwrap();
         let fake = Arc::new(FakeMediaBackend::new(Duration::from_secs(120)));
         let mut cache = HashMap::new();
-        cache.insert(path("cached.mp4"), Duration::from_secs(60));
+        cache.insert(canonical, Duration::from_secs(60));
         let cached = CachedMedia::new(cache, fake.clone());
 
-        let _ = cached.get_duration(&path("cached.mp4"));
+        let _ = cached.get_duration(temp_file.path());
         let _ = cached.get_duration(&path("other1.mp4"));
         let _ = cached.get_duration(&path("other2.mp4"));
 

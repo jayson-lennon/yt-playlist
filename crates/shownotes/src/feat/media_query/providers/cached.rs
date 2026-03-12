@@ -1,21 +1,17 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
 use error_stack::Report;
+use marked_path::CanonicalPath;
 
 use super::super::{MediaError, MediaQuery};
 
 pub struct CachedMedia {
-    cache: HashMap<PathBuf, Duration>,
+    cache: HashMap<CanonicalPath, Duration>,
     fallback: Arc<dyn MediaQuery>,
 }
 
 impl CachedMedia {
-    pub fn new(cache: HashMap<PathBuf, Duration>, fallback: Arc<dyn MediaQuery>) -> Self {
+    pub fn new(cache: HashMap<CanonicalPath, Duration>, fallback: Arc<dyn MediaQuery>) -> Self {
         Self { cache, fallback }
     }
 }
@@ -26,9 +22,10 @@ impl MediaQuery for CachedMedia {
     }
 
     fn get_duration(&self, path: &Path) -> Result<Duration, Report<MediaError>> {
-        let lookup_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        if let Some(duration) = self.cache.get(&lookup_path) {
-            return Ok(*duration);
+        if let Ok(canonical) = CanonicalPath::from_path(path) {
+            if let Some(duration) = self.cache.get(&canonical) {
+                return Ok(*duration);
+            }
         }
         self.fallback.get_duration(path)
     }

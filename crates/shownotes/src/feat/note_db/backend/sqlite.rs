@@ -31,7 +31,11 @@ pub async fn connect_and_migrate(
 ) -> Result<SqlitePool, Report<SqliteNoteDbError>> {
     let options = SqliteConnectOptions::from_str(database_url)
         .map_err(|_| Report::new(SqliteNoteDbError::Connect))?
-        .create_if_missing(true);
+        .create_if_missing(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .busy_timeout(std::time::Duration::from_secs(30))
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+        .foreign_keys(true);
 
     let pool = SqlitePool::connect_with(options)
         .await
@@ -55,6 +59,10 @@ impl SqliteNoteDb {
     pub async fn new(database_url: &str) -> Result<Self, Report<SqliteNoteDbError>> {
         let pool = connect_and_migrate(database_url).await?;
         Ok(Self { pool })
+    }
+
+    pub async fn close(&self) {
+        self.pool.close().await;
     }
 }
 
@@ -157,6 +165,10 @@ impl NoteDb for SqliteNoteDb {
         .map_err(|_| Report::new(NoteDbError))?;
 
         Ok(results)
+    }
+
+    async fn close(&self) {
+        self.pool.close().await;
     }
 }
 

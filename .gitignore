@@ -1,9 +1,19 @@
+# AI
 .kilo/
+.plans/
 .opencode/
-/target
-shownotes.toml
+
+# Packaging
 /.build
 *.zst
 /pkg
+
+# Rust
+/target
+
+# App
+shownotes.toml
+
+# Code analysis
 coverage.lcov
 debt.json

@@ -4,6 +4,8 @@ use std::{
     sync::Arc,
 };
 
+use marked_path::CanonicalPath;
+
 use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -18,7 +20,7 @@ use crate::{
     feat::config::{load, Config},
     feat::media_query::{CachedMedia, Ffprobe, MediaQuery, MediaQueryService},
     feat::mpv::MpvIpc,
-    feat::playlist::{PlaylistData, PlaylistStorage, PlaylistStorageService, TomlStorage},
+    feat::playlist::{FileMetadata, PlaylistData},
     feat::terminal::suspend_and_run,
     services::Services,
     tui,
@@ -104,22 +106,47 @@ pub fn run_tui(
 ) -> Result<(), Report<RunError>> {
     let config = load().change_context(RunError)?;
 
-    let storage_backend: Arc<dyn PlaylistStorage> = Arc::new(TomlStorage::new(playlist.clone()));
-    let playlist_storage = PlaylistStorageService::new(storage_backend.clone());
+    let handle = rt.handle().clone();
+    let core_services = rt
+        .block_on(Services::new(&db_path.to_string_lossy(), handle))
+        .change_context(RunError)?;
 
-    let playlist_data = playlist_storage.load().change_context(RunError)?;
+    let canonical_library_path = CanonicalPath::from_path(&library_path)
+        .change_context(RunError)
+        .attach("Failed to canonicalize library path")?;
+    let playlist_data = rt.block_on(core_services.storage.load(&canonical_library_path)).change_context(RunError)?;
     let all_files = collect_all_files(&playlist_data, &config, &library_path);
     let ffprobe_backend: Arc<dyn MediaQuery> = Arc::new(Ffprobe);
     let files_for_migration = playlist_data.files.clone();
 
+    let metadata: std::collections::HashMap<CanonicalPath, _> = playlist_data
+        .files
+        .into_iter()
+        .filter_map(|(k, v)| CanonicalPath::from_path(&k).ok().map(|cp| (cp, v)))
+        .collect();
+
     let result = crate::feat::media_duration_analysis::analyze_files(
         &all_files,
-        playlist_data.files,
+        metadata,
         ffprobe_backend.as_ref(),
     )
     .change_context(RunError)?;
 
-    let durations: std::collections::HashMap<PathBuf, std::time::Duration> = result
+    let files: std::collections::HashMap<PathBuf, FileMetadata> = result
+        .files
+        .iter()
+        .map(|(k, v)| (k.as_path().to_path_buf(), v.clone()))
+        .collect();
+
+    let analyzed_data = PlaylistData {
+        working_directory: canonical_library_path.clone(),
+        playlist: playlist_data.playlist.clone(),
+        files: files.clone(),
+    };
+    rt.block_on(core_services.storage.save(&analyzed_data))
+        .change_context(RunError)?;
+
+    let durations: std::collections::HashMap<CanonicalPath, std::time::Duration> = result
         .files
         .iter()
         .filter_map(|(k, v)| v.duration.map(|d| (k.clone(), d)))
@@ -127,12 +154,7 @@ pub fn run_tui(
 
     let media_backend: Arc<dyn MediaQuery> = Arc::new(CachedMedia::new(durations, ffprobe_backend));
 
-    let handle = rt.handle().clone();
-    let core_services = rt
-        .block_on(Services::new(&db_path.to_string_lossy(), handle))
-        .change_context(RunError)?;
-
-    let services = build_services(&playlist, &socket, media_backend, core_services);
+    let services = build_services(&socket, media_backend, core_services);
 
     enable_raw_mode().change_context(RunError)?;
     let mut stdout = std::io::stdout();
@@ -149,13 +171,13 @@ pub fn run_tui(
         rt,
     );
 
-    {
+    let migration_task = {
         let services = app.services.clone();
         let files = files_for_migration;
         app.tokio_runtime.spawn(async move {
             let _ = crate::command::notes::migrate_aliases_to_notes(&services, &files).await;
-        });
-    }
+        })
+    };
 
     let res = run_app(&mut terminal, &mut app);
 
@@ -172,6 +194,12 @@ pub fn run_tui(
         eprintln!("Error: {err:?}");
     }
 
+    let _ = app.tokio_runtime.block_on(async {
+        tokio::time::timeout(std::time::Duration::from_secs(5), migration_task).await
+    });
+
+    app.tokio_runtime.block_on(app.services.close());
+
     Ok(())
 }
 
@@ -179,25 +207,21 @@ fn collect_all_files(
     playlist_data: &PlaylistData,
     config: &Config,
     library_path: &Path,
-) -> Vec<PathBuf> {
-    let mut files: HashSet<PathBuf> = HashSet::new();
+) -> Vec<CanonicalPath> {
+    let mut files: HashSet<CanonicalPath> = HashSet::new();
 
     for path in &playlist_data.playlist {
         if config.is_video_or_audio(path) {
-            if let Ok(canonical) = path.canonicalize() {
+            if let Ok(canonical) = CanonicalPath::from_path(path) {
                 files.insert(canonical);
-            } else {
-                files.insert(path.clone());
             }
         }
     }
 
     for path in playlist_data.files.keys() {
         if config.is_video_or_audio(path) {
-            if let Ok(canonical) = path.canonicalize() {
+            if let Ok(canonical) = CanonicalPath::from_path(path) {
                 files.insert(canonical);
-            } else {
-                files.insert(path.clone());
             }
         }
     }
@@ -206,10 +230,8 @@ fn collect_all_files(
         for entry in read_dir.flatten() {
             let path = entry.path();
             if path.is_file() && config.is_video_or_audio(&path) {
-                if let Ok(canonical) = path.canonicalize() {
+                if let Ok(canonical) = CanonicalPath::from_path(&path) {
                     files.insert(canonical);
-                } else {
-                    files.insert(path);
                 }
             }
         }
@@ -219,7 +241,6 @@ fn collect_all_files(
 }
 
 fn build_services(
-    playlist: &Path,
     socket: &Path,
     media_backend: Arc<dyn MediaQuery>,
     core: Services,
@@ -230,13 +251,11 @@ fn build_services(
     };
 
     let mpv_backend: Arc<dyn crate::feat::mpv::MpvClient> = Arc::new(MpvIpc::new(socket));
-    let storage_backend: Arc<dyn PlaylistStorage> =
-        Arc::new(TomlStorage::new(playlist.to_path_buf()));
 
     Services {
         mpv: MpvClientService::new(mpv_backend),
         media: MediaQueryService::new(media_backend),
-        storage: PlaylistStorageService::new(storage_backend),
+        storage: core.storage,
         mpv_launcher: MpvLauncherService::new(Arc::new(RealMpvLauncher)),
         file_launcher: FileLauncherService::new(Arc::new(XdgLauncher::new())),
         db: core.db,

@@ -8,9 +8,9 @@ use crate::feat::fuzzy_search::{FuzzySearchService, backend::SkimBackend};
 use crate::feat::launcher::FileLauncherService;
 use crate::feat::media_query::MediaQueryService;
 use crate::feat::mpv::{MpvClientService, MpvLauncherService};
-use crate::feat::note_db::{NoteDbService, SqliteNoteDb, SqliteNoteDbError};
+use crate::feat::note_db::{NoteDb, NoteDbService, SqliteNoteDb, SqliteNoteDbError};
 use crate::feat::path_resolver::{PathResolverService, SystemPathResolver};
-use crate::feat::playlist::PlaylistStorageService;
+use crate::feat::playlist::{PlaylistStorageService, SqliteStorage};
 use crate::feat::sources::{SourceDbService, db::sqlite::SqliteSourceDb};
 
 /// Container for all injectable service dependencies.
@@ -38,7 +38,9 @@ impl Services {
     /// Returns an error if the database connection or migration fails.
     pub async fn new(db_path: &str, rt: tokio::runtime::Handle) -> Result<Self, Report<SqliteNoteDbError>> {
         let note_db = Arc::new(SqliteNoteDb::new(db_path).await?);
-        let source_db = Arc::new(SqliteSourceDb::new(note_db.pool().clone()));
+        let pool = note_db.pool();
+        let source_db = Arc::new(SqliteSourceDb::new(pool.clone()));
+        let storage = Arc::new(SqliteStorage::new(pool.clone()));
         let editor = Arc::new(SystemEditor);
         let path_resolver = Arc::new(SystemPathResolver);
 
@@ -47,9 +49,7 @@ impl Services {
                 &std::path::PathBuf::new(),
             ))),
             media: MediaQueryService::new(Arc::new(crate::feat::media_query::Ffprobe)),
-            storage: PlaylistStorageService::new(Arc::new(
-                crate::feat::playlist::TomlStorage::new(std::path::PathBuf::new()),
-            )),
+            storage: PlaylistStorageService::new(storage),
             mpv_launcher: MpvLauncherService::new(Arc::new(crate::feat::mpv::RealMpvLauncher)),
             file_launcher: FileLauncherService::new(Arc::new(
                 crate::feat::launcher::XdgLauncher::new(),
@@ -61,5 +61,9 @@ impl Services {
             fuzzy_search: FuzzySearchService::new(Arc::new(SkimBackend)),
             rt,
         })
+    }
+
+    pub async fn close(&self) {
+        self.db.close().await;
     }
 }

@@ -1,23 +1,19 @@
-use std::{collections::HashMap, io::Write, path::PathBuf};
+use std::{collections::HashMap, io::Write};
 
 use error_stack::Report;
+use marked_path::CanonicalPath;
 
 use super::media_query::{MediaError, MediaQuery};
 use super::playlist::FileMetadata;
 
-/// Result of analyzing media file durations.
-///
-/// Contains statistics about media file duration analysis, including
-/// the number of files analyzed, files with missing durations, and
-/// total duration.
 pub struct AnalysisResult {
-    pub files: HashMap<PathBuf, FileMetadata>,
+    pub files: HashMap<CanonicalPath, FileMetadata>,
 }
 
 #[allow(clippy::missing_errors_doc, clippy::implicit_hasher)]
 pub fn analyze_files(
-    files: &[PathBuf],
-    mut metadata: HashMap<PathBuf, FileMetadata>,
+    files: &[CanonicalPath],
+    mut metadata: HashMap<CanonicalPath, FileMetadata>,
     backend: &dyn MediaQuery,
 ) -> Result<AnalysisResult, Report<MediaError>> {
     let uncached: Vec<_> = files
@@ -33,17 +29,17 @@ pub fn analyze_files(
         std::io::stderr().flush().ok();
 
         for (i, path) in uncached.iter().enumerate() {
-            if let Ok(duration) = backend.get_duration(path) {
+            if let Ok(duration) = backend.get_duration(path.as_path()) {
                 let existing = metadata.remove(*path);
-                let alias = existing.and_then(|m| m.alias);
+                let time_added = existing.and_then(|m| m.time_added);
                 metadata.insert(
                     (*path).clone(),
                     FileMetadata {
                         duration: Some(duration),
-                        alias,
                         is_virtual: false,
                         deleted: false,
                         mime_type: None,
+                        time_added,
                     },
                 );
             }
@@ -60,11 +56,9 @@ pub fn analyze_files(
 mod tests {
     use super::*;
     use std::path::Path;
+    use std::path::PathBuf;
     use std::time::Duration;
-
-    fn path(s: &str) -> PathBuf {
-        PathBuf::from(s)
-    }
+    use tempfile::TempDir;
 
     struct FakeMediaBackend {
         durations: HashMap<PathBuf, Duration>,
@@ -77,8 +71,8 @@ mod tests {
             }
         }
 
-        fn with_duration(mut self, p: &str, duration: Duration) -> Self {
-            self.durations.insert(path(p), duration);
+        fn with_duration(mut self, p: &Path, duration: Duration) -> Self {
+            self.durations.insert(p.to_path_buf(), duration);
             self
         }
     }
@@ -96,177 +90,176 @@ mod tests {
         }
     }
 
+    fn create_temp_files(temp: &TempDir, names: &[&str]) -> Vec<CanonicalPath> {
+        names
+            .iter()
+            .map(|name| {
+                let path = temp.path().join(name);
+                std::fs::write(&path, "").unwrap();
+                CanonicalPath::from_path(&path).unwrap()
+            })
+            .collect()
+    }
+
     #[test]
     fn analyze_files_processes_uncached_files() {
-        // Given files without cached metadata.
-        let files = vec![path("a.mp4"), path("b.mp4")];
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4", "b.mp4"]);
         let metadata = HashMap::new();
         let backend = FakeMediaBackend::new()
-            .with_duration("a.mp4", Duration::from_secs(120))
-            .with_duration("b.mp4", Duration::from_secs(60));
+            .with_duration(files[0].as_path(), Duration::from_secs(120))
+            .with_duration(files[1].as_path(), Duration::from_secs(60));
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then durations are added.
         assert_eq!(result.files.len(), 2);
         assert_eq!(
-            result.files.get(&path("a.mp4")).unwrap().duration,
+            result.files.get(&files[0]).unwrap().duration,
             Some(Duration::from_secs(120))
         );
         assert_eq!(
-            result.files.get(&path("b.mp4")).unwrap().duration,
+            result.files.get(&files[1]).unwrap().duration,
             Some(Duration::from_secs(60))
         );
     }
 
     #[test]
     fn analyze_files_skips_cached_files() {
-        // Given files with some already cached.
-        let files = vec![path("a.mp4"), path("b.mp4")];
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4", "b.mp4"]);
         let mut metadata = HashMap::new();
         metadata.insert(
-            path("a.mp4"),
+            files[0].clone(),
             FileMetadata {
                 duration: Some(Duration::from_secs(100)),
-                alias: None,
                 is_virtual: false,
                 deleted: false,
                 mime_type: None,
+                time_added: None,
             },
         );
-        let backend = FakeMediaBackend::new().with_duration("b.mp4", Duration::from_secs(60));
+        let backend =
+            FakeMediaBackend::new().with_duration(files[1].as_path(), Duration::from_secs(60));
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then cached duration is preserved.
         assert_eq!(
-            result.files.get(&path("a.mp4")).unwrap().duration,
+            result.files.get(&files[0]).unwrap().duration,
             Some(Duration::from_secs(100))
         );
     }
 
     #[test]
     fn analyze_files_processes_files_with_missing_duration() {
-        // Given files with metadata but no duration.
-        let files = vec![path("a.mp4")];
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4"]);
         let mut metadata = HashMap::new();
         metadata.insert(
-            path("a.mp4"),
+            files[0].clone(),
             FileMetadata {
                 duration: None,
-                alias: Some("My Video".to_string()),
                 is_virtual: false,
                 deleted: false,
                 mime_type: None,
+                time_added: None,
             },
         );
-        let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
+        let backend =
+            FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then duration is added and alias is preserved.
-        let meta = result.files.get(&path("a.mp4")).unwrap();
+        let meta = result.files.get(&files[0]).unwrap();
         assert_eq!(meta.duration, Some(Duration::from_secs(120)));
-        assert_eq!(meta.alias, Some("My Video".to_string()));
     }
 
     #[test]
-    fn analyze_files_preserves_existing_aliases() {
-        // Given files with aliases but no durations.
-        let files = vec![path("a.mp4")];
+    fn analyze_files_preserves_existing_time_added() {
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4"]);
+        let timestamp = "2024-01-01T00:00:00Z".parse().unwrap();
         let mut metadata = HashMap::new();
         metadata.insert(
-            path("a.mp4"),
+            files[0].clone(),
             FileMetadata {
                 duration: None,
-                alias: Some("My Video".to_string()),
                 is_virtual: false,
                 deleted: false,
                 mime_type: None,
+                time_added: Some(timestamp),
             },
         );
-        let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
+        let backend =
+            FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then alias is preserved.
         assert_eq!(
-            result.files.get(&path("a.mp4")).unwrap().alias,
-            Some("My Video".to_string())
+            result.files.get(&files[0]).unwrap().time_added,
+            Some(timestamp)
         );
     }
 
     #[test]
     fn analyze_files_handles_empty_file_list() {
-        // Given no files.
-        let files: Vec<PathBuf> = vec![];
+        let files: Vec<CanonicalPath> = vec![];
         let metadata = HashMap::new();
         let backend = FakeMediaBackend::new();
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then result is empty.
         assert!(result.files.is_empty());
     }
 
     #[test]
     fn analyze_files_handles_backend_errors() {
-        // Given files where backend will fail.
-        let files = vec![path("a.mp4"), path("b.mp4")];
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4", "b.mp4"]);
         let metadata = HashMap::new();
-        let backend = FakeMediaBackend::new().with_duration("a.mp4", Duration::from_secs(120));
+        let backend =
+            FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then only successful files are added.
         assert_eq!(result.files.len(), 1);
-        assert!(result.files.contains_key(&path("a.mp4")));
-        assert!(!result.files.contains_key(&path("b.mp4")));
+        assert!(result.files.contains_key(&files[0]));
+        assert!(!result.files.contains_key(&files[1]));
     }
 
     #[test]
     fn analyze_files_preserves_existing_metadata() {
-        // Given files with existing metadata.
-        let files = vec![path("a.mp4"), path("b.mp4")];
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4", "b.mp4"]);
         let mut metadata = HashMap::new();
         metadata.insert(
-            path("a.mp4"),
+            files[0].clone(),
             FileMetadata {
                 duration: Some(Duration::from_secs(100)),
-                alias: Some("Video A".to_string()),
                 is_virtual: false,
                 deleted: false,
                 mime_type: None,
+                time_added: None,
             },
         );
         metadata.insert(
-            path("b.mp4"),
+            files[1].clone(),
             FileMetadata {
                 duration: None,
-                alias: Some("Video B".to_string()),
                 is_virtual: false,
                 deleted: false,
                 mime_type: None,
+                time_added: None,
             },
         );
-        let backend = FakeMediaBackend::new().with_duration("b.mp4", Duration::from_secs(60));
+        let backend =
+            FakeMediaBackend::new().with_duration(files[1].as_path(), Duration::from_secs(60));
 
-        // When analyzing.
         let result = analyze_files(&files, metadata, &backend).unwrap();
 
-        // Then all metadata is preserved/updated.
-        let meta_a = result.files.get(&path("a.mp4")).unwrap();
+        let meta_a = result.files.get(&files[0]).unwrap();
         assert_eq!(meta_a.duration, Some(Duration::from_secs(100)));
-        assert_eq!(meta_a.alias, Some("Video A".to_string()));
 
-        let meta_b = result.files.get(&path("b.mp4")).unwrap();
+        let meta_b = result.files.get(&files[1]).unwrap();
         assert_eq!(meta_b.duration, Some(Duration::from_secs(60)));
-        assert_eq!(meta_b.alias, Some("Video B".to_string()));
     }
 }
