@@ -25,7 +25,7 @@
 //!    updated alias from any workspace
 //! 3. **Filename**: If no alias exists at all, display the actual filename
 
-use std::{collections::HashMap, path::Path, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use derive_more::Debug;
@@ -33,6 +33,8 @@ use error_stack::Report;
 use jiff::Timestamp;
 use marked_path::CanonicalPath;
 use wherror::Error;
+
+use crate::tui::ItemPath;
 
 #[derive(Debug, Error)]
 #[error(debug)]
@@ -63,9 +65,9 @@ pub struct PlaylistData {
     /// The working directory (workspace) for this playlist.
     pub working_directory: CanonicalPath,
     /// Ordered list of file paths in the playlist.
-    pub playlist: Vec<PathBuf>,
+    pub playlist: Vec<ItemPath>,
     /// Metadata for all files (playlist items and library files).
-    pub files: HashMap<PathBuf, FileMetadata>,
+    pub files: HashMap<ItemPath, FileMetadata>,
 }
 
 /// Storage backend for playlist data.
@@ -100,8 +102,8 @@ pub trait PlaylistStorage: Send + Sync {
     /// Returns an error if the alias cannot be saved.
     async fn upsert_alias(
         &self,
-        file_path: &Path,
-        workspace: &Path,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
         alias: &str,
     ) -> Result<(), Report<IoError>>;
 
@@ -118,8 +120,8 @@ pub trait PlaylistStorage: Send + Sync {
     /// Returns an error if the alias cannot be resolved.
     async fn resolve_alias(
         &self,
-        file_path: &Path,
-        workspace: &Path,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>>;
 }
 
@@ -163,8 +165,8 @@ impl PlaylistStorageService {
     /// Returns an error if the alias cannot be saved.
     pub async fn upsert_alias(
         &self,
-        file_path: &Path,
-        workspace: &Path,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
         alias: &str,
     ) -> Result<(), Report<IoError>> {
         self.backend.upsert_alias(file_path, workspace, alias).await
@@ -179,8 +181,8 @@ impl PlaylistStorageService {
     /// Returns an error if the alias cannot be resolved.
     pub async fn resolve_alias(
         &self,
-        file_path: &Path,
-        workspace: &Path,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>> {
         self.backend.resolve_alias(file_path, workspace).await
     }
@@ -193,6 +195,7 @@ pub use storage::SqliteStorage;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -256,9 +259,9 @@ mod tests {
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
 
-        let file = PathBuf::from("/test/video.mp4");
+        let file = CanonicalPath::new(PathBuf::from("/test/video.mp4"));
         let result = storage
-            .upsert_alias(&file, working_dir.as_path(), "My Video")
+            .upsert_alias(&file, &working_dir, "My Video")
             .await;
         assert!(result.is_ok());
     }
@@ -270,13 +273,13 @@ mod tests {
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
 
-        let file = PathBuf::from("/test/video.mp4");
+        let file = CanonicalPath::new(PathBuf::from("/test/video.mp4"));
         storage
-            .upsert_alias(&file, working_dir.as_path(), "My Video")
+            .upsert_alias(&file, &working_dir, "My Video")
             .await
             .unwrap();
 
-        let result = storage.resolve_alias(&file, working_dir.as_path()).await;
+        let result = storage.resolve_alias(&file, &working_dir).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Some("My Video".to_string()));
     }

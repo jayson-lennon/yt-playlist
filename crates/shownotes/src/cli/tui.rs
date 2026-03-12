@@ -23,7 +23,7 @@ use crate::{
     feat::playlist::{FileMetadata, PlaylistData},
     feat::terminal::suspend_and_run,
     services::Services,
-    tui,
+    tui::{self},
 };
 
 use super::RunError;
@@ -40,18 +40,28 @@ fn requires_suspend(action: &ForkAction) -> bool {
 
 fn execute_fork_action(app: &mut App, action: ForkAction) -> ForkResult {
     match action {
-        ForkAction::AddNote { path } => match add_note_for_path(app, &path) {
-            Ok(()) => ForkResult::Success(format!("Note added: {}", path.display())),
-            Err(e) => ForkResult::Failed(format!("Failed to add note: {e}")),
-        },
+        ForkAction::AddNote { path } => {
+            match path.as_file() {
+                Some(file_path) => match add_note_for_path(app, file_path.as_path()) {
+                    Ok(()) => ForkResult::Success(format!("Note added: {}", path.display())),
+                    Err(e) => ForkResult::Failed(format!("Failed to add note: {e}")),
+                },
+                None => ForkResult::Failed("Cannot add notes to URLs".to_string()),
+            }
+        }
         ForkAction::FuzzyNotes => match run_fuzzy_notes(app) {
             Ok(count) => ForkResult::Success(format!("Created {count} symlink(s)")),
             Err(e) => ForkResult::Failed(format!("Fuzzy search failed: {e}")),
         },
-        ForkAction::EditSources { path } => match edit_sources_for_path(app, &path) {
-            Ok(()) => ForkResult::Success(format!("Updated sources: {}", path.display())),
-            Err(e) => ForkResult::Failed(format!("Failed to edit sources: {e}")),
-        },
+        ForkAction::EditSources { path } => {
+            match path.as_file() {
+                Some(file_path) => match edit_sources_for_path(app, file_path.as_path()) {
+                    Ok(()) => ForkResult::Success(format!("Updated sources: {}", path.display())),
+                    Err(e) => ForkResult::Failed(format!("Failed to edit sources: {e}")),
+                },
+                None => ForkResult::Failed("Cannot edit sources for URLs".to_string()),
+            }
+        }
         ForkAction::GenerateNotes { format } => match run_generate_notes(app, &format) {
             Ok(()) => ForkResult::Success(format!("Show notes ({format}) copied to clipboard")),
             Err(e) => ForkResult::Failed(format!("Failed to generate notes: {e}")),
@@ -98,7 +108,6 @@ fn process_fork(
 /// - The database cannot be accessed
 /// - Terminal setup fails
 pub fn run_tui(
-    playlist: PathBuf,
     socket: PathBuf,
     db_path: &Path,
     library_path: PathBuf,
@@ -115,14 +124,18 @@ pub fn run_tui(
         .change_context(RunError)
         .attach("Failed to canonicalize library path")?;
     let playlist_data = rt.block_on(core_services.storage.load(&canonical_library_path)).change_context(RunError)?;
-    let all_files = collect_all_files(&playlist_data, &config, &library_path);
+    let all_files = collect_all_files(&playlist_data, &config, &canonical_library_path);
     let ffprobe_backend: Arc<dyn MediaQuery> = Arc::new(Ffprobe);
-    let files_for_migration = playlist_data.files.clone();
+    let files_for_migration: std::collections::HashMap<CanonicalPath, _> = playlist_data
+        .files
+        .iter()
+        .filter_map(|(k, v)| k.as_file().map(|cp| (cp.clone(), v.clone())))
+        .collect();
 
     let metadata: std::collections::HashMap<CanonicalPath, _> = playlist_data
         .files
-        .into_iter()
-        .filter_map(|(k, v)| CanonicalPath::from_path(&k).ok().map(|cp| (cp, v)))
+        .iter()
+        .filter_map(|(k, v)| k.as_file().map(|cp| (cp.clone(), v.clone())))
         .collect();
 
     let result = crate::feat::media_duration_analysis::analyze_files(
@@ -132,10 +145,11 @@ pub fn run_tui(
     )
     .change_context(RunError)?;
 
-    let files: std::collections::HashMap<PathBuf, FileMetadata> = result
+    use crate::tui::ItemPath;
+    let files: std::collections::HashMap<ItemPath, FileMetadata> = result
         .files
-        .iter()
-        .map(|(k, v)| (k.as_path().to_path_buf(), v.clone()))
+        .into_iter()
+        .map(|(k, v)| (ItemPath::File(k), v))
         .collect();
 
     let analyzed_data = PlaylistData {
@@ -146,10 +160,12 @@ pub fn run_tui(
     rt.block_on(core_services.storage.save(&analyzed_data))
         .change_context(RunError)?;
 
-    let durations: std::collections::HashMap<CanonicalPath, std::time::Duration> = result
-        .files
+    let durations: std::collections::HashMap<CanonicalPath, std::time::Duration> = files
         .iter()
-        .filter_map(|(k, v)| v.duration.map(|d| (k.clone(), d)))
+        .filter_map(|(k, v)| {
+            k.as_file()
+                .and_then(|cp| v.duration.map(|d| (cp.clone(), d)))
+        })
         .collect();
 
     let media_backend: Arc<dyn MediaQuery> = Arc::new(CachedMedia::new(durations, ffprobe_backend));
@@ -166,8 +182,7 @@ pub fn run_tui(
         services,
         config,
         socket.to_string_lossy().into_owned(),
-        canonical_library_path.to_path_buf(),
-        playlist,
+        canonical_library_path,
         rt,
     );
 
@@ -206,27 +221,27 @@ pub fn run_tui(
 fn collect_all_files(
     playlist_data: &PlaylistData,
     config: &Config,
-    library_path: &Path,
+    library_path: &CanonicalPath,
 ) -> Vec<CanonicalPath> {
     let mut files: HashSet<CanonicalPath> = HashSet::new();
 
-    for path in &playlist_data.playlist {
-        if config.is_video_or_audio(path) {
-            if let Ok(canonical) = CanonicalPath::from_path(path) {
-                files.insert(canonical);
+    for item_path in &playlist_data.playlist {
+        if let Some(canonical) = item_path.as_file() {
+            if config.is_video_or_audio(canonical.as_path()) {
+                files.insert(canonical.clone());
             }
         }
     }
 
-    for path in playlist_data.files.keys() {
-        if config.is_video_or_audio(path) {
-            if let Ok(canonical) = CanonicalPath::from_path(path) {
-                files.insert(canonical);
+    for item_path in playlist_data.files.keys() {
+        if let Some(canonical) = item_path.as_file() {
+            if config.is_video_or_audio(canonical.as_path()) {
+                files.insert(canonical.clone());
             }
         }
     }
 
-    if let Ok(read_dir) = std::fs::read_dir(library_path) {
+    if let Ok(read_dir) = std::fs::read_dir(library_path.as_path()) {
         for entry in read_dir.flatten() {
             let path = entry.path();
             if path.is_file() && config.is_video_or_audio(&path) {
@@ -298,13 +313,14 @@ fn run_app(
 }
 
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
+    let canonical = CanonicalPath::from_path(path).map_err(|e| format!("Failed to canonicalize path: {e:?}"))?;
     let result = app
         .services
         .rt
         .block_on(crate::command::execute(
             &app.services,
             Command::NotesAdd {
-                paths: vec![path.to_owned()],
+                paths: vec![canonical],
             },
         ))
         .map_err(|e| format!("Add note failed: {e:?}"))?;
@@ -334,13 +350,14 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
 }
 
 fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
+    let canonical = CanonicalPath::from_path(path).map_err(|e| format!("Failed to canonicalize path: {e:?}"))?;
     let result = app
         .services
         .rt
         .block_on(crate::command::execute(
             &app.services,
             Command::SourcesEdit {
-                path: path.to_owned(),
+                path: canonical,
             },
         ))
         .map_err(|e| format!("Edit sources failed: {e:?}"))?;
@@ -351,6 +368,7 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
 }
 
 fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
+    let library_path = app.runtime.library_path.clone();
     let result = app
         .services
         .rt
@@ -358,7 +376,7 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
             &app.services,
             Command::GenerateNotes {
                 format: format.to_owned(),
-                playlist_path: app.runtime.playlist_path.clone(),
+                working_directory: library_path,
             },
         ))
         .map_err(|e| format!("Generation failed: {e:?}"))?;
@@ -377,13 +395,15 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::ItemPath;
+    use marked_path::CanonicalPath;
     use std::path::PathBuf;
 
     #[test]
     fn requires_suspend_returns_true_for_add_note() {
         // Given an AddNote action.
         let action = ForkAction::AddNote {
-            path: PathBuf::from("/test"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/test"))),
         };
 
         // When checking if suspend is required.
@@ -405,7 +425,7 @@ mod tests {
     fn requires_suspend_returns_true_for_edit_sources() {
         // Given an EditSources action.
         let action = ForkAction::EditSources {
-            path: PathBuf::from("/test"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/test"))),
         };
 
         // When checking if suspend is required.

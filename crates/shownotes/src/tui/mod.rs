@@ -17,7 +17,7 @@ use ratatui::{
     Frame,
 };
 
-pub use common::{get_mime_type, ItemDisplayMode, Pane, PlaylistItem};
+pub use common::{get_mime_type, ItemDisplayMode, ItemPath, Pane, PlaylistItem};
 pub use error_popup::ErrorPopup;
 pub use filter::Filter;
 pub use library_pane::LibraryPane;

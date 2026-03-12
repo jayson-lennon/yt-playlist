@@ -60,8 +60,8 @@ fn build_entries(
         .filter_map(|path| {
             let path_str = path.to_string_lossy();
             let filename = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
+                .file_stem()
+                .map(str::to_string)
                 .unwrap_or_default();
             let sources: Vec<String> = sources_map
                 .get(&*path_str)

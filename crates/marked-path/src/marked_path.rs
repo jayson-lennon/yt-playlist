@@ -1,6 +1,8 @@
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use error_stack::Report;
 use wherror::Error;
@@ -27,6 +29,42 @@ impl<M> Clone for MarkedPath<M> {
             path: self.path.clone(),
             _marker: PhantomData,
         }
+    }
+}
+
+impl<M> fmt::Display for MarkedPath<M> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.path.display().fmt(f)
+    }
+}
+
+impl<M> AsRef<Path> for MarkedPath<M> {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl FromStr for MarkedPath<Absolute> {
+    type Err = Report<PathError>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let path = PathBuf::from(s);
+        Self::new(path)
+    }
+}
+
+impl FromStr for MarkedPath<Relative> {
+    type Err = Report<PathError>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let path = PathBuf::from(s);
+        Self::new(path)
+    }
+}
+
+impl From<CanonicalPath> for MarkedPath<Absolute> {
+    fn from(value: CanonicalPath) -> Self {
+        value.0
     }
 }
 

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
+use marked_path::CanonicalPath;
 
 use crate::command::{format_output, execute, Command};
 use crate::services::Services;
@@ -50,9 +51,18 @@ pub fn run_sources_command(
             .change_context(RunError)?;
 
         let command = match cmd {
-            SourcesCommands::Add { path, url } => Command::SourcesAdd { path, url },
-            SourcesCommands::List { path } => Command::SourcesList { path },
-            SourcesCommands::Edit { path } => Command::SourcesEdit { path },
+            SourcesCommands::Add { path, url } => {
+                let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
+                Command::SourcesAdd { path: canonical, url }
+            }
+            SourcesCommands::List { path } => {
+                let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
+                Command::SourcesList { path: canonical }
+            }
+            SourcesCommands::Edit { path } => {
+                let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
+                Command::SourcesEdit { path: canonical }
+            }
         };
 
         let result = execute(&services, command)

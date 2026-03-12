@@ -41,10 +41,6 @@ pub struct Args {
 pub enum Commands {
     /// Run the TUI (default when no command specified)
     Tui {
-        /// Playlist file path
-        #[arg(short, long, default_value = "shownotes.toml")]
-        playlist: PathBuf,
-
         /// mpv socket path
         #[arg(long, default_value = "/tmp/mpvsocket")]
         socket: PathBuf,
@@ -78,9 +74,9 @@ pub enum Commands {
         #[arg(short, long, default_value = "markdown")]
         format: String,
 
-        /// Playlist file path
-        #[arg(short, long, default_value = "shownotes.toml")]
-        playlist: PathBuf,
+        /// Working directory path
+        #[arg(default_value = ".")]
+        path: PathBuf,
     },
 }
 
@@ -102,11 +98,10 @@ pub fn run() -> Result<(), Report<RunError>> {
     let handle = rt.handle().clone();
 
     match args.command.unwrap_or(Commands::Tui {
-        playlist: PathBuf::from("shownotes.toml"),
         socket: PathBuf::from("/tmp/mpvsocket"),
         path: PathBuf::from("."),
     }) {
-        Commands::Tui { playlist, socket, path } => run_tui(playlist, socket, &args.db_path, path, rt),
+        Commands::Tui { socket, path } => run_tui(socket, &args.db_path, path, rt),
         Commands::Action { action } => match action {
             ActionCommands::Mpv { path, socket } => {
                 run_action_mpv(&path, &socket, &args.db_path, &handle)
@@ -116,8 +111,8 @@ pub fn run() -> Result<(), Report<RunError>> {
         Commands::Sources { sources_cmd } => {
             run_sources_command(sources_cmd, &args.db_path, &handle)
         }
-        Commands::Generate { format, playlist } => {
-            run_generate(&format, &playlist, &args.db_path, &handle)
+        Commands::Generate { format, path } => {
+            run_generate(&format, &path, &args.db_path, &handle)
         }
     }
 }

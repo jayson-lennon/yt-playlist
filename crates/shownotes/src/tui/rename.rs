@@ -73,10 +73,14 @@ impl Rename {
         let filename = selected_item.map_or_else(
             || "Unknown".to_string(),
             |item| {
-                item.path.file_name().map_or_else(
-                    || item.path.to_string_lossy().into_owned(),
-                    |n| n.to_string_lossy().into_owned(),
-                )
+                if item.is_virtual || item.path.is_url() {
+                    item.path.to_string_lossy().into_owned()
+                } else {
+                    item.path.file_stem().map_or_else(
+                        || item.path.to_string_lossy().into_owned(),
+                        |s| s.to_string(),
+                    )
+                }
             },
         );
 

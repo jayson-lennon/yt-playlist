@@ -2,6 +2,7 @@
 use cucumber::{World, given, then, when};
 
 use acceptance::ShownotesWorld;
+use marked_path::CanonicalPath;
 use shownotes::NoteDb;
 use shownotes::PathResolver;
 use shownotes::command::notes::add_alias_as_note;
@@ -96,7 +97,8 @@ async fn given_file_has_note(world: &mut AliasNotesWorld, path: String, note: St
 #[when(expr = r#"I add alias {string} to {string}"#)]
 async fn when_add_alias(world: &mut AliasNotesWorld, alias: String, path: String) {
     let full_path = world.inner.resolve_path(&path);
-    add_alias_as_note(&world.inner.services, &full_path, &alias)
+    let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
+    add_alias_as_note(&world.inner.services, &canonical, &alias)
         .await
         .expect("add_alias_as_note failed");
 }

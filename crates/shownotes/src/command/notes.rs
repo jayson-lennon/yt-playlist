@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use error_stack::{Report, ResultExt};
+use marked_path::CanonicalPath;
 
 use crate::feat::{
     external_editor::ExternalEditor, note_db::NoteDb,
-    path_resolver::PathResolver, symlink::create_symlink_with_suffix,
+    symlink::create_symlink_with_suffix,
 };
 use crate::services::Services;
 
@@ -13,28 +14,18 @@ use super::CommandError;
 
 /// # Errors
 ///
-/// Returns an error if path resolution, database operations, or editor invocation fails.
+/// Returns an error if database operations or editor invocation fails.
 pub async fn add(
     services: &Services,
-    paths: Vec<std::path::PathBuf>,
-) -> Result<Vec<std::path::PathBuf>, Report<CommandError>> {
+    paths: Vec<CanonicalPath>,
+) -> Result<Vec<CanonicalPath>, Report<CommandError>> {
     if paths.is_empty() {
         return Err(Report::new(CommandError));
     }
 
-    let mut resolved_paths = Vec::with_capacity(paths.len());
-    for path in paths {
-        let resolved = services
-            .path_resolver
-            .resolve(&path)
-            .await
-            .change_context(CommandError)?;
-        resolved_paths.push(resolved);
-    }
-
-    if resolved_paths.len() == 1 {
-        let resolved_path = &resolved_paths[0];
-        let path_str = resolved_path.to_string_lossy();
+    if paths.len() == 1 {
+        let resolved_path = &paths[0];
+        let path_str = resolved_path.as_path().to_string_lossy();
         let file_path_id = services
             .db
             .get_or_create_file_path(&path_str)
@@ -62,23 +53,23 @@ pub async fn add(
         }
     } else {
         let Some(new_content) = services.editor.open("").await.change_context(CommandError)? else {
-            return Ok(resolved_paths);
+            return Ok(paths);
         };
 
-        for resolved_path in &resolved_paths {
+        for resolved_path in &paths {
             upsert_note_with_prepend(services, resolved_path, &new_content).await?;
         }
     }
 
-    Ok(resolved_paths)
+    Ok(paths)
 }
 
 async fn upsert_note_with_prepend(
     services: &Services,
-    resolved_path: &Path,
+    resolved_path: &CanonicalPath,
     new_content: &str,
 ) -> Result<(), Report<CommandError>> {
-    let path_str = resolved_path.to_string_lossy();
+    let path_str = resolved_path.as_path().to_string_lossy();
     let file_path_id = services
         .db
         .get_or_create_file_path(&path_str)
@@ -138,22 +129,17 @@ pub async fn search(
 
 /// # Errors
 ///
-/// Returns an error if path resolution or database operations fail.
+/// Returns an error if database operations fail.
 pub async fn add_alias_as_note(
     services: &Services,
-    path: &Path,
+    path: &CanonicalPath,
     alias: &str,
 ) -> Result<bool, Report<CommandError>> {
     if alias.is_empty() {
         return Ok(false);
     }
 
-    let resolved = services
-        .path_resolver
-        .resolve(path)
-        .await
-        .change_context(CommandError)?;
-    let path_str = resolved.to_string_lossy();
+    let path_str = path.as_path().to_string_lossy();
 
     let file_path_id = services
         .db
@@ -190,7 +176,7 @@ pub async fn add_alias_as_note(
 #[allow(clippy::unused_async)]
 pub async fn migrate_aliases_to_notes<S>(
     _services: &Services,
-    _files: &HashMap<std::path::PathBuf, crate::feat::playlist::FileMetadata, S>,
+    _files: &HashMap<CanonicalPath, crate::feat::playlist::FileMetadata, S>,
 ) -> (usize, usize)
 where
     S: std::hash::BuildHasher,
@@ -239,14 +225,17 @@ pub async fn fuzzy(
 mod tests {
     use std::collections::HashMap;
 
+    use marked_path::CanonicalPath;
+
     use crate::feat::note_db::NoteDb;
     use crate::test_utils::{create_test_services, create_temp_file, NoteTestContext};
 
     #[tokio::test]
     async fn add_alias_as_note_skips_blank_alias() {
         let ctx = NoteTestContext::new().await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "").await.unwrap();
+        let result = super::add_alias_as_note(&ctx.services, &canonical, "").await.unwrap();
 
         assert!(!result);
     }
@@ -254,8 +243,9 @@ mod tests {
     #[tokio::test]
     async fn add_alias_as_note_adds_when_no_conflicts() {
         let ctx = NoteTestContext::new().await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "my-alias")
+        let result = super::add_alias_as_note(&ctx.services, &canonical, "my-alias")
             .await
             .unwrap();
 
@@ -267,13 +257,14 @@ mod tests {
     #[tokio::test]
     async fn add_alias_as_note_skips_exact_match() {
         let ctx = NoteTestContext::new().await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.services
             .db
             .upsert_note(ctx.file_path_id, "foo")
             .await
             .unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "foo")
+        let result = super::add_alias_as_note(&ctx.services, &canonical, "foo")
             .await
             .unwrap();
 
@@ -285,13 +276,14 @@ mod tests {
     #[tokio::test]
     async fn add_alias_as_note_skips_substring_match() {
         let ctx = NoteTestContext::new().await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.services
             .db
             .upsert_note(ctx.file_path_id, "foo bar")
             .await
             .unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "foo")
+        let result = super::add_alias_as_note(&ctx.services, &canonical, "foo")
             .await
             .unwrap();
 
@@ -303,13 +295,14 @@ mod tests {
     #[tokio::test]
     async fn add_alias_as_note_appends_to_existing() {
         let ctx = NoteTestContext::new().await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.services
             .db
             .upsert_note(ctx.file_path_id, "first")
             .await
             .unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, ctx.temp_file.path(), "second")
+        let result = super::add_alias_as_note(&ctx.services, &canonical, "second")
             .await
             .unwrap();
 
@@ -326,7 +319,7 @@ mod tests {
 
         let mut files = HashMap::new();
         files.insert(
-            temp1.path().to_path_buf(),
+            CanonicalPath::from_path(temp1.path()).unwrap(),
             crate::feat::playlist::FileMetadata {
                 duration: None,
                 is_virtual: false,
@@ -337,7 +330,7 @@ mod tests {
             },
         );
         files.insert(
-            temp2.path().to_path_buf(),
+            CanonicalPath::from_path(temp2.path()).unwrap(),
             crate::feat::playlist::FileMetadata {
                 duration: None,
                 is_virtual: false,
@@ -362,7 +355,7 @@ mod tests {
 
         let mut files = HashMap::new();
         files.insert(
-            temp1.path().to_path_buf(),
+            CanonicalPath::from_path(temp1.path()).unwrap(),
             crate::feat::playlist::FileMetadata {
                 duration: None,
                 is_virtual: false,
@@ -373,7 +366,7 @@ mod tests {
             },
         );
         files.insert(
-            temp2.path().to_path_buf(),
+            CanonicalPath::from_path(temp2.path()).unwrap(),
             crate::feat::playlist::FileMetadata {
                 duration: None,
                 is_virtual: false,
@@ -397,7 +390,7 @@ mod tests {
 
         let mut files = HashMap::new();
         files.insert(
-            temp.path().to_path_buf(),
+            CanonicalPath::from_path(temp.path()).unwrap(),
             crate::feat::playlist::FileMetadata {
                 duration: None,
                 is_virtual: false,

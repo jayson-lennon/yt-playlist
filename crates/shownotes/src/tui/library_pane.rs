@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -8,7 +6,7 @@ use ratatui::{
 };
 
 use super::common::{
-    filter_items, format_duration, format_item_line, ItemDisplayMode, PlaylistItem,
+    filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, PlaylistItem,
 };
 use super::filter::Filter;
 
@@ -77,7 +75,7 @@ impl LibraryPane {
         }
     }
 
-    pub fn refresh(&mut self, entries: Vec<PlaylistItem>, playlist_paths: &[&PathBuf]) {
+    pub fn refresh(&mut self, entries: Vec<PlaylistItem>, playlist_paths: &[&ItemPath]) {
         use std::collections::HashSet;
 
         let entry_paths: HashSet<_> = entries.iter().map(|e| &e.path).collect();
@@ -92,7 +90,8 @@ impl LibraryPane {
             }
         }
 
-        self.items.sort_by(|a, b| a.path.cmp(&b.path));
+        self.items
+            .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
         if self.items.is_empty() {
             self.selected = 0;
         } else if self.selected >= self.items.len() {
@@ -166,7 +165,12 @@ impl LibraryPane {
             .enumerate()
             .map(|(display_idx, (_original_idx, item))| {
                 let is_selected = display_idx == self.selected && is_focused && !is_filtering;
-                let file_missing = !item.path.exists() && !item.is_virtual;
+                let file_missing = !item
+                    .path
+                    .as_file()
+                    .map(|p| p.as_path().exists())
+                    .unwrap_or(false)
+                    && !item.is_virtual;
                 let style = if is_selected {
                     if file_missing {
                         Style::default()
@@ -239,11 +243,12 @@ impl Default for LibraryPane {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use marked_path::CanonicalPath;
+    use std::path::PathBuf;
 
     fn item(path: &str) -> PlaylistItem {
         PlaylistItem {
-            path: PathBuf::from(path),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from(path))),
             duration: None,
             alias: None,
             mime_type: None,
@@ -253,7 +258,7 @@ mod tests {
 
     fn virtual_item(path: &str) -> PlaylistItem {
         PlaylistItem {
-            path: PathBuf::from(path),
+            path: ItemPath::Url(path.to_string()),
             duration: None,
             alias: None,
             mime_type: None,
@@ -369,8 +374,14 @@ mod tests {
 
         // Then selected item is removed.
         assert_eq!(pane.items.len(), 2);
-        assert_eq!(pane.items[0].path, PathBuf::from("a.mp4"));
-        assert_eq!(pane.items[1].path, PathBuf::from("c.mp4"));
+        assert_eq!(
+            pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4")))
+        );
+        assert_eq!(
+            pane.items[1].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("c.mp4")))
+        );
     }
 
     #[test]
@@ -403,7 +414,7 @@ mod tests {
         assert!(pane
             .items
             .iter()
-            .all(|i| i.path != Path::new("apricot.mp4")));
+            .all(|i| i.path != ItemPath::File(CanonicalPath::new(PathBuf::from("apricot.mp4")))));
     }
 
     #[test]
@@ -417,7 +428,10 @@ mod tests {
         let selected = pane.selected_item();
 
         // Then correct item is returned.
-        assert_eq!(selected.unwrap().path, PathBuf::from("b.mp4"));
+        assert_eq!(
+            selected.unwrap().path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
     }
 
     #[test]
@@ -526,7 +540,10 @@ mod tests {
 
         // Then only matching items are returned.
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].1.path, PathBuf::from("banana.mp4"));
+        assert_eq!(
+            filtered[0].1.path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("banana.mp4")))
+        );
     }
 
     #[test]
@@ -534,15 +551,18 @@ mod tests {
         // Given a pane and playlist paths.
         let mut pane = LibraryPane::new();
         let entries = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
-        let b_path = PathBuf::from("b.mp4");
-        let playlist_paths: Vec<&PathBuf> = vec![&b_path];
+        let b_path = ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")));
+        let playlist_paths: Vec<&ItemPath> = vec![&b_path];
 
         // When refreshing.
         pane.refresh(entries, &playlist_paths);
 
         // Then items in playlist are excluded.
         assert_eq!(pane.items.len(), 2);
-        assert!(pane.items.iter().all(|i| i.path != Path::new("b.mp4")));
+        assert!(pane
+            .items
+            .iter()
+            .all(|i| i.path != ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))));
     }
 
     #[test]
@@ -560,12 +580,17 @@ mod tests {
 
         // Then virtual items are preserved, old non-virtual is removed, new is added.
         assert_eq!(pane.items.len(), 2);
+        assert!(pane.items.iter().any(|i| i.path
+            == ItemPath::Url("https://example.com/video.mp4".to_string())
+            && i.is_virtual));
         assert!(pane
             .items
             .iter()
-            .any(|i| i.path == Path::new("https://example.com/video.mp4") && i.is_virtual));
-        assert!(pane.items.iter().any(|i| i.path == Path::new("new.mp4")));
-        assert!(!pane.items.iter().any(|i| i.path == Path::new("old.mp4")));
+            .any(|i| i.path == ItemPath::File(CanonicalPath::new(PathBuf::from("new.mp4")))));
+        assert!(!pane
+            .items
+            .iter()
+            .any(|i| i.path == ItemPath::File(CanonicalPath::new(PathBuf::from("old.mp4")))));
     }
 
     #[test]
@@ -581,7 +606,7 @@ mod tests {
         assert_eq!(pane.items.len(), 1);
         assert_eq!(
             pane.items[0].path,
-            PathBuf::from("https://youtube.com/watch?v=abc")
+            ItemPath::Url("https://youtube.com/watch?v=abc".to_string())
         );
         assert!(pane.items[0].is_virtual);
     }

@@ -9,7 +9,7 @@ use crate::feat::config::Config;
 use crate::feat::keymap::{Action, Keymap};
 use crate::feat::playlist::PlaylistData;
 use crate::services::Services;
-use crate::tui::{ItemDisplayMode, Pane, PlaylistItem, TuiState, get_mime_type};
+use crate::tui::{ItemDisplayMode, ItemPath, Pane, PlaylistItem, TuiState, get_mime_type};
 
 /// Holds pending actions that require forking from the TUI.
 ///
@@ -18,9 +18,9 @@ use crate::tui::{ItemDisplayMode, Pane, PlaylistItem, TuiState, get_mime_type};
 /// main loop checks this struct and executes any pending action before continuing.
 #[derive(Default)]
 pub struct Fork {
-    pub notes_path: Option<PathBuf>,
+    pub notes_path: Option<ItemPath>,
     pub fuzzy_notes: bool,
-    pub sources_path: Option<PathBuf>,
+    pub sources_path: Option<ItemPath>,
     pub generate_notes: Option<String>,
 }
 
@@ -29,9 +29,9 @@ pub struct Fork {
 /// Each variant represents an external operation that requires suspending
 /// the terminal UI to interact with an external program or output.
 pub enum ForkAction {
-    AddNote { path: PathBuf },
+    AddNote { path: ItemPath },
     FuzzyNotes,
-    EditSources { path: PathBuf },
+    EditSources { path: ItemPath },
     GenerateNotes { format: String },
 }
 
@@ -62,8 +62,7 @@ impl Fork {
 pub struct RuntimeSettings {
     pub keymap: Keymap,
     pub socket_path: String,
-    pub library_path: PathBuf,
-    pub playlist_path: PathBuf,
+    pub library_path: CanonicalPath,
 }
 
 /// The main application state container.
@@ -86,8 +85,7 @@ impl App {
         services: Services,
         config: Config,
         socket_path: String,
-        library_path: PathBuf,
-        playlist_path: PathBuf,
+        library_path: CanonicalPath,
         tokio_runtime: tokio::runtime::Runtime,
     ) -> Self {
         let mut app = Self {
@@ -100,7 +98,6 @@ impl App {
                 keymap: Keymap::new(),
                 socket_path,
                 library_path,
-                playlist_path,
             },
             tokio_runtime,
         };
@@ -131,12 +128,8 @@ impl App {
     }
 
     pub fn load_playlist(&mut self) {
-        let Ok(library_path) = CanonicalPath::from_path(&self.runtime.library_path) else {
-            self.tui_state.show_error("Failed to canonicalize library path".to_string());
-            return;
-        };
         let result = self.tokio_runtime.block_on(async {
-            self.services.storage.load(&library_path).await
+            self.services.storage.load(&self.runtime.library_path).await
         });
         match result {
             Ok(data) => {
@@ -170,9 +163,10 @@ impl App {
                         metadata.is_virtual && !playlist_paths.contains(path)
                     })
                     .map(|(path, metadata)| {
-                        let mime_type = metadata.mime_type.or_else(|| get_mime_type(&path));
+                        let item_path = ItemPath::Url(path.to_string_lossy().to_string());
+                        let mime_type = metadata.mime_type.or_else(|| get_mime_type(&item_path));
                         PlaylistItem {
-                            path,
+                            path: item_path,
                             duration: metadata.duration,
                             alias: metadata.alias.clone(),
                             mime_type,
@@ -180,7 +174,7 @@ impl App {
                         }
                     })
                     .collect();
-                virtual_library_items.sort_by(|a, b| a.path.cmp(&b.path));
+                virtual_library_items.sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
 
                 self.refresh_library();
 
@@ -190,7 +184,7 @@ impl App {
                 self.tui_state
                     .library_pane
                     .items
-                    .sort_by(|a, b| a.path.cmp(&b.path));
+                    .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
             }
             Err(e) => {
                 self.tui_state
@@ -200,10 +194,6 @@ impl App {
     }
 
     pub fn save_playlist(&mut self) {
-        let Ok(library_path) = CanonicalPath::from_path(&self.runtime.library_path) else {
-            self.tui_state.show_error("Failed to canonicalize library path".to_string());
-            return;
-        };
         let mut files = std::collections::HashMap::new();
         for item in &self.tui_state.playlist_pane.items {
             files.insert(
@@ -214,7 +204,7 @@ impl App {
                     deleted: false,
                     mime_type: item.mime_type.clone(),
                     time_added: None,
-                    alias: None,
+                    alias: item.alias.clone(),
                 },
             );
         }
@@ -227,11 +217,11 @@ impl App {
                     deleted: false,
                     mime_type: item.mime_type.clone(),
                     time_added: None,
-                    alias: None,
+                    alias: item.alias.clone(),
                 },
             );
         }
-        let playlist_paths: Vec<PathBuf> = self
+        let playlist_paths: Vec<ItemPath> = self
             .tui_state
             .playlist_pane
             .items
@@ -239,7 +229,7 @@ impl App {
             .map(|item| item.path.clone())
             .collect();
         let data = PlaylistData {
-            working_directory: library_path,
+            working_directory: self.runtime.library_path.clone(),
             playlist: playlist_paths,
             files,
         };
@@ -259,7 +249,7 @@ impl App {
 
     pub fn refresh_library(&mut self) {
         let mut entries = Vec::new();
-        if let Ok(read_dir) = std::fs::read_dir(&self.runtime.library_path) {
+        if let Ok(read_dir) = std::fs::read_dir(self.runtime.library_path.as_path()) {
             let paths: Vec<_> = read_dir
                 .flatten()
                 .map(|entry| entry.path())
@@ -273,14 +263,14 @@ impl App {
                 .block_on(async {
                     let mut result = std::collections::HashMap::new();
                     for path in &paths {
-                        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+                        let canonical = CanonicalPath::new(path.canonicalize().unwrap_or_else(|_| path.clone()));
                         let alias = services
                             .storage
                             .resolve_alias(&canonical, &workspace)
                             .await
                             .ok()
                             .flatten();
-                        result.insert(canonical, alias);
+                        result.insert(canonical.to_path_buf(), alias);
                     }
                     result
                 });
@@ -288,10 +278,11 @@ impl App {
             for path in paths {
                 let canonical = path.canonicalize().unwrap_or(path);
                 let duration = self.services.media.get_duration(&canonical).ok();
-                let mime_type = get_mime_type(&canonical);
+                let item_path = ItemPath::File(CanonicalPath::new(canonical.clone()));
+                let mime_type = get_mime_type(&item_path);
                 let alias = aliases.get(&canonical).cloned().flatten();
                 entries.push(PlaylistItem {
-                    path: canonical,
+                    path: item_path,
                     duration,
                     alias,
                     mime_type,
@@ -299,7 +290,7 @@ impl App {
                 });
             }
         }
-        entries.sort_by(|a, b| a.path.cmp(&b.path));
+        entries.sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
         self.tui_state.refresh_library(entries);
     }
 
@@ -349,12 +340,13 @@ impl App {
                                     let services = self.services.clone();
                                     let workspace = self.runtime.library_path.clone();
                                     self.tokio_runtime.block_on(async {
-                                        let _ = crate::command::notes::add_alias_as_note(
-                                            &services, &path, &alias,
-                                        )
-                                        .await;
-                                        let canonical_path = path.canonicalize().unwrap_or(path);
-                                        let _ = services.storage.upsert_alias(&canonical_path, &workspace, &alias).await;
+                                        if let Some(file_path) = path.as_file() {
+                                            let _ = crate::command::notes::add_alias_as_note(
+                                                &services, file_path, &alias,
+                                            )
+                                            .await;
+                                            let _ = services.storage.upsert_alias(file_path, &workspace, &alias).await;
+                                        }
                                     });
                                 }
                             }
@@ -561,9 +553,8 @@ impl App {
 
     fn submit_url_input(&mut self) {
         if let Some(url) = self.tui_state.submit_url_input() {
-            let path = PathBuf::from(url);
             let item = PlaylistItem {
-                path,
+                path: ItemPath::Url(url),
                 duration: None,
                 alias: None,
                 mime_type: Some("url".to_string()),
@@ -573,7 +564,7 @@ impl App {
             self.tui_state
                 .library_pane
                 .items
-                .sort_by(|a, b| a.path.cmp(&b.path));
+                .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
             self.save_playlist();
             self.tui_state.status_message = Some("URL added to library".to_string());
         }
@@ -599,13 +590,13 @@ impl App {
 
     fn move_from_playlist_to_library(&mut self) {
         if let Some(item) = self.tui_state.selected_playlist_item().cloned() {
-            let file_missing = !item.path.exists() && !item.is_virtual;
+            let file_missing = !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
             if !file_missing {
                 self.tui_state.library_pane.items.push(item);
                 self.tui_state
                     .library_pane
                     .items
-                    .sort_by(|a, b| a.path.cmp(&b.path));
+                    .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
             }
             self.tui_state.remove_from_playlist();
             if self.tui_state.playlist_pane.items.is_empty() {
@@ -618,46 +609,51 @@ impl App {
 
     fn launch_file(&mut self) {
         if let Some(item) = self.tui_state.get_selected_item() {
-            let cmd = self.config.get_cmd(&item.path);
-            let path = item.path.clone();
-            let command = Command::LaunchFile {
-                path: path.clone(),
-                command: cmd.map(str::to_string),
-                socket_path: self.runtime.socket_path.clone(),
-            };
-            match self
-                .tokio_runtime
-                .block_on(execute(&self.services, command))
-            {
-                Ok(CommandResult::FileLaunched {
-                    used_default_opener,
-                    ..
-                }) => {
-                    if used_default_opener {
-                        self.tui_state.status_message =
-                            Some(format!("Opening with default opener: {}", path.display()));
-                    } else {
-                        self.tui_state.status_message =
-                            Some(format!("Opening: {}", path.display()));
+            if let Some(file_path) = item.path.as_file() {
+                let cmd = self.config.get_cmd(file_path.as_path());
+                let command = Command::LaunchFile {
+                    path: file_path.clone(),
+                    command: cmd.map(str::to_string),
+                    socket_path: self.runtime.socket_path.clone(),
+                };
+                match self
+                    .tokio_runtime
+                    .block_on(execute(&self.services, command))
+                {
+                    Ok(CommandResult::FileLaunched {
+                        used_default_opener,
+                        ..
+                    }) => {
+                        if used_default_opener {
+                            self.tui_state.status_message =
+                                Some(format!("Opening with default opener: {}", item.path.display()));
+                        } else {
+                            self.tui_state.status_message =
+                                Some(format!("Opening: {}", item.path.display()));
+                        }
                     }
+                    Err(e) => {
+                        self.tui_state
+                            .show_error(format!("Failed to open file: {e:?}"));
+                    }
+                    _ => unreachable!(),
                 }
-                Err(e) => {
-                    self.tui_state
-                        .show_error(format!("Failed to open file: {e:?}"));
-                }
-                _ => unreachable!(),
             }
         }
     }
 
     fn load_playlist_in_mpv(&mut self) {
-        let paths: Vec<PathBuf> = self
+        let paths: Vec<CanonicalPath> = self
             .tui_state
             .playlist_pane
             .items
             .iter()
-            .filter(|item| self.config.is_video_or_audio(&item.path))
-            .map(|item| item.path.clone())
+            .filter(|item| {
+                item.path
+                    .as_file()
+                    .is_some_and(|p| self.config.is_video_or_audio(p.as_path()))
+            })
+            .filter_map(|item| item.path.as_file().map(|p| p.clone()))
             .collect();
 
         if paths.is_empty() {
@@ -728,7 +724,7 @@ mod tests {
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
         library_items: Vec<PathBuf>,
-        library_path: PathBuf,
+        library_path: CanonicalPath,
         mpv_launcher: FakeMpvLauncher,
         mpv_backend: FakeMpvBackend,
         media_backend: FakeMediaBackend,
@@ -742,7 +738,7 @@ mod tests {
             Self {
                 playlist_items: vec![],
                 library_items: vec![],
-                library_path: PathBuf::from("."),
+                library_path: CanonicalPath::new(PathBuf::from(".")),
                 mpv_launcher: FakeMpvLauncher::new(),
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
@@ -763,7 +759,7 @@ mod tests {
         }
 
         fn library_path(mut self, path: PathBuf) -> Self {
-            self.library_path = path;
+            self.library_path = CanonicalPath::new(path);
             self
         }
 
@@ -806,17 +802,17 @@ mod tests {
                 runtime: RuntimeSettings {
                     keymap: Keymap::new(),
                     socket_path: String::from("/tmp/mpvsocket"),
-                    library_path: self.library_path.clone(),
-                    playlist_path: self.library_path,
+                    library_path: self.library_path,
                 },
                 tokio_runtime: rt,
             };
 
             for path in self.playlist_items {
+                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
                 let duration = app.services.media.get_duration(&path).ok();
-                let mime_type = get_mime_type(&path);
+                let mime_type = get_mime_type(&item_path);
                 app.tui_state.playlist_pane.items.push(PlaylistItem {
-                    path,
+                    path: item_path,
                     duration,
                     alias: None,
                     mime_type,
@@ -825,10 +821,11 @@ mod tests {
             }
 
             for path in self.library_items {
+                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
                 let duration = app.services.media.get_duration(&path).ok();
-                let mime_type = get_mime_type(&path);
+                let mime_type = get_mime_type(&item_path);
                 app.tui_state.library_pane.items.push(PlaylistItem {
-                    path,
+                    path: item_path,
                     duration,
                     alias: None,
                     mime_type,
@@ -1006,11 +1003,11 @@ mod tests {
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].path,
-            PathBuf::from("b.mp4")
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
         );
         assert_eq!(
             app.tui_state.playlist_pane.items[1].path,
-            PathBuf::from("a.mp4")
+            ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4")))
         );
     }
 
@@ -1034,11 +1031,11 @@ mod tests {
         assert_eq!(app.tui_state.playlist_pane.selected, 1);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].path,
-            PathBuf::from("a.mp4")
+            ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4")))
         );
         assert_eq!(
             app.tui_state.playlist_pane.items[1].path,
-            PathBuf::from("b.mp4")
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
         );
     }
 
@@ -1057,7 +1054,7 @@ mod tests {
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].path,
-            PathBuf::from("test.mp4")
+            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4")))
         );
         assert!(app.tui_state.library_pane.items.is_empty());
     }
@@ -1078,7 +1075,10 @@ mod tests {
         // Then the item moves to the library.
         assert!(app.tui_state.playlist_pane.items.is_empty());
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
-        assert_eq!(app.tui_state.library_pane.items[0].path, temp_path);
+        assert_eq!(
+            app.tui_state.library_pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(temp_path))
+        );
     }
 
     #[test]
@@ -1294,7 +1294,7 @@ mod tests {
         // Then pending notes path is set to the selected item's path.
         assert_eq!(
             app.fork.notes_path,
-            Some(PathBuf::from("/path/to/video.mp4"))
+            Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))))
         );
     }
 
@@ -1440,9 +1440,9 @@ mod tests {
     fn virtual_item_preserved_when_moved_from_library_to_playlist() {
         // Given a library with a virtual URL item.
         let mut app = TestAppBuilder::new().build();
-        let url = PathBuf::from("https://example.com/video.mp4");
+        let url = "https://example.com/video.mp4";
         app.tui_state.library_pane.items.push(PlaylistItem {
-            path: url.clone(),
+            path: ItemPath::Url(url.to_string()),
             duration: None,
             alias: None,
             mime_type: Some("url".to_string()),
@@ -1456,7 +1456,7 @@ mod tests {
         // Then the item is in playlist with is_virtual preserved.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
         assert!(app.tui_state.library_pane.items.is_empty());
-        assert_eq!(app.tui_state.playlist_pane.items[0].path, url);
+        assert_eq!(app.tui_state.playlist_pane.items[0].path, ItemPath::Url(url.to_string()));
         assert!(app.tui_state.playlist_pane.items[0].is_virtual);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].mime_type,
@@ -1468,9 +1468,9 @@ mod tests {
     fn virtual_item_preserved_when_moved_from_playlist_to_library() {
         // Given a playlist with a virtual URL item.
         let mut app = TestAppBuilder::new().build();
-        let url = PathBuf::from("https://example.com/video.mp4");
+        let url = "https://example.com/video.mp4";
         app.tui_state.playlist_pane.items.push(PlaylistItem {
-            path: url.clone(),
+            path: ItemPath::Url(url.to_string()),
             duration: None,
             alias: None,
             mime_type: Some("url".to_string()),
@@ -1484,7 +1484,7 @@ mod tests {
         // Then the item is in library with is_virtual preserved.
         assert!(app.tui_state.playlist_pane.items.is_empty());
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
-        assert_eq!(app.tui_state.library_pane.items[0].path, url);
+        assert_eq!(app.tui_state.library_pane.items[0].path, ItemPath::Url(url.to_string()));
         assert!(app.tui_state.library_pane.items[0].is_virtual);
         assert_eq!(
             app.tui_state.library_pane.items[0].mime_type,
@@ -1496,9 +1496,9 @@ mod tests {
     fn virtual_item_roundtrip_preserves_all_properties() {
         // Given a library with a virtual URL item with all properties.
         let mut app = TestAppBuilder::new().build();
-        let url = PathBuf::from("https://youtube.com/watch?v=abc123");
+        let url = "https://youtube.com/watch?v=abc123";
         app.tui_state.library_pane.items.push(PlaylistItem {
-            path: url.clone(),
+            path: ItemPath::Url(url.to_string()),
             duration: Some(std::time::Duration::from_secs(300)),
             alias: Some("My Video".to_string()),
             mime_type: Some("url".to_string()),
@@ -1512,7 +1512,7 @@ mod tests {
         // Then all properties are preserved.
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
         let item = &app.tui_state.library_pane.items[0];
-        assert_eq!(item.path, url);
+        assert_eq!(item.path, ItemPath::Url(url.to_string()));
         assert!(item.is_virtual);
         assert_eq!(item.mime_type, Some("url".to_string()));
         assert_eq!(item.alias, Some("My Video".to_string()));
@@ -1524,7 +1524,7 @@ mod tests {
         // Given a playlist with a missing non-virtual file.
         let mut app = TestAppBuilder::new().build();
         app.tui_state.playlist_pane.items.push(PlaylistItem {
-            path: PathBuf::from("/nonexistent/file.mp4"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/nonexistent/file.mp4"))),
             duration: None,
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -1550,9 +1550,9 @@ mod tests {
         let mut app = TestAppBuilder::new()
             .library_path(tree.path().to_path_buf())
             .build();
-        let url = PathBuf::from("https://example.com/video.mp4");
+        let url = "https://example.com/video.mp4";
         app.tui_state.library_pane.items.push(PlaylistItem {
-            path: url.clone(),
+            path: ItemPath::Url(url.to_string()),
             duration: None,
             alias: None,
             mime_type: Some("url".to_string()),
@@ -1569,14 +1569,14 @@ mod tests {
                 .library_pane
                 .items
                 .iter()
-                .any(|i| i.path == url && i.is_virtual)
+                .any(|i| i.path == ItemPath::Url(url.to_string()) && i.is_virtual)
         );
         assert!(
             app.tui_state
                 .library_pane
                 .items
                 .iter()
-                .any(|i| i.path.file_name().unwrap() == "real.mp4" && !i.is_virtual)
+                .any(|i| i.path.as_file().is_some_and(|p| p.as_path().file_name().unwrap() == "real.mp4") && !i.is_virtual)
         );
     }
 
@@ -1589,7 +1589,7 @@ mod tests {
             .library_path(tree.path().to_path_buf())
             .build();
         app.tui_state.library_pane.items.push(PlaylistItem {
-            path: PathBuf::from("/nonexistent/file.mp4"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/nonexistent/file.mp4"))),
             duration: None,
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -1607,9 +1607,9 @@ mod tests {
     fn delete_action_removes_virtual_item_from_library() {
         // Given an app with a virtual item in the library.
         let mut app = TestAppBuilder::new().build();
-        let url = PathBuf::from("https://example.com/video.mp4");
+        let url = "https://example.com/video.mp4";
         app.tui_state.library_pane.items.push(PlaylistItem {
-            path: url.clone(),
+            path: ItemPath::Url(url.to_string()),
             duration: None,
             alias: None,
             mime_type: Some("url".to_string()),
@@ -1664,7 +1664,7 @@ mod tests {
     fn fork_take_action_returns_add_note_and_clears_flag() {
         // Given a fork with notes_path set.
         let mut fork = Fork {
-            notes_path: Some(PathBuf::from("/test/path")),
+            notes_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/test/path")))),
             ..Default::default()
         };
 
@@ -1696,7 +1696,7 @@ mod tests {
     fn fork_take_action_returns_edit_sources_and_clears_flag() {
         // Given a fork with sources_path set.
         let mut fork = Fork {
-            sources_path: Some(PathBuf::from("/test/sources")),
+            sources_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/test/sources")))),
             ..Default::default()
         };
 
@@ -1728,7 +1728,7 @@ mod tests {
     fn fork_take_action_priority_order() {
         // Given a fork with multiple flags set.
         let mut fork = Fork {
-            notes_path: Some(PathBuf::from("/note")),
+            notes_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/note")))),
             fuzzy_notes: true,
             ..Default::default()
         };

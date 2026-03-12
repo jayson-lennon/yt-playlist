@@ -119,8 +119,8 @@ impl PlaylistStorage for FakeStorageBackend {
 
     async fn upsert_alias(
         &self,
-        _file_path: &Path,
-        _workspace: &Path,
+        _file_path: &CanonicalPath,
+        _workspace: &CanonicalPath,
         _alias: &str,
     ) -> Result<(), Report<IoError>> {
         Ok(())
@@ -128,8 +128,8 @@ impl PlaylistStorage for FakeStorageBackend {
 
     async fn resolve_alias(
         &self,
-        _file_path: &Path,
-        _workspace: &Path,
+        _file_path: &CanonicalPath,
+        _workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>> {
         Ok(None)
     }

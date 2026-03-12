@@ -2,6 +2,7 @@ use std::path::Path;
 
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
+use marked_path::CanonicalPath;
 
 use crate::command::{format_output, execute, Command};
 use crate::services::Services;
@@ -35,8 +36,9 @@ pub fn run_action_mpv(
             .await
             .change_context(RunError)?;
 
+        let canonical_path = CanonicalPath::from_path(path).change_context(RunError)?;
         let command = Command::MpvLoad {
-            path: path.to_path_buf(),
+            path: canonical_path,
             socket: socket.to_path_buf(),
         };
 

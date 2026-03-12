@@ -1,21 +1,28 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use error_stack::{Report, ResultExt};
+use marked_path::CanonicalPath;
 
 use super::CommandError;
 use crate::feat::mpv::MpvIpc;
 use crate::feat::MpvClient;
 use crate::services::Services;
 
-pub fn load(socket: &Path, path: &Path) -> Result<(), Report<CommandError>> {
+pub fn load(socket: &Path, path: &CanonicalPath) -> Result<(), Report<CommandError>> {
     let backend = MpvIpc::new(socket);
-    backend.load_file(path).change_context(CommandError)
+    backend
+        .load_file(path.as_path())
+        .change_context(CommandError)
 }
 
-pub fn load_playlist(services: &Services, paths: &[PathBuf]) -> Result<(), Report<CommandError>> {
+pub fn load_playlist(
+    services: &Services,
+    paths: &[CanonicalPath],
+) -> Result<(), Report<CommandError>> {
+    let paths: Vec<std::path::PathBuf> = paths.iter().map(|p| p.as_path().to_path_buf()).collect();
     services
         .mpv
-        .load_playlist(paths)
+        .load_playlist(&paths)
         .change_context(CommandError)
         .attach("failed to load playlist into mpv")
 }

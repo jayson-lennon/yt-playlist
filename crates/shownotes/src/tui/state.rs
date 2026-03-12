@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use super::common::ItemDisplayMode;
+use super::common::{ItemDisplayMode, ItemPath};
 use crate::feat::keymap::Key;
 use crate::tui::{
     ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput, WhichKey,
@@ -81,7 +79,7 @@ impl TuiState {
 
     pub fn add_to_playlist(
         &mut self,
-        path: PathBuf,
+        path: ItemPath,
         duration: Option<std::time::Duration>,
         alias: Option<String>,
         mime_type: Option<String>,
@@ -136,7 +134,7 @@ impl TuiState {
         self.rename.cancel();
     }
 
-    pub fn submit_rename(&mut self) -> Option<(PathBuf, Option<String>, Option<String>)> {
+    pub fn submit_rename(&mut self) -> Option<(ItemPath, Option<String>, Option<String>)> {
         let new_alias = self.rename.submit();
         if let Some(item) = self.get_selected_item_mut() {
             let old_alias = item.alias.clone();
@@ -284,11 +282,13 @@ impl Default for TuiState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use marked_path::CanonicalPath;
+    use std::path::PathBuf;
     use std::time::Duration;
 
     fn item(path: &str) -> PlaylistItem {
         PlaylistItem {
-            path: PathBuf::from(path),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from(path))),
             duration: None,
             alias: None,
             mime_type: None,
@@ -322,7 +322,10 @@ mod tests {
         let selected = state.selected_playlist_item();
 
         // Then correct item is returned.
-        assert_eq!(selected.unwrap().path, PathBuf::from("b.mp4"));
+        assert_eq!(
+            selected.unwrap().path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
     }
 
     #[test]
@@ -336,7 +339,10 @@ mod tests {
         let selected = state.selected_library_item();
 
         // Then correct item is returned.
-        assert_eq!(selected.unwrap().path, PathBuf::from("b.mp4"));
+        assert_eq!(
+            selected.unwrap().path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
     }
 
     #[test]
@@ -406,7 +412,10 @@ mod tests {
         state.reorder_playlist_up();
 
         // Then items are swapped.
-        assert_eq!(state.playlist_pane.items[0].path, PathBuf::from("b.mp4"));
+        assert_eq!(
+            state.playlist_pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
     }
 
     #[test]
@@ -420,7 +429,10 @@ mod tests {
         state.reorder_playlist_down();
 
         // Then items are swapped.
-        assert_eq!(state.playlist_pane.items[0].path, PathBuf::from("b.mp4"));
+        assert_eq!(
+            state.playlist_pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
     }
 
     #[test]
@@ -430,7 +442,7 @@ mod tests {
 
         // When adding to playlist.
         state.add_to_playlist(
-            PathBuf::from("test.mp4"),
+            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4"))),
             Some(Duration::from_secs(120)),
             Some("alias".to_string()),
             Some("video/mp4".to_string()),
@@ -439,7 +451,10 @@ mod tests {
 
         // Then item is added.
         assert_eq!(state.playlist_pane.items.len(), 1);
-        assert_eq!(state.playlist_pane.items[0].path, PathBuf::from("test.mp4"));
+        assert_eq!(
+            state.playlist_pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4")))
+        );
         assert_eq!(
             state.playlist_pane.items[0].alias,
             Some("alias".to_string())

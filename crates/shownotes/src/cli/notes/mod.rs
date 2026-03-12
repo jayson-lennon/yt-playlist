@@ -61,7 +61,13 @@ pub fn run_notes_command(
             .change_context(RunError)?;
 
         let command = match cmd {
-            NotesCommand::Add { paths } => Command::NotesAdd { paths },
+            NotesCommand::Add { paths } => {
+                let canonical_paths: Vec<_> = paths
+                    .into_iter()
+                    .filter_map(|p| marked_path::CanonicalPath::from_path(&p).ok())
+                    .collect();
+                Command::NotesAdd { paths: canonical_paths }
+            }
             NotesCommand::Search { query, symlink } => Command::NotesSearch {
                 query,
                 create_symlinks: symlink,

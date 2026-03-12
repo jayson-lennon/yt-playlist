@@ -1,7 +1,55 @@
-use std::{path::PathBuf, time::Duration};
+use std::{borrow::Cow, time::Duration};
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use marked_path::CanonicalPath;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ItemPath {
+    File(CanonicalPath),
+    Url(String),
+}
+
+impl ItemPath {
+    pub fn as_file(&self) -> Option<&CanonicalPath> {
+        match self {
+            ItemPath::File(path) => Some(path),
+            ItemPath::Url(_) => None,
+        }
+    }
+
+    pub fn as_url(&self) -> Option<&str> {
+        match self {
+            ItemPath::File(_) => None,
+            ItemPath::Url(url) => Some(url),
+        }
+    }
+
+    pub fn is_url(&self) -> bool {
+        matches!(self, ItemPath::Url(_))
+    }
+
+    pub fn display(&self) -> std::path::Display<'_> {
+        match self {
+            ItemPath::File(path) => path.as_path().display(),
+            ItemPath::Url(url) => std::path::Path::new(url).display(),
+        }
+    }
+
+    pub fn to_string_lossy(&self) -> Cow<'_, str> {
+        match self {
+            ItemPath::File(path) => path.as_path().to_string_lossy(),
+            ItemPath::Url(url) => Cow::Borrowed(url),
+        }
+    }
+
+    pub fn file_stem(&self) -> Option<&str> {
+        match self {
+            ItemPath::File(path) => path.as_path().file_stem().and_then(|s| s.to_str()),
+            ItemPath::Url(_) => None,
+        }
+    }
+}
 
 /// Display mode for showing item names in the TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -30,7 +78,7 @@ pub enum Pane {
 /// item (URL) that doesn't exist on the local filesystem.
 #[derive(Debug, Clone)]
 pub struct PlaylistItem {
-    pub path: PathBuf,
+    pub path: ItemPath,
     pub duration: Option<Duration>,
     pub alias: Option<String>,
     pub mime_type: Option<String>,
@@ -54,16 +102,19 @@ pub fn get_display_name(item: &PlaylistItem) -> String {
     item.alias.clone().unwrap_or_else(|| {
         item.path.file_stem().map_or_else(
             || item.path.to_string_lossy().into_owned(),
-            |n| n.to_string_lossy().into_owned(),
+            |s| s.to_string(),
         )
     })
 }
 
-pub fn get_mime_type(path: &PathBuf) -> Option<String> {
-    infer::get_from_path(path)
-        .ok()
-        .flatten()
-        .map(|t| t.mime_type().to_string())
+pub fn get_mime_type(path: &ItemPath) -> Option<String> {
+    match path {
+        ItemPath::File(canonical_path) => infer::get_from_path(canonical_path.as_path())
+            .ok()
+            .flatten()
+            .map(|t| t.mime_type().to_string()),
+        ItemPath::Url(_) => None,
+    }
 }
 
 pub fn format_mime_type(mime: Option<&str>) -> String {
@@ -83,12 +134,12 @@ pub fn format_item_line(item: &PlaylistItem, display_mode: ItemDisplayMode) -> S
     let mime_str = format_mime_type(item.mime_type.as_deref());
     let duration_str = format_duration(item.duration);
 
-    let filename = if item.is_virtual {
+    let filename = if item.is_virtual || item.path.is_url() {
         item.path.to_string_lossy().into_owned()
     } else {
         item.path.file_stem().map_or_else(
             || item.path.to_string_lossy().into_owned(),
-            |n| n.to_string_lossy().into_owned(),
+            |s| s.to_string(),
         )
     };
 
@@ -143,11 +194,17 @@ pub fn filter_items<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use marked_path::CanonicalPath;
     use std::path::PathBuf;
 
     fn item(path: &str) -> PlaylistItem {
+        let item_path = if path.starts_with("http://") || path.starts_with("https://") {
+            ItemPath::Url(path.to_string())
+        } else {
+            ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
+        };
         PlaylistItem {
-            path: PathBuf::from(path),
+            path: item_path,
             duration: None,
             alias: None,
             mime_type: None,
@@ -156,8 +213,13 @@ mod tests {
     }
 
     fn item_with_alias(path: &str, alias: &str) -> PlaylistItem {
+        let item_path = if path.starts_with("http://") || path.starts_with("https://") {
+            ItemPath::Url(path.to_string())
+        } else {
+            ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
+        };
         PlaylistItem {
-            path: PathBuf::from(path),
+            path: item_path,
             duration: None,
             alias: Some(alias.to_string()),
             mime_type: None,
@@ -167,8 +229,13 @@ mod tests {
 
     #[allow(dead_code)]
     fn item_with_duration(path: &str, secs: u64) -> PlaylistItem {
+        let item_path = if path.starts_with("http://") || path.starts_with("https://") {
+            ItemPath::Url(path.to_string())
+        } else {
+            ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
+        };
         PlaylistItem {
-            path: PathBuf::from(path),
+            path: item_path,
             duration: Some(Duration::from_secs(secs)),
             alias: None,
             mime_type: None,
@@ -295,7 +362,10 @@ mod tests {
 
         // Then only matching items are returned.
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].1.path, PathBuf::from("banana.mp4"));
+        assert_eq!(
+            result[0].1.path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("banana.mp4")))
+        );
     }
 
     #[test]
@@ -309,7 +379,10 @@ mod tests {
 
         // Then applied filter is used.
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].1.path, PathBuf::from("test.mp4"));
+        assert_eq!(
+            result[0].1.path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4")))
+        );
     }
 
     #[test]
@@ -323,7 +396,10 @@ mod tests {
 
         // Then input filter is used.
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].1.path, PathBuf::from("banana.mp4"));
+        assert_eq!(
+            result[0].1.path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("banana.mp4")))
+        );
     }
 
     #[test]
@@ -416,7 +492,7 @@ mod tests {
     fn format_item_line_formats_with_duration_and_alias() {
         // Given an item with duration and alias.
         let item = PlaylistItem {
-            path: PathBuf::from("/path/to/video.mp4"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -434,7 +510,7 @@ mod tests {
     fn format_item_line_formats_with_duration_no_alias() {
         // Given an item with duration but no alias.
         let item = PlaylistItem {
-            path: PathBuf::from("/path/to/video.mp4"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -452,7 +528,7 @@ mod tests {
     fn format_item_line_formats_without_duration_with_alias() {
         // Given an item without duration but with alias.
         let item = PlaylistItem {
-            path: PathBuf::from("/path/to/doc.pdf"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/doc.pdf"))),
             duration: None,
             alias: Some("My Doc".to_string()),
             mime_type: Some("application/pdf".to_string()),
@@ -470,7 +546,7 @@ mod tests {
     fn format_item_line_formats_without_duration_or_alias() {
         // Given an item without duration or alias.
         let item = PlaylistItem {
-            path: PathBuf::from("/path/to/doc.pdf"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/doc.pdf"))),
             duration: None,
             alias: None,
             mime_type: Some("application/pdf".to_string()),
@@ -488,7 +564,7 @@ mod tests {
     fn format_item_line_uses_unknown_when_no_mime() {
         // Given an item without mime type.
         let item = PlaylistItem {
-            path: PathBuf::from("/path/to/file.xyz"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.xyz"))),
             duration: None,
             alias: None,
             mime_type: None,
@@ -506,7 +582,7 @@ mod tests {
     fn format_item_line_shows_full_url_for_virtual_items() {
         // Given a virtual URL item.
         let item = PlaylistItem {
-            path: PathBuf::from("https://youtube.com/watch?v=abc123"),
+            path: ItemPath::Url("https://youtube.com/watch?v=abc123".to_string()),
             duration: None,
             alias: None,
             mime_type: Some("url".to_string()),
@@ -527,7 +603,7 @@ mod tests {
     fn format_item_line_shows_full_url_with_alias() {
         // Given a virtual URL item with alias.
         let item = PlaylistItem {
-            path: PathBuf::from("https://youtube.com/watch?v=abc123"),
+            path: ItemPath::Url("https://youtube.com/watch?v=abc123".to_string()),
             duration: None,
             alias: Some("My Video".to_string()),
             mime_type: Some("url".to_string()),
@@ -548,7 +624,7 @@ mod tests {
     fn format_item_line_shows_file_stem_for_non_virtual_items() {
         // Given a non-virtual file item.
         let item = PlaylistItem {
-            path: PathBuf::from("/path/to/video.mp4"),
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: None,
             alias: None,
             mime_type: Some("video/mp4".to_string()),

@@ -1,9 +1,8 @@
-use std::path::Path;
-
 use error_stack::{Report, ResultExt};
 
+use marked_path::CanonicalPath;
+
 use crate::services::Services;
-use crate::feat::path_resolver::PathResolver;
 use crate::feat::sources::SourceDb;
 use crate::feat::note_db::NoteDb;
 use crate::feat::external_editor::ExternalEditor;
@@ -12,16 +11,10 @@ use super::CommandError;
 
 pub async fn add(
     services: &Services,
-    path: &Path,
+    path: &CanonicalPath,
     url: &str,
 ) -> Result<(), Report<CommandError>> {
-    let resolved = services
-        .path_resolver
-        .resolve(path)
-        .await
-        .change_context(CommandError)?;
-
-    let path_str = resolved.to_string_lossy();
+    let path_str = path.as_path().to_string_lossy();
     let file_path_id = services
         .db
         .get_or_create_file_path(&path_str)
@@ -49,15 +42,9 @@ pub async fn add(
 
 pub async fn list(
     services: &Services,
-    path: &Path,
+    path: &CanonicalPath,
 ) -> Result<Vec<String>, Report<CommandError>> {
-    let resolved = services
-        .path_resolver
-        .resolve(path)
-        .await
-        .change_context(CommandError)?;
-
-    let path_str = resolved.to_string_lossy();
+    let path_str = path.as_path().to_string_lossy();
     let file_path_id = services
         .db
         .get_or_create_file_path(&path_str)
@@ -76,15 +63,9 @@ pub async fn list(
 
 pub async fn edit(
     services: &Services,
-    path: &Path,
+    path: &CanonicalPath,
 ) -> Result<(), Report<CommandError>> {
-    let resolved = services
-        .path_resolver
-        .resolve(path)
-        .await
-        .change_context(CommandError)?;
-
-    let path_str = resolved.to_string_lossy();
+    let path_str = path.as_path().to_string_lossy();
     let file_path_id = services
         .db
         .get_or_create_file_path(&path_str)
