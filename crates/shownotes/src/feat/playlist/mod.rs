@@ -107,6 +107,17 @@ pub trait PlaylistStorage: Send + Sync {
         alias: &str,
     ) -> Result<(), Report<IoError>>;
 
+    /// Deletes the alias for a file in a specific workspace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the alias cannot be deleted.
+    async fn delete_alias(
+        &self,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
+    ) -> Result<(), Report<IoError>>;
+
     /// Resolves the display alias for a file in a specific workspace.
     ///
     /// # Alias Resolution Priority
@@ -170,6 +181,19 @@ impl PlaylistStorageService {
         alias: &str,
     ) -> Result<(), Report<IoError>> {
         self.backend.upsert_alias(file_path, workspace, alias).await
+    }
+
+    /// Deletes the alias for a file in a specific workspace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the alias cannot be deleted.
+    pub async fn delete_alias(
+        &self,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
+    ) -> Result<(), Report<IoError>> {
+        self.backend.delete_alias(file_path, workspace).await
     }
 
     /// Resolves the display alias for a file in a specific workspace.

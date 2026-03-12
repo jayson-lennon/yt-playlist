@@ -418,6 +418,22 @@ impl PlaylistStorage for SqliteStorage {
         self.upsert_alias_by_id(file_path_id, workspace_id, alias).await
     }
 
+    async fn delete_alias(
+        &self,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
+    ) -> Result<(), Report<IoError>> {
+        let file_path_id = self.get_or_create_file_path(file_path.as_path()).await?;
+        let workspace_id = self.get_or_create_workspace(workspace.as_path()).await?;
+        sqlx::query("DELETE FROM aliases WHERE file_path_id = ? AND workspace_id = ?")
+            .bind(file_path_id)
+            .bind(workspace_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|_| Report::new(IoError))?;
+        Ok(())
+    }
+
     async fn resolve_alias(
         &self,
         file_path: &CanonicalPath,

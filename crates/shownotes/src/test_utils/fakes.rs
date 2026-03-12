@@ -126,6 +126,14 @@ impl PlaylistStorage for FakeStorageBackend {
         Ok(())
     }
 
+    async fn delete_alias(
+        &self,
+        _file_path: &CanonicalPath,
+        _workspace: &CanonicalPath,
+    ) -> Result<(), Report<IoError>> {
+        Ok(())
+    }
+
     async fn resolve_alias(
         &self,
         _file_path: &CanonicalPath,

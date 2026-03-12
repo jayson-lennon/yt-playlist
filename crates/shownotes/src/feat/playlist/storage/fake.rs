@@ -218,6 +218,16 @@ impl PlaylistStorage for FakeStorageBackend {
         Ok(())
     }
 
+    async fn delete_alias(
+        &self,
+        file_path: &CanonicalPath,
+        workspace: &CanonicalPath,
+    ) -> Result<(), Report<IoError>> {
+        let mut data = self.data.write().unwrap();
+        data.aliases.remove(&(file_path.as_path().to_path_buf(), workspace.as_path().to_path_buf()));
+        Ok(())
+    }
+
     async fn resolve_alias(
         &self,
         file_path: &CanonicalPath,

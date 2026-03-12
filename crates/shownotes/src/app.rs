@@ -334,21 +334,25 @@ impl App {
                     KeyCode::Enter => {
                         if let Some((path, old_alias, new_alias)) = self.tui_state.submit_rename() {
                             if old_alias != new_alias {
-                                if let Some(ref alias) = new_alias {
-                                    let path = path.clone();
-                                    let alias = alias.clone();
-                                    let services = self.services.clone();
-                                    let workspace = self.runtime.library_path.clone();
-                                    self.tokio_runtime.block_on(async {
-                                        if let Some(file_path) = path.as_file() {
-                                            let _ = crate::command::notes::add_alias_as_note(
-                                                &services, file_path, &alias,
-                                            )
-                                            .await;
-                                            let _ = services.storage.upsert_alias(file_path, &workspace, &alias).await;
+                                let path = path.clone();
+                                let services = self.services.clone();
+                                let workspace = self.runtime.library_path.clone();
+                                self.tokio_runtime.block_on(async {
+                                    if let Some(file_path) = path.as_file() {
+                                        match new_alias {
+                                            Some(ref alias) => {
+                                                let _ = crate::command::notes::add_alias_as_note(
+                                                    &services, file_path, alias,
+                                                )
+                                                .await;
+                                                let _ = services.storage.upsert_alias(file_path, &workspace, alias).await;
+                                            }
+                                            None => {
+                                                let _ = services.storage.delete_alias(file_path, &workspace).await;
+                                            }
                                         }
-                                    });
-                                }
+                                    }
+                                });
                             }
                         }
                     }
