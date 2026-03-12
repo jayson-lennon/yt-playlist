@@ -173,6 +173,40 @@ pub async fn add_alias_as_note(
     Ok(true)
 }
 
+/// # Errors
+///
+/// Returns an error if database or storage operations fail.
+pub async fn set_alias(
+    services: &Services,
+    path: &CanonicalPath,
+    workspace: &CanonicalPath,
+    alias: &str,
+) -> Result<CanonicalPath, Report<CommandError>> {
+    let _ = add_alias_as_note(services, path, alias).await;
+    services
+        .storage
+        .upsert_alias(path, workspace, alias)
+        .await
+        .change_context(CommandError)?;
+    Ok(path.clone())
+}
+
+/// # Errors
+///
+/// Returns an error if storage operations fail.
+pub async fn remove_alias(
+    services: &Services,
+    path: &CanonicalPath,
+    workspace: &CanonicalPath,
+) -> Result<CanonicalPath, Report<CommandError>> {
+    services
+        .storage
+        .delete_alias(path, workspace)
+        .await
+        .change_context(CommandError)?;
+    Ok(path.clone())
+}
+
 #[allow(clippy::unused_async)]
 pub async fn migrate_aliases_to_notes<S>(
     _services: &Services,

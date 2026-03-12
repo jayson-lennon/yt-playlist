@@ -341,14 +341,25 @@ impl App {
                                     if let Some(file_path) = path.as_file() {
                                         match new_alias {
                                             Some(ref alias) => {
-                                                let _ = crate::command::notes::add_alias_as_note(
-                                                    &services, file_path, alias,
+                                                let _ = crate::command::execute(
+                                                    &services,
+                                                    crate::command::Command::AliasSet {
+                                                        path: file_path.clone(),
+                                                        workspace,
+                                                        alias: alias.clone(),
+                                                    },
                                                 )
                                                 .await;
-                                                let _ = services.storage.upsert_alias(file_path, &workspace, alias).await;
                                             }
                                             None => {
-                                                let _ = services.storage.delete_alias(file_path, &workspace).await;
+                                                let _ = crate::command::execute(
+                                                    &services,
+                                                    crate::command::Command::AliasRemove {
+                                                        path: file_path.clone(),
+                                                        workspace,
+                                                    },
+                                                )
+                                                .await;
                                             }
                                         }
                                     }
@@ -721,8 +732,9 @@ mod tests {
     use crate::feat::media_query::MediaQueryService;
     use crate::feat::mpv::{MpvClientService, MpvLauncherService};
     use crate::feat::playlist::PlaylistStorageService;
+    use crate::feat::playlist::FakeStorageBackend;
     use crate::test_utils::{
-        FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher, FakeStorageBackend,
+        FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher,
     };
 
     struct TestAppBuilder {
@@ -746,7 +758,7 @@ mod tests {
                 mpv_launcher: FakeMpvLauncher::new(),
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
-                storage_backend: FakeStorageBackend,
+                storage_backend: FakeStorageBackend::new(),
                 file_launcher: FakeLauncher,
                 focused_pane: None,
             }
@@ -774,6 +786,11 @@ mod tests {
 
         fn focused_on(mut self, pane: Pane) -> Self {
             self.focused_pane = Some(pane);
+            self
+        }
+
+        fn storage_backend(mut self, backend: FakeStorageBackend) -> Self {
+            self.storage_backend = backend;
             self
         }
 

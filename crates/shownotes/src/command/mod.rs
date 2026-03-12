@@ -37,6 +37,9 @@ pub enum Command {
     LaunchFile { path: CanonicalPath, command: Option<String>, socket_path: String },
     MpvLoadPlaylist { paths: Vec<CanonicalPath> },
     MpvSpawn { socket_path: String },
+
+    AliasSet { path: CanonicalPath, workspace: CanonicalPath, alias: String },
+    AliasRemove { path: CanonicalPath, workspace: CanonicalPath },
 }
 
 /// Results from command execution.
@@ -59,6 +62,9 @@ pub enum CommandResult {
     FileLaunched { path: CanonicalPath, used_default_opener: bool },
     MpvPlaylistLoaded { count: usize },
     MpvSpawned { was_already_running: bool },
+
+    AliasSet { path: CanonicalPath, alias: String },
+    AliasRemoved { path: CanonicalPath },
 }
 
 /// # Errors
@@ -112,6 +118,16 @@ pub async fn execute(
         Command::MpvSpawn { socket_path } => {
             let was_already_running = mpv::spawn(services, &socket_path)?;
             Ok(CommandResult::MpvSpawned { was_already_running })
+        }
+        Command::AliasSet { path, workspace, alias } => {
+            let alias_clone = alias.clone();
+            notes::set_alias(services, &path, &workspace, &alias).await?;
+            Ok(CommandResult::AliasSet { path, alias: alias_clone })
+        }
+        Command::AliasRemove { path, workspace } => {
+            let path_clone = path.clone();
+            notes::remove_alias(services, &path, &workspace).await?;
+            Ok(CommandResult::AliasRemoved { path: path_clone })
         }
     }
 }

@@ -537,6 +537,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_alias_removes_existing_alias() {
+        let backend = FakeStorageBackend::new();
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+        let file = CanonicalPath::new(PathBuf::from("/test/file.mp3"));
+
+        // Given an alias exists
+        backend
+            .upsert_alias(&file, &workspace, "My File")
+            .await
+            .unwrap();
+        let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
+        assert_eq!(alias, Some("My File".to_string()));
+
+        // When deleting the alias
+        backend.delete_alias(&file, &workspace).await.unwrap();
+
+        // Then the alias is removed
+        let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
+        assert!(alias.is_none());
+    }
+
+    #[tokio::test]
     async fn resolve_alias_returns_none_for_unknown_file() {
         let backend = FakeStorageBackend::new();
 

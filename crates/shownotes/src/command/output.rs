@@ -49,5 +49,11 @@ pub fn format_output(result: &CommandResult) -> String {
                 "MPV launched".to_string()
             }
         }
+        CommandResult::AliasSet { path, alias } => {
+            format!("Set alias '{}' for: {}", alias, path.as_path().display())
+        }
+        CommandResult::AliasRemoved { path } => {
+            format!("Removed alias for: {}", path.as_path().display())
+        }
     }
 }

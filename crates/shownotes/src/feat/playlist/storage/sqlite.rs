@@ -713,6 +713,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_alias_removes_existing_alias() {
+        let storage = create_test_storage().await;
+        let temp = TempDir::new().unwrap();
+        let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
+        let file = CanonicalPath::new(PathBuf::from("/test/file.mp4"));
+
+        // Given an alias exists
+        storage.upsert_alias(&file, &working_dir, "My Video").await.unwrap();
+        let alias = storage.resolve_alias(&file, &working_dir).await.unwrap();
+        assert_eq!(alias, Some("My Video".to_string()));
+
+        // When deleting the alias
+        storage.delete_alias(&file, &working_dir).await.unwrap();
+
+        // Then the alias is removed
+        let alias = storage.resolve_alias(&file, &working_dir).await.unwrap();
+        assert!(alias.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_alias_is_idempotent() {
+        let storage = create_test_storage().await;
+        let temp = TempDir::new().unwrap();
+        let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
+        let file = CanonicalPath::new(PathBuf::from("/test/file.mp4"));
+
+        // When deleting a non-existent alias
+        let result = storage.delete_alias(&file, &working_dir).await;
+
+        // Then it succeeds without error
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn workspace_alias_not_overridden_by_other_workspace() {
         let storage = create_test_storage().await;
 
