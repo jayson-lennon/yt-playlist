@@ -337,7 +337,8 @@ impl App {
                                 let path = path.clone();
                                 let services = self.services.clone();
                                 let workspace = self.runtime.library_path.clone();
-                                self.tokio_runtime.block_on(async {
+                                let is_deletion = new_alias.is_none();
+                                let fallback_alias = self.tokio_runtime.block_on(async {
                                     if let Some(file_path) = path.as_file() {
                                         match new_alias {
                                             Some(ref alias) => {
@@ -350,20 +351,34 @@ impl App {
                                                     },
                                                 )
                                                 .await;
+                                                None
                                             }
                                             None => {
                                                 let _ = crate::command::execute(
                                                     &services,
                                                     crate::command::Command::AliasRemove {
                                                         path: file_path.clone(),
-                                                        workspace,
+                                                        workspace: workspace.clone(),
                                                     },
                                                 )
                                                 .await;
+                                                services
+                                                    .storage
+                                                    .resolve_alias(&file_path, &workspace)
+                                                    .await
+                                                    .ok()
+                                                    .flatten()
                                             }
                                         }
+                                    } else {
+                                        None
                                     }
                                 });
+                                if is_deletion {
+                                    if let Some(item) = self.tui_state.get_selected_item_mut() {
+                                        item.alias = fallback_alias;
+                                    }
+                                }
                             }
                         }
                     }
