@@ -1,9 +1,8 @@
-use std::{path::Path, time::Duration};
+use std::{path::{Path, PathBuf}, time::Duration};
 
 use async_trait::async_trait;
 use error_stack::Report;
 use marked_path::CanonicalPath;
-use std::path::PathBuf;
 
 use crate::feat::launcher::{FileLauncher, LaunchResult};
 use crate::feat::media_query::{MediaError, MediaQuery};
@@ -73,6 +72,31 @@ impl MediaQuery for FakeMediaBackend {
     }
 }
 
+/// Simple stub launcher for tests.
+pub struct FakeLauncher;
+
+impl FileLauncher for FakeLauncher {
+    fn name(&self) -> &'static str {
+        "fake"
+    }
+
+    fn launch(
+        &self,
+        _path: &Path,
+        _command: Option<&str>,
+        _socket_path: &str,
+    ) -> Result<LaunchResult, Report<crate::feat::launcher::LaunchError>> {
+        Ok(LaunchResult {
+            used_default_opener: false,
+        })
+    }
+}
+
+/// Simple stub storage backend for tests.
+///
+/// This is a minimal implementation that returns empty data.
+/// For tests that need more control over storage behavior,
+/// use [`crate::feat::playlist::FakeStorageBackend`] instead.
 pub struct FakeStorageBackend;
 
 #[async_trait]
@@ -92,23 +116,21 @@ impl PlaylistStorage for FakeStorageBackend {
     async fn save(&self, _data: &PlaylistData) -> Result<(), Report<IoError>> {
         Ok(())
     }
-}
 
-pub struct FakeLauncher;
-
-impl FileLauncher for FakeLauncher {
-    fn name(&self) -> &'static str {
-        "fake"
+    async fn upsert_alias(
+        &self,
+        _file_path: &Path,
+        _workspace: &Path,
+        _alias: &str,
+    ) -> Result<(), Report<IoError>> {
+        Ok(())
     }
 
-    fn launch(
+    async fn resolve_alias(
         &self,
-        _path: &Path,
-        _command: Option<&str>,
-        _socket_path: &str,
-    ) -> Result<LaunchResult, Report<crate::feat::launcher::LaunchError>> {
-        Ok(LaunchResult {
-            used_default_opener: false,
-        })
+        _file_path: &Path,
+        _workspace: &Path,
+    ) -> Result<Option<String>, Report<IoError>> {
+        Ok(None)
     }
 }

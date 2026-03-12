@@ -166,7 +166,7 @@ pub fn run_tui(
         services,
         config,
         socket.to_string_lossy().into_owned(),
-        library_path,
+        canonical_library_path.to_path_buf(),
         playlist,
         rt,
     );

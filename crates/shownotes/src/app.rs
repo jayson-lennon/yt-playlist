@@ -156,7 +156,7 @@ impl App {
                         PlaylistItem {
                             path,
                             duration,
-                            alias: None,
+                            alias: metadata.and_then(|m| m.alias.clone()),
                             mime_type,
                             is_virtual,
                         }
@@ -174,7 +174,7 @@ impl App {
                         PlaylistItem {
                             path,
                             duration: metadata.duration,
-                            alias: None,
+                            alias: metadata.alias.clone(),
                             mime_type,
                             is_virtual: true,
                         }
@@ -214,6 +214,7 @@ impl App {
                     deleted: false,
                     mime_type: item.mime_type.clone(),
                     time_added: None,
+                    alias: None,
                 },
             );
         }
@@ -226,6 +227,7 @@ impl App {
                     deleted: false,
                     mime_type: item.mime_type.clone(),
                     time_added: None,
+                    alias: None,
                 },
             );
         }
@@ -258,20 +260,43 @@ impl App {
     pub fn refresh_library(&mut self) {
         let mut entries = Vec::new();
         if let Ok(read_dir) = std::fs::read_dir(&self.runtime.library_path) {
-            for entry in read_dir.flatten() {
-                let path = entry.path();
-                if path.is_file() {
-                    let canonical = path.canonicalize().unwrap_or(path);
-                    let duration = self.services.media.get_duration(&canonical).ok();
-                    let mime_type = get_mime_type(&canonical);
-                    entries.push(PlaylistItem {
-                        path: canonical,
-                        duration,
-                        alias: None,
-                        mime_type,
-                        is_virtual: false,
-                    });
-                }
+            let paths: Vec<_> = read_dir
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file())
+                .collect();
+
+            let workspace = self.runtime.library_path.clone();
+            let services = self.services.clone();
+            let aliases: std::collections::HashMap<PathBuf, Option<String>> = self
+                .tokio_runtime
+                .block_on(async {
+                    let mut result = std::collections::HashMap::new();
+                    for path in &paths {
+                        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+                        let alias = services
+                            .storage
+                            .resolve_alias(&canonical, &workspace)
+                            .await
+                            .ok()
+                            .flatten();
+                        result.insert(canonical, alias);
+                    }
+                    result
+                });
+
+            for path in paths {
+                let canonical = path.canonicalize().unwrap_or(path);
+                let duration = self.services.media.get_duration(&canonical).ok();
+                let mime_type = get_mime_type(&canonical);
+                let alias = aliases.get(&canonical).cloned().flatten();
+                entries.push(PlaylistItem {
+                    path: canonical,
+                    duration,
+                    alias,
+                    mime_type,
+                    is_virtual: false,
+                });
             }
         }
         entries.sort_by(|a, b| a.path.cmp(&b.path));
@@ -322,11 +347,14 @@ impl App {
                                     let path = path.clone();
                                     let alias = alias.clone();
                                     let services = self.services.clone();
+                                    let workspace = self.runtime.library_path.clone();
                                     self.tokio_runtime.block_on(async {
                                         let _ = crate::command::notes::add_alias_as_note(
                                             &services, &path, &alias,
                                         )
                                         .await;
+                                        let canonical_path = path.canonicalize().unwrap_or(path);
+                                        let _ = services.storage.upsert_alias(&canonical_path, &workspace, &alias).await;
                                     });
                                 }
                             }

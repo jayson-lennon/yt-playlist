@@ -333,6 +333,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
         files.insert(
@@ -343,6 +344,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
 
@@ -367,6 +369,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
         files.insert(
@@ -377,6 +380,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
 
@@ -400,6 +404,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
 

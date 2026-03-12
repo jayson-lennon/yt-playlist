@@ -21,6 +21,8 @@ struct StorageData {
     playlists: HashMap<i64, Vec<PathBuf>>,
     metadata: HashMap<PathBuf, FileMetadata>,
     virtual_files: HashSet<PathBuf>,
+    /// Aliases stored as (file_path, workspace_path) -> (alias, timestamp)
+    /// Used for display names in the TUI with workspace-specific priority.
     aliases: HashMap<(PathBuf, PathBuf), (String, Timestamp)>,
 }
 
@@ -50,13 +52,23 @@ impl FakeStorageBackend {
         id
     }
 
-    fn resolve_alias(&self, file_path: &Path, workspace_path: &Path) -> Option<String> {
+
+    /// Resolves the display alias for a file using the priority system.
+    ///
+    /// # Alias Resolution Priority
+    ///
+    /// 1. Workspace-specific alias (if exists for current workspace)
+    /// 2. Most recently updated alias from any workspace (fallback)
+    /// 3. `None` (caller should display filename instead)
+    fn resolve_alias_internal(&self, file_path: &Path, workspace_path: &Path) -> Option<String> {
         let data = self.data.read().unwrap();
-        
+
+        // First, try workspace-specific alias
         if let Some((alias, _)) = data.aliases.get(&(file_path.to_path_buf(), workspace_path.to_path_buf())) {
             return Some(alias.clone());
         }
-        
+
+        // Fallback to most recently updated alias from any workspace
         let mut most_recent: Option<(&String, &Timestamp)> = None;
         for ((fp, _wp), (alias, ts)) in &data.aliases {
             if fp == file_path {
@@ -94,7 +106,7 @@ impl FakeStorageBackend {
 
     #[allow(clippy::missing_panics_doc)]
     pub fn get_alias(&self, file_path: &Path, workspace_path: &Path) -> Option<String> {
-        self.resolve_alias(file_path, workspace_path)
+        self.resolve_alias_internal(file_path, workspace_path)
     }
 }
 
@@ -112,17 +124,21 @@ impl PlaylistStorage for FakeStorageBackend {
 
     async fn load(&self, working_directory: &CanonicalPath) -> Result<PlaylistData, Report<IoError>> {
         self.load_called.fetch_add(1, Ordering::SeqCst);
-        
+
         let workspace_id = self.get_or_create_workspace(working_directory.as_path());
-        
+
         let data = self.data.read().unwrap();
-        
+
         let playlist = data.playlists.get(&workspace_id).cloned().unwrap_or_default();
-        
+
         let mut files = HashMap::new();
         for path in &playlist {
-            if let Some(metadata) = data.metadata.get(path) {
-                files.insert(path.clone(), metadata.clone());
+            // Resolve alias for this file in the current workspace
+            let alias = self.resolve_alias_internal(path, working_directory.as_path());
+            
+            if let Some(mut metadata) = data.metadata.get(path).cloned() {
+                metadata.alias = alias;
+                files.insert(path.clone(), metadata);
             } else {
                 files.insert(
                     path.clone(),
@@ -132,11 +148,12 @@ impl PlaylistStorage for FakeStorageBackend {
                         deleted: false,
                         mime_type: None,
                         time_added: None,
+                        alias,
                     },
                 );
             }
         }
-        
+
         Ok(PlaylistData {
             working_directory: working_directory.clone(),
             playlist,
@@ -146,21 +163,43 @@ impl PlaylistStorage for FakeStorageBackend {
 
     async fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
         self.save_called.fetch_add(1, Ordering::SeqCst);
-        
+
         let workspace_id = self.get_or_create_workspace(data.working_directory.as_path());
-        
+
         let mut storage = self.data.write().unwrap();
-        
+
         storage.playlists.insert(workspace_id, data.playlist.clone());
-        
+
         for (path, metadata) in &data.files {
             storage.metadata.insert(path.clone(), metadata.clone());
             if metadata.is_virtual {
                 storage.virtual_files.insert(path.clone());
             }
         }
-        
+
         Ok(())
+    }
+
+    async fn upsert_alias(
+        &self,
+        file_path: &Path,
+        workspace: &Path,
+        alias: &str,
+    ) -> Result<(), Report<IoError>> {
+        let mut data = self.data.write().unwrap();
+        data.aliases.insert(
+            (file_path.to_path_buf(), workspace.to_path_buf()),
+            (alias.to_string(), Timestamp::now()),
+        );
+        Ok(())
+    }
+
+    async fn resolve_alias(
+        &self,
+        file_path: &Path,
+        workspace: &Path,
+    ) -> Result<Option<String>, Report<IoError>> {
+        Ok(self.resolve_alias_internal(file_path, workspace))
     }
 }
 
@@ -177,44 +216,45 @@ mod tests {
             deleted: false,
             mime_type: Some("audio/mpeg".to_string()),
             time_added: Some(Timestamp::now()),
+            alias: None,
         }
     }
 
     #[tokio::test]
     async fn workspace_isolation() {
         let backend = FakeStorageBackend::new();
-        
+
         let temp1 = TempDir::new().unwrap();
         let temp2 = TempDir::new().unwrap();
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
-        
+
         let file1 = PathBuf::from("/workspace1/file1.mp3");
         let file2 = PathBuf::from("/workspace2/file2.mp3");
-        
+
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
             playlist: vec![file1.clone()],
             files: [(file1.clone(), create_test_metadata())].into_iter().collect(),
         };
-        
+
         let data2 = PlaylistData {
             working_directory: workspace2.clone(),
             playlist: vec![file2.clone()],
             files: [(file2.clone(), create_test_metadata())].into_iter().collect(),
         };
-        
+
         backend.save(&data1).await.unwrap();
         backend.save(&data2).await.unwrap();
-        
+
         let loaded1 = backend.load(&workspace1).await.unwrap();
         let loaded2 = backend.load(&workspace2).await.unwrap();
-        
+
         assert_eq!(loaded1.playlist.len(), 1);
         assert_eq!(loaded1.playlist[0], file1);
         assert_eq!(loaded2.playlist.len(), 1);
         assert_eq!(loaded2.playlist[0], file2);
-        
+
         let ws1_id = backend.get_workspace_id(workspace1.as_path()).unwrap();
         let ws2_id = backend.get_workspace_id(workspace2.as_path()).unwrap();
         assert_ne!(ws1_id, ws2_id);
@@ -223,11 +263,11 @@ mod tests {
     #[tokio::test]
     async fn alias_resolution_priority() {
         let backend = FakeStorageBackend::new();
-        
+
         let workspace1 = PathBuf::from("/workspace1");
         let workspace2 = PathBuf::from("/workspace2");
         let file = PathBuf::from("/shared/file.mp3");
-        
+
         {
             let mut data = backend.data.write().unwrap();
             data.aliases.insert(
@@ -239,10 +279,10 @@ mod tests {
                 ("alias_ws2".to_string(), Timestamp::now()),
             );
         }
-        
-        let alias1 = backend.resolve_alias(&file, &workspace1);
-        let alias2 = backend.resolve_alias(&file, &workspace2);
-        
+
+        let alias1 = backend.resolve_alias_internal(&file, &workspace1);
+        let alias2 = backend.resolve_alias_internal(&file, &workspace2);
+
         assert_eq!(alias1, Some("alias_ws1".to_string()));
         assert_eq!(alias2, Some("alias_ws2".to_string()));
     }
@@ -250,15 +290,15 @@ mod tests {
     #[tokio::test]
     async fn alias_fallback_to_most_recent() {
         let backend = FakeStorageBackend::new();
-        
+
         let workspace1 = PathBuf::from("/workspace1");
         let unknown_workspace = PathBuf::from("/unknown");
         let file = PathBuf::from("/shared/file.mp3");
-        
+
         let ts1 = Timestamp::now();
         std::thread::sleep(std::time::Duration::from_millis(10));
         let ts2 = Timestamp::now();
-        
+
         {
             let mut data = backend.data.write().unwrap();
             data.aliases.insert(
@@ -270,20 +310,48 @@ mod tests {
                 ("newer_alias".to_string(), ts2),
             );
         }
-        
-        let alias = backend.resolve_alias(&file, &unknown_workspace);
+
+        let alias = backend.resolve_alias_internal(&file, &unknown_workspace);
         assert_eq!(alias, Some("newer_alias".to_string()));
+    }
+
+    #[tokio::test]
+    async fn alias_loaded_with_file_metadata() {
+        let backend = FakeStorageBackend::new();
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+        let file = PathBuf::from("/workspace/file.mp3");
+
+        // Save playlist with file
+        let data = PlaylistData {
+            working_directory: workspace.clone(),
+            playlist: vec![file.clone()],
+            files: [(file.clone(), create_test_metadata())].into_iter().collect(),
+        };
+        backend.save(&data).await.unwrap();
+
+        // Add alias
+        backend
+            .upsert_alias(&file, workspace.as_path(), "My File")
+            .await
+            .unwrap();
+
+        // Load and verify alias is included
+        let loaded = backend.load(&workspace).await.unwrap();
+        let meta = loaded.files.get(&file).unwrap();
+        assert_eq!(meta.alias, Some("My File".to_string()));
     }
 
     #[tokio::test]
     async fn virtual_file_handling() {
         let backend = FakeStorageBackend::new();
-        
+
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
         let virtual_file = PathBuf::from("/virtual/stream.mp3");
         let regular_file = PathBuf::from("/regular/file.mp3");
-        
+
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: vec![regular_file.clone(), virtual_file.clone()],
@@ -294,6 +362,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 }),
                 (virtual_file.clone(), FileMetadata {
                     duration: None,
@@ -301,15 +370,16 @@ mod tests {
                     deleted: false,
                     mime_type: Some("application/x-mpegURL".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
-        
+
         backend.save(&data).await.unwrap();
-        
+
         assert!(backend.is_virtual_file(&virtual_file));
         assert!(!backend.is_virtual_file(&regular_file));
-        
+
         let loaded = backend.load(&workspace).await.unwrap();
         assert!(loaded.files.get(&virtual_file).unwrap().is_virtual);
         assert!(!loaded.files.get(&regular_file).unwrap().is_virtual);
@@ -318,27 +388,27 @@ mod tests {
     #[tokio::test]
     async fn metadata_persistence() {
         let backend = FakeStorageBackend::new();
-        
+
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
         let file = PathBuf::from("/workspace/audio.mp3");
         let original_metadata = create_test_metadata();
-        
+
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: vec![file.clone()],
             files: [(file.clone(), original_metadata.clone())].into_iter().collect(),
         };
-        
+
         backend.save(&data).await.unwrap();
-        
+
         let loaded = backend.load(&workspace).await.unwrap();
         let loaded_metadata = loaded.files.get(&file).unwrap();
-        
+
         assert_eq!(loaded_metadata.duration, original_metadata.duration);
         assert_eq!(loaded_metadata.mime_type, original_metadata.mime_type);
         assert_eq!(loaded_metadata.deleted, original_metadata.deleted);
-        
+
         let direct_metadata = backend.get_metadata(&file).unwrap();
         assert_eq!(direct_metadata.duration, Some(Duration::from_secs(120)));
     }
@@ -348,13 +418,13 @@ mod tests {
         let backend = FakeStorageBackend::new();
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        
+
         assert_eq!(backend.load_called.load(Ordering::SeqCst), 0);
         assert_eq!(backend.save_called.load(Ordering::SeqCst), 0);
-        
+
         backend.load(&workspace).await.unwrap();
         assert_eq!(backend.load_called.load(Ordering::SeqCst), 1);
-        
+
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: Vec::new(),
@@ -362,7 +432,7 @@ mod tests {
         };
         backend.save(&data).await.unwrap();
         assert_eq!(backend.save_called.load(Ordering::SeqCst), 1);
-        
+
         backend.load(&workspace).await.unwrap();
         backend.load(&workspace).await.unwrap();
         assert_eq!(backend.load_called.load(Ordering::SeqCst), 3);
@@ -371,21 +441,21 @@ mod tests {
     #[tokio::test]
     async fn playlist_order_preserved() {
         let backend = FakeStorageBackend::new();
-        
+
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
         let files: Vec<PathBuf> = (0..5)
             .map(|i| PathBuf::from(format!("/workspace/file{}.mp3", i)))
             .collect();
-        
+
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: files.clone(),
             files: files.iter().map(|f| (f.clone(), create_test_metadata())).collect(),
         };
-        
+
         backend.save(&data).await.unwrap();
-        
+
         let loaded = backend.load(&workspace).await.unwrap();
         assert_eq!(loaded.playlist, files);
     }
@@ -395,10 +465,42 @@ mod tests {
         let backend = FakeStorageBackend::new();
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        
+
         let loaded = backend.load(&workspace).await.unwrap();
         assert!(loaded.playlist.is_empty());
         assert!(loaded.files.is_empty());
         assert_eq!(loaded.working_directory, workspace);
+    }
+
+    #[tokio::test]
+    async fn upsert_alias_trait_method() {
+        let backend = FakeStorageBackend::new();
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+        let file = PathBuf::from("/test/file.mp3");
+
+        backend
+            .upsert_alias(&file, workspace.as_path(), "My File")
+            .await
+            .unwrap();
+
+        let alias = backend
+            .resolve_alias(&file, workspace.as_path())
+            .await
+            .unwrap();
+        assert_eq!(alias, Some("My File".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resolve_alias_returns_none_for_unknown_file() {
+        let backend = FakeStorageBackend::new();
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+        let file = PathBuf::from("/unknown/file.mp3");
+
+        let alias = backend.resolve_alias(&file, workspace.as_path()).await.unwrap();
+        assert!(alias.is_none());
     }
 }

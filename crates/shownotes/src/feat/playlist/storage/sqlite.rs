@@ -83,12 +83,29 @@ impl SqliteStorage {
         Ok(id)
     }
 
-    #[allow(dead_code)]
-    async fn resolve_alias(
+    async fn get_file_path(&self, path: &Path) -> Result<Option<i64>, Report<IoError>> {
+        let path_str = path.to_string_lossy();
+        let id = sqlx::query_scalar::<_, i64>("SELECT id FROM file_paths WHERE path = ?")
+            .bind(path_str.as_ref())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|_| Report::new(IoError))?;
+        Ok(id)
+    }
+
+    /// Resolves the display alias for a file using the priority system.
+    ///
+    /// # Alias Resolution Priority
+    ///
+    /// 1. Workspace-specific alias (if exists for current workspace)
+    /// 2. Most recently updated alias from any workspace (fallback)
+    /// 3. `None` (caller should display filename instead)
+    async fn resolve_alias_by_id(
         &self,
         file_path_id: i64,
         workspace_id: i64,
     ) -> Result<Option<String>, Report<IoError>> {
+        // First, try to get workspace-specific alias
         if let Some(alias) = sqlx::query_scalar::<_, String>(
             "SELECT alias FROM aliases WHERE file_path_id = ? AND workspace_id = ?",
         )
@@ -101,6 +118,7 @@ impl SqliteStorage {
             return Ok(Some(alias));
         }
 
+        // Fallback to most recently updated alias from any workspace
         let fallback = sqlx::query_scalar::<_, String>(
             "SELECT alias FROM aliases WHERE file_path_id = ? ORDER BY updated_at DESC LIMIT 1",
         )
@@ -167,8 +185,10 @@ impl SqliteStorage {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    async fn upsert_alias(
+    /// Upserts an alias for a file in a specific workspace.
+    ///
+    /// The alias will be displayed in the TUI instead of the filename.
+    async fn upsert_alias_by_id(
         &self,
         file_path_id: i64,
         workspace_id: i64,
@@ -208,6 +228,7 @@ impl SqliteStorage {
     async fn get_file_metadata(
         &self,
         file_path_id: i64,
+        workspace_id: i64,
     ) -> Result<FileMetadata, Report<IoError>> {
         let row = sqlx::query_as::<_, (Option<f64>, Option<String>, i32, Option<String>)>(
             "SELECT duration_seconds, mime_type, deleted, time_added FROM file_metadata WHERE file_path_id = ?",
@@ -218,6 +239,7 @@ impl SqliteStorage {
         .map_err(|_| Report::new(IoError))?;
 
         let is_virtual = self.is_virtual_file(file_path_id).await?;
+        let alias = self.resolve_alias_by_id(file_path_id, workspace_id).await?;
 
         match row {
             Some((duration_seconds, mime_type, deleted, time_added)) => {
@@ -231,6 +253,7 @@ impl SqliteStorage {
                     deleted: deleted != 0,
                     mime_type,
                     time_added,
+                    alias,
                 })
             }
             None => Ok(FileMetadata {
@@ -239,6 +262,7 @@ impl SqliteStorage {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias,
             }),
         }
     }
@@ -280,7 +304,7 @@ impl PlaylistStorage for SqliteStorage {
 
         for (path_str, file_path_id) in &items {
             let path = PathBuf::from(path_str);
-            let metadata = self.get_file_metadata(*file_path_id).await?;
+            let metadata = self.get_file_metadata(*file_path_id, workspace_id).await?;
             if let Ok(canonical) = CanonicalPath::from_path(&path) {
                 files.insert(canonical.to_path_buf(), metadata);
             } else {
@@ -309,7 +333,7 @@ impl PlaylistStorage for SqliteStorage {
             }
 
             let path = PathBuf::from(&path_str);
-            let metadata = self.get_file_metadata(file_path_id).await?;
+            let metadata = self.get_file_metadata(file_path_id, workspace_id).await?;
             if let Ok(canonical) = CanonicalPath::from_path(&path) {
                 files.insert(canonical.to_path_buf(), metadata);
             } else {
@@ -369,6 +393,45 @@ impl PlaylistStorage for SqliteStorage {
 
         Ok(())
     }
+
+    async fn upsert_alias(
+        &self,
+        file_path: &Path,
+        workspace: &Path,
+        alias: &str,
+    ) -> Result<(), Report<IoError>> {
+        let file_path_id = self.get_or_create_file_path(file_path).await?;
+        let workspace_id = self.get_or_create_workspace(workspace).await?;
+        self.upsert_alias_by_id(file_path_id, workspace_id, alias).await
+    }
+
+    async fn resolve_alias(
+        &self,
+        file_path: &Path,
+        workspace: &Path,
+    ) -> Result<Option<String>, Report<IoError>> {
+        let Some(file_path_id) = self.get_file_path(file_path).await? else {
+            return Ok(None);
+        };
+
+        // Try to get workspace-specific alias first
+        if let Some(workspace_id) = self.get_workspace(workspace).await? {
+            if let Some(alias) = self.resolve_alias_by_id(file_path_id, workspace_id).await? {
+                return Ok(Some(alias));
+            }
+        }
+
+        // Fallback to most recently updated alias from any workspace
+        let fallback = sqlx::query_scalar::<_, String>(
+            "SELECT alias FROM aliases WHERE file_path_id = ? ORDER BY updated_at DESC LIMIT 1",
+        )
+        .bind(file_path_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| Report::new(IoError))?;
+
+        Ok(fallback)
+    }
 }
 
 #[cfg(test)]
@@ -417,6 +480,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
                 (file2.clone(), FileMetadata {
                     duration: Some(Duration::from_secs(240)),
@@ -424,6 +488,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 }),
                 (non_playlist_file.clone(), FileMetadata {
                     duration: Some(Duration::from_secs(300)),
@@ -431,6 +496,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -474,6 +540,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
                 (non_playlist_virtual.clone(), FileMetadata {
                     duration: Some(Duration::from_secs(60)),
@@ -481,6 +548,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -516,6 +584,7 @@ mod tests {
                     deleted: true,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 }),
                 (non_playlist_file.clone(), FileMetadata {
                     duration: None,
@@ -523,6 +592,7 @@ mod tests {
                     deleted: true,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -545,17 +615,13 @@ mod tests {
         let workspace2 = PathBuf::from("/workspace2");
         let file = PathBuf::from("/shared/file.mp4");
 
-        let ws1_id = storage.get_or_create_workspace(&workspace1).await.unwrap();
-        let ws2_id = storage.get_or_create_workspace(&workspace2).await.unwrap();
-        let file_id = storage.get_or_create_file_path(&file).await.unwrap();
+        storage.upsert_alias(&file, &workspace1, "Workspace1 Alias").await.unwrap();
+        storage.upsert_alias(&file, &workspace2, "Workspace2 Alias").await.unwrap();
 
-        storage.upsert_alias(file_id, ws1_id, "Workspace1 Alias").await.unwrap();
-        storage.upsert_alias(file_id, ws2_id, "Workspace2 Alias").await.unwrap();
-
-        let alias_ws1 = storage.resolve_alias(file_id, ws1_id).await.unwrap();
+        let alias_ws1 = storage.resolve_alias(&file, &workspace1).await.unwrap();
         assert_eq!(alias_ws1, Some("Workspace1 Alias".to_string()));
 
-        let alias_ws2 = storage.resolve_alias(file_id, ws2_id).await.unwrap();
+        let alias_ws2 = storage.resolve_alias(&file, &workspace2).await.unwrap();
         assert_eq!(alias_ws2, Some("Workspace2 Alias".to_string()));
     }
 
@@ -565,21 +631,165 @@ mod tests {
 
         let workspace1 = PathBuf::from("/workspace1");
         let workspace2 = PathBuf::from("/workspace2");
+        let workspace3 = PathBuf::from("/workspace3");
         let file = PathBuf::from("/shared/file.mp4");
 
-        let ws1_id = storage.get_or_create_workspace(&workspace1).await.unwrap();
-        let ws2_id = storage.get_or_create_workspace(&workspace2).await.unwrap();
-        let file_id = storage.get_or_create_file_path(&file).await.unwrap();
-
-        storage.upsert_alias(file_id, ws1_id, "First Alias").await.unwrap();
+        storage.upsert_alias(&file, &workspace1, "First Alias").await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-        storage.upsert_alias(file_id, ws2_id, "Second Alias").await.unwrap();
+        storage.upsert_alias(&file, &workspace2, "Second Alias").await.unwrap();
 
-        let ws3_id = storage.get_or_create_workspace(&PathBuf::from("/workspace3")).await.unwrap();
-        let fallback = storage.resolve_alias(file_id, ws3_id).await.unwrap();
+        let fallback = storage.resolve_alias(&file, &workspace3).await.unwrap();
         assert!(fallback.is_some());
+    }
+
+    #[tokio::test]
+    async fn alias_loaded_with_file_metadata() {
+        let storage = create_test_storage().await;
+        let temp = TempDir::new().unwrap();
+        let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
+
+        let file = working_dir.as_path().join("video.mp4");
+
+        // Save playlist with file
+        let data = PlaylistData {
+            working_directory: working_dir.clone(),
+            playlist: vec![file.clone()],
+            files: [(file.clone(), FileMetadata {
+                duration: Some(Duration::from_secs(120)),
+                is_virtual: false,
+                deleted: false,
+                mime_type: Some("video/mp4".to_string()),
+                time_added: None,
+                alias: None,
+            })].into_iter().collect(),
+        };
+        storage.save(&data).await.unwrap();
+
+        // Add alias
+        storage.upsert_alias(&file, working_dir.as_path(), "My Video").await.unwrap();
+
+        // Load and verify alias is included
+        let loaded = storage.load(&working_dir).await.unwrap();
+        let meta = loaded.files.get(&file).unwrap();
+        assert_eq!(meta.alias, Some("My Video".to_string()));
+    }
+
+    #[tokio::test]
+    async fn workspace_alias_not_overridden_by_other_workspace() {
+        let storage = create_test_storage().await;
+
+        let temp1 = TempDir::new().unwrap();
+        let temp2 = TempDir::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
+        let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
+
+        let shared_file = PathBuf::from("/shared/video.mp4");
+
+        let data1 = PlaylistData {
+            working_directory: workspace1.clone(),
+            playlist: vec![shared_file.clone()],
+            files: [(shared_file.clone(), FileMetadata {
+                duration: Some(Duration::from_secs(100)),
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            })].into_iter().collect(),
+        };
+
+        let data2 = PlaylistData {
+            working_directory: workspace2.clone(),
+            playlist: vec![shared_file.clone()],
+            files: [(shared_file.clone(), FileMetadata {
+                duration: Some(Duration::from_secs(100)),
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            })].into_iter().collect(),
+        };
+
+        storage.save(&data1).await.unwrap();
+        storage.save(&data2).await.unwrap();
+
+        storage.upsert_alias(&shared_file, workspace1.as_path(), "WS1 Alias").await.unwrap();
+        storage.upsert_alias(&shared_file, workspace2.as_path(), "WS2 Alias").await.unwrap();
+
+        let loaded1 = storage.load(&workspace1).await.unwrap();
+        let loaded2 = storage.load(&workspace2).await.unwrap();
+
+        let meta1 = loaded1.files.get(&shared_file).unwrap();
+        let meta2 = loaded2.files.get(&shared_file).unwrap();
+
+        assert_eq!(meta1.alias, Some("WS1 Alias".to_string()), 
+            "Workspace1 should show its own alias");
+        assert_eq!(meta2.alias, Some("WS2 Alias".to_string()), 
+            "Workspace2 should show its own alias, not WS1's alias");
+    }
+
+    #[tokio::test]
+    async fn workspace_alias_priority_over_fallback() {
+        let storage = create_test_storage().await;
+
+        let temp1 = TempDir::new().unwrap();
+        let temp2 = TempDir::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
+        let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
+
+        let shared_file = PathBuf::from("/shared/video.mp4");
+
+        let data1 = PlaylistData {
+            working_directory: workspace1.clone(),
+            playlist: vec![shared_file.clone()],
+            files: [(shared_file.clone(), FileMetadata {
+                duration: None,
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            })].into_iter().collect(),
+        };
+        storage.save(&data1).await.unwrap();
+
+        let data2 = PlaylistData {
+            working_directory: workspace2.clone(),
+            playlist: vec![shared_file.clone()],
+            files: [(shared_file.clone(), FileMetadata {
+                duration: None,
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            })].into_iter().collect(),
+        };
+        storage.save(&data2).await.unwrap();
+
+        storage.upsert_alias(&shared_file, workspace1.as_path(), "Older Alias from WS1").await.unwrap();
+        
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        
+        storage.upsert_alias(&shared_file, workspace2.as_path(), "Newer Alias from WS2").await.unwrap();
+
+        let loaded1 = storage.load(&workspace1).await.unwrap();
+        let meta1 = loaded1.files.get(&shared_file).unwrap();
+        assert_eq!(meta1.alias, Some("Older Alias from WS1".to_string()),
+            "Workspace1 should show its own alias even though workspace2's alias is newer");
+
+        let loaded2 = storage.load(&workspace2).await.unwrap();
+        let meta2 = loaded2.files.get(&shared_file).unwrap();
+        assert_eq!(meta2.alias, Some("Newer Alias from WS2".to_string()),
+            "Workspace2 should show its own alias");
+
+        let direct1 = storage.resolve_alias(&shared_file, workspace1.as_path()).await.unwrap();
+        let direct2 = storage.resolve_alias(&shared_file, workspace2.as_path()).await.unwrap();
+        assert_eq!(direct1, Some("Older Alias from WS1".to_string()));
+        assert_eq!(direct2, Some("Newer Alias from WS2".to_string()));
     }
 
     #[tokio::test]
@@ -600,6 +810,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             })].into_iter().collect(),
         };
 
@@ -612,6 +823,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             })].into_iter().collect(),
         };
 
@@ -644,6 +856,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 }),
                 (PathBuf::from("/file2.mp4"), FileMetadata {
                     duration: None,
@@ -651,6 +864,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -666,6 +880,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             })].into_iter().collect(),
         };
 
@@ -696,6 +911,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: None,
+                    alias: None,
                 })
             }).collect(),
         };
@@ -730,6 +946,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: Some(timestamp),
+                    alias: None,
                 }),
                 (non_playlist_file.clone(), FileMetadata {
                     duration: None,
@@ -737,6 +954,7 @@ mod tests {
                     deleted: false,
                     mime_type: None,
                     time_added: Some(timestamp),
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -763,6 +981,7 @@ mod tests {
 
         let file = PathBuf::from("/test/file.mp4");
         let file_id = storage.get_or_create_file_path(&file).await.unwrap();
+        let workspace_id = storage.get_or_create_workspace(Path::new("/test")).await.unwrap();
 
         let meta1 = FileMetadata {
             duration: Some(Duration::from_secs(100)),
@@ -770,11 +989,12 @@ mod tests {
             deleted: false,
             mime_type: Some("video/mp4".to_string()),
             time_added: None,
+            alias: None,
         };
 
         storage.upsert_file_metadata(file_id, &meta1).await.unwrap();
 
-        let loaded1 = storage.get_file_metadata(file_id).await.unwrap();
+        let loaded1 = storage.get_file_metadata(file_id, workspace_id).await.unwrap();
         assert_eq!(loaded1.duration, Some(Duration::from_secs(100)));
 
         let meta2 = FileMetadata {
@@ -783,11 +1003,12 @@ mod tests {
             deleted: true,
             mime_type: None,
             time_added: None,
+            alias: None,
         };
 
         storage.upsert_file_metadata(file_id, &meta2).await.unwrap();
 
-        let loaded2 = storage.get_file_metadata(file_id).await.unwrap();
+        let loaded2 = storage.get_file_metadata(file_id, workspace_id).await.unwrap();
         assert_eq!(loaded2.duration, Some(Duration::from_secs(200)));
         assert!(loaded2.deleted);
         assert!(loaded2.mime_type.is_none());
@@ -824,6 +1045,7 @@ mod tests {
                 deleted: false,
                 mime_type: Some("video/mp4".to_string()),
                 time_added: None,
+                alias: None,
             })].into_iter().collect(),
         };
 
@@ -860,6 +1082,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
                 (library_file.clone(), FileMetadata {
                     duration: Some(Duration::from_secs(180)),
@@ -867,6 +1090,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: None,
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -904,6 +1128,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: Some(timestamp),
+                    alias: None,
                 }),
                 (library_file.clone(), FileMetadata {
                     duration: Some(Duration::from_secs(450)),
@@ -911,6 +1136,7 @@ mod tests {
                     deleted: true,
                     mime_type: Some("video/x-matroska".to_string()),
                     time_added: Some(timestamp),
+                    alias: None,
                 }),
                 (virtual_file.clone(), FileMetadata {
                     duration: Some(Duration::from_secs(600)),
@@ -918,6 +1144,7 @@ mod tests {
                     deleted: false,
                     mime_type: Some("video/mp4".to_string()),
                     time_added: Some(timestamp),
+                    alias: None,
                 }),
             ].into_iter().collect(),
         };
@@ -974,6 +1201,7 @@ mod tests {
                 deleted: false,
                 mime_type: Some("video/mp4".to_string()),
                 time_added: None,
+                alias: None,
             },
         );
 
@@ -993,6 +1221,7 @@ mod tests {
                 deleted: false,
                 mime_type: Some("video/mp4".to_string()),
                 time_added: None,
+                alias: None,
             },
         );
 
@@ -1003,5 +1232,38 @@ mod tests {
             loaded2.files.get(&file).unwrap().duration,
             Some(Duration::from_secs(200))
         );
+    }
+
+    #[tokio::test]
+    async fn alias_resolution_with_different_path_formats() {
+        let storage = create_test_storage().await;
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+        
+        let file = PathBuf::from("/shared/video.mp4");
+
+        let data = PlaylistData {
+            working_directory: workspace.clone(),
+            playlist: vec![file.clone()],
+            files: [(file.clone(), FileMetadata {
+                duration: Some(Duration::from_secs(100)),
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            })].into_iter().collect(),
+        };
+        storage.save(&data).await.unwrap();
+
+        storage.upsert_alias(&file, workspace.as_path(), "My Alias").await.unwrap();
+
+        let alias_same = storage.resolve_alias(&file, workspace.as_path()).await.unwrap();
+        assert_eq!(alias_same, Some("My Alias".to_string()));
+
+        let loaded = storage.load(&workspace).await.unwrap();
+        let meta = loaded.files.get(&file).unwrap();
+        assert_eq!(meta.alias, Some("My Alias".to_string()));
     }
 }

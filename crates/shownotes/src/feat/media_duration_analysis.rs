@@ -31,7 +31,8 @@ pub fn analyze_files(
         for (i, path) in uncached.iter().enumerate() {
             if let Ok(duration) = backend.get_duration(path.as_path()) {
                 let existing = metadata.remove(*path);
-                let time_added = existing.and_then(|m| m.time_added);
+                let time_added = existing.as_ref().and_then(|m| m.time_added);
+                let alias = existing.and_then(|m| m.alias);
                 metadata.insert(
                     (*path).clone(),
                     FileMetadata {
@@ -40,6 +41,7 @@ pub fn analyze_files(
                         deleted: false,
                         mime_type: None,
                         time_added,
+                        alias,
                     },
                 );
             }
@@ -136,6 +138,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
         let backend =
@@ -162,6 +165,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
         let backend =
@@ -187,6 +191,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: Some(timestamp),
+                alias: None,
             },
         );
         let backend =
@@ -239,6 +244,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
         metadata.insert(
@@ -249,6 +255,7 @@ mod tests {
                 deleted: false,
                 mime_type: None,
                 time_added: None,
+                alias: None,
             },
         );
         let backend =
