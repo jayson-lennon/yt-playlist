@@ -1,14 +1,17 @@
 use crossterm::event::KeyEvent;
 
 use super::event::EventResult;
+use super::Pane;
 use crate::feat::keymap::Keymap;
 
 /// Context passed to components during key handling.
 ///
 /// Provides access to shared state needed by some components
-/// (like WhichKey which needs the keymap for tree traversal).
+/// (like WhichKey which needs the keymap for tree traversal,
+/// or components that need to know the focused_pane).
 pub struct ComponentContext<'a> {
     pub keymap: &'a Keymap,
+    pub focused_pane: Pane,
 }
 
 /// Trait for UI components that can handle keyboard input.
@@ -119,7 +122,10 @@ mod tests {
         let mut component = IgnoringComponent;
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
         let keymap = Keymap::default();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         assert_eq!(
             component.handle_key_with_context(key, &ctx),
@@ -132,7 +138,10 @@ mod tests {
         let mut component = ContextUsingComponent { last_key: None };
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('x'));
         let keymap = Keymap::default();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         let result = component.handle_key_with_context(key, &ctx);
 

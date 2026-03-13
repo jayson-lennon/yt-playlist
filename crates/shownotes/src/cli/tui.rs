@@ -92,7 +92,7 @@ fn process_fork(
         Ok(ForkResult::Success(msg) | ForkResult::Failed(msg)) => msg,
         Ok(ForkResult::SuspendFailed) => "Failed to suspend terminal".to_string(),
     };
-    app.tui_state.status_message = Some(message);
+    app.tui_state.set_status(message);
 
     Ok(())
 }

@@ -564,7 +564,10 @@ mod tests {
         // Given a WhichKey that is not pending
         let mut which_key = WhichKey::default();
         let keymap = Keymap::default();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When handling a key
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('a')), &ctx);
@@ -579,7 +582,10 @@ mod tests {
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
         let keymap = Keymap::default();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When handling Escape
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Esc), &ctx);
@@ -597,7 +603,10 @@ mod tests {
         which_key.push_key(Key::Char('g'));
         which_key.push_key(Key::Char('m'));
         let keymap = make_keymap_with_sequence();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When handling Backspace
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Backspace), &ctx);
@@ -613,7 +622,10 @@ mod tests {
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
         let keymap = Keymap::default();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When handling Backspace
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Backspace), &ctx);
@@ -630,7 +642,10 @@ mod tests {
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
         let keymap = Keymap::default();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When handling an invalid key (F1 is not mapped)
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::F(1)), &ctx);
@@ -646,7 +661,10 @@ mod tests {
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
         let keymap = make_keymap_with_nested_branches();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When pressing 's' which leads to another branch (not a leaf)
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('s')), &ctx);
@@ -663,7 +681,10 @@ mod tests {
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
         let keymap = make_keymap_with_sequence();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When pressing 'm' to complete the sequence "gm"
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('m')), &ctx);
@@ -680,7 +701,10 @@ mod tests {
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
         let keymap = make_keymap_with_sequence();
-        let ctx = ComponentContext { keymap: &keymap };
+        let ctx = ComponentContext {
+            keymap: &keymap,
+            focused_pane: Pane::Playlist,
+        };
 
         // When pressing a key that doesn't match any binding
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('z')), &ctx);

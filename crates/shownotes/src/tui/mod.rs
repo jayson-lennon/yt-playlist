@@ -3,11 +3,13 @@ mod component;
 mod error_popup;
 mod event;
 mod filter;
+mod global_key_handler;
 mod library_pane;
 mod playlist_pane;
 mod rename;
 mod render;
 mod state;
+mod status_bar;
 mod url_input;
 mod which_key;
 
@@ -16,8 +18,6 @@ use crate::services::Services;
 pub use crate::tui::state::TuiState;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    widgets::Paragraph,
     Frame,
 };
 
@@ -26,10 +26,12 @@ pub use component::{Component, ComponentContext};
 pub use error_popup::ErrorPopup;
 pub use event::EventResult;
 pub use filter::Filter;
+pub use global_key_handler::GlobalKeyHandler;
 pub use library_pane::LibraryPane;
 pub use playlist_pane::PlaylistPane;
 pub use rename::Rename;
 pub use render::{AreaRender, Render, RenderContext};
+pub use status_bar::StatusBar;
 pub use url_input::UrlInput;
 pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
 
@@ -52,12 +54,10 @@ pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap, services: &S
     AreaRender::to(chunks[0]).try_render(&mut ctx, &state.playlist_pane);
     AreaRender::to(chunks[1]).try_render(&mut ctx, &state.library_pane);
 
-    let status_text = state.status_message.clone().unwrap_or_default();
-    let status = Paragraph::new(status_text).style(Style::default().fg(Color::Yellow));
-    ctx.frame.render_widget(status, status_area);
+    AreaRender::to(status_area).try_render(&mut ctx, &state.status_bar);
 
     AreaRender::to(Rect::default()).try_render(&mut ctx, &state.rename);
     AreaRender::to(Rect::default()).try_render(&mut ctx, &state.url_input);
-    AreaRender::to(Rect::default()).try_render(&mut ctx, &state.which_key);
+    AreaRender::to(Rect::default()).try_render(&mut ctx, &state.global_handler);
     AreaRender::to(Rect::default()).try_render(&mut ctx, &state.error_popup);
 }

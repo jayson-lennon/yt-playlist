@@ -1,15 +1,16 @@
 use std::path::PathBuf;
 
 use crossterm::event::Event;
-use error_stack::Report;
 use marked_path::CanonicalPath;
 
-use crate::command::{Command, CommandError, CommandResult, execute};
+use crate::command::{Command, CommandResult, execute};
 use crate::feat::config::Config;
-use crate::feat::keymap::{Action, Key, Keymap};
+use crate::feat::keymap::{Action, Keymap};
 use crate::feat::playlist::PlaylistData;
 use crate::services::Services;
-use crate::tui::{ComponentContext, EventResult, ItemDisplayMode, ItemPath, Pane, PlaylistItem, TuiState, get_mime_type};
+use crate::tui::{
+    ComponentContext, ItemDisplayMode, ItemPath, Pane, PlaylistItem, TuiState, get_mime_type,
+};
 
 /// Holds pending actions that require forking from the TUI.
 ///
@@ -107,16 +108,6 @@ impl App {
         app
     }
 
-    /// # Errors
-    ///
-    /// Returns an error if the command execution fails.
-    pub async fn execute_command(
-        &mut self,
-        command: Command,
-    ) -> Result<CommandResult, Report<CommandError>> {
-        execute(&self.services, command).await
-    }
-
     fn set_initial_focus(&mut self) {
         let playlist_empty = self.tui_state.playlist_pane.items.is_empty();
         let library_empty = self.tui_state.library_pane.items.is_empty();
@@ -128,9 +119,9 @@ impl App {
     }
 
     pub fn load_playlist(&mut self) {
-        let result = self.tokio_runtime.block_on(async {
-            self.services.storage.load(&self.runtime.library_path).await
-        });
+        let result = self
+            .tokio_runtime
+            .block_on(async { self.services.storage.load(&self.runtime.library_path).await });
         match result {
             Ok(data) => {
                 let playlist_paths: std::collections::HashSet<_> =
@@ -174,7 +165,8 @@ impl App {
                         }
                     })
                     .collect();
-                virtual_library_items.sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
+                virtual_library_items
+                    .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
 
                 self.refresh_library();
 
@@ -233,12 +225,12 @@ impl App {
             playlist: playlist_paths,
             files,
         };
-        let result = self.tokio_runtime.block_on(async {
-            self.services.storage.save(&data).await
-        });
+        let result = self
+            .tokio_runtime
+            .block_on(async { self.services.storage.save(&data).await });
         match result {
             Ok(()) => {
-                self.tui_state.status_message = Some("Playlist saved".to_string());
+                self.tui_state.status_bar.set("Playlist saved");
             }
             Err(e) => {
                 self.tui_state
@@ -258,12 +250,13 @@ impl App {
 
             let workspace = self.runtime.library_path.clone();
             let services = self.services.clone();
-            let aliases: std::collections::HashMap<PathBuf, Option<String>> = self
-                .tokio_runtime
-                .block_on(async {
+            let aliases: std::collections::HashMap<PathBuf, Option<String>> =
+                self.tokio_runtime.block_on(async {
                     let mut result = std::collections::HashMap::new();
                     for path in &paths {
-                        let canonical = CanonicalPath::new(path.canonicalize().unwrap_or_else(|_| path.clone()));
+                        let canonical = CanonicalPath::new(
+                            path.canonicalize().unwrap_or_else(|_| path.clone()),
+                        );
                         let alias = services
                             .storage
                             .resolve_alias(&canonical, &workspace)
@@ -296,47 +289,23 @@ impl App {
 
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
-            self.tui_state.status_message = None;
-
-            if self.tui_state.which_key.active && !self.tui_state.which_key.is_pending() {
-                self.tui_state.which_key.dismiss();
-            }
+            self.tui_state.status_bar.clear();
 
             let ctx = ComponentContext {
                 keymap: &self.runtime.keymap,
+                focused_pane: self.tui_state.focused_pane,
             };
-            let result = self.tui_state.handle_key(key, &ctx);
 
-            if let Some(action) = self.tui_state.which_key.take_action() {
+            self.tui_state.handle_key(key, &ctx);
+
+            if let Some(action) = self.tui_state.global_handler.take_action() {
                 self.execute_action(action);
-                return;
             }
-
             if let Some(new_alias) = self.tui_state.rename.take_submitted().flatten() {
                 self.handle_rename_submit(new_alias);
-                return;
             }
-
             if let Some(url) = self.tui_state.url_input.take_submitted().flatten() {
                 self.handle_url_submit(url);
-                return;
-            }
-
-            if result == EventResult::Ignored {
-                if let Some(key) = Key::from_keycode(key.code) {
-                    if self.runtime.keymap.is_prefix_key(key) {
-                        self.tui_state.which_key.push_key(key);
-                        return;
-                    }
-                }
-
-                if let Some(action) = self
-                    .runtime
-                    .keymap
-                    .get_action(key.code, key.modifiers, self.tui_state.focused_pane)
-                {
-                    self.execute_action(action);
-                }
             }
         }
     }
@@ -390,13 +359,13 @@ impl App {
             .items
             .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
         self.save_playlist();
-        self.tui_state.status_message = Some("URL added to library".to_string());
+        self.tui_state.status_bar.set("URL added to library");
     }
 
     fn execute_action(&mut self, action: Action) {
         match action {
             Action::ShowHelp => {
-                self.tui_state.which_key.toggle();
+                self.tui_state.global_handler.toggle_help();
             }
             Action::Quit => {
                 self.save_playlist();
@@ -495,10 +464,11 @@ impl App {
             if item.is_virtual {
                 self.tui_state.library_pane.remove();
                 self.save_playlist();
-                self.tui_state.status_message = Some("Virtual entry deleted".to_string());
+                self.tui_state.status_bar.set("Virtual entry deleted");
             } else {
-                self.tui_state.status_message =
-                    Some("Only virtual entries (URLs) can be deleted.".to_string());
+                self.tui_state
+                    .status_bar
+                    .set("Only virtual entries (URLs) can be deleted.");
             }
         }
     }
@@ -523,7 +493,8 @@ impl App {
 
     fn move_from_playlist_to_library(&mut self) {
         if let Some(item) = self.tui_state.selected_playlist_item().cloned() {
-            let file_missing = !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
+            let file_missing =
+                !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
             if !file_missing {
                 self.tui_state.library_pane.items.push(item);
                 self.tui_state
@@ -558,11 +529,14 @@ impl App {
                         ..
                     }) => {
                         if used_default_opener {
-                            self.tui_state.status_message =
-                                Some(format!("Opening with default opener: {}", item.path.display()));
+                            self.tui_state.status_bar.set(format!(
+                                "Opening with default opener: {}",
+                                item.path.display()
+                            ));
                         } else {
-                            self.tui_state.status_message =
-                                Some(format!("Opening: {}", item.path.display()));
+                            self.tui_state
+                                .status_bar
+                                .set(format!("Opening: {}", item.path.display()));
                         }
                     }
                     Err(e) => {
@@ -601,7 +575,9 @@ impl App {
             .block_on(execute(&self.services, command))
         {
             Ok(CommandResult::MpvPlaylistLoaded { count }) => {
-                self.tui_state.status_message = Some(format!("Loaded {count} items into mpv"));
+                self.tui_state
+                    .status_bar
+                    .set(format!("Loaded {count} items into mpv"));
             }
             Err(e) => {
                 self.tui_state
@@ -622,12 +598,12 @@ impl App {
             Ok(CommandResult::MpvSpawned {
                 was_already_running: true,
             }) => {
-                self.tui_state.status_message = Some("MPV already running".to_string());
+                self.tui_state.status_bar.set("MPV already running");
             }
             Ok(CommandResult::MpvSpawned {
                 was_already_running: false,
             }) => {
-                self.tui_state.status_message = Some("MPV launched".to_string());
+                self.tui_state.status_bar.set("MPV launched");
             }
             Err(e) => {
                 self.tui_state
@@ -649,11 +625,9 @@ mod tests {
     use crate::feat::keymap::{Action, Keymap};
     use crate::feat::media_query::MediaQueryService;
     use crate::feat::mpv::{MpvClientService, MpvLauncherService};
-    use crate::feat::playlist::PlaylistStorageService;
     use crate::feat::playlist::FakeStorageBackend;
-    use crate::test_utils::{
-        FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher,
-    };
+    use crate::feat::playlist::PlaylistStorageService;
+    use crate::test_utils::{FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher};
 
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
@@ -798,7 +772,13 @@ mod tests {
 
         // Then the app should quit and show saved message.
         assert!(app.should_quit);
-        assert!(app.tui_state.status_message.unwrap().contains("saved"));
+        assert!(
+            app.tui_state
+                .status_bar
+                .message()
+                .unwrap()
+                .contains("saved")
+        );
     }
 
     #[test]
@@ -812,7 +792,13 @@ mod tests {
         app.execute_action(Action::Save);
 
         // Then a saved status message is shown.
-        assert!(app.tui_state.status_message.unwrap().contains("saved"));
+        assert!(
+            app.tui_state
+                .status_bar
+                .message()
+                .unwrap()
+                .contains("saved")
+        );
     }
 
     #[test]
@@ -873,7 +859,10 @@ mod tests {
             .build();
 
         // When executing MoveDown action three times.
-        execute_actions(&mut app, &[Action::MoveDown, Action::MoveDown, Action::MoveDown]);
+        execute_actions(
+            &mut app,
+            &[Action::MoveDown, Action::MoveDown, Action::MoveDown],
+        );
 
         // Then selection starts at 0 and stays at the last item (2).
         assert_eq!(app.tui_state.playlist_pane.selected, 2);
@@ -1026,7 +1015,13 @@ mod tests {
         app.execute_action(Action::LaunchFile);
 
         // Then an opening status message is shown.
-        assert!(app.tui_state.status_message.unwrap().contains("Opening"));
+        assert!(
+            app.tui_state
+                .status_bar
+                .message()
+                .unwrap()
+                .contains("Opening")
+        );
     }
 
     #[test]
@@ -1042,7 +1037,8 @@ mod tests {
         // Then a loaded status message is shown.
         assert!(
             app.tui_state
-                .status_message
+                .status_bar
+                .message()
                 .unwrap()
                 .contains("Loaded 2 items")
         );
@@ -1169,7 +1165,7 @@ mod tests {
         execute_actions(&mut app, &[Action::ShowHelp, Action::ShowHelp]);
 
         // Then which-key starts inactive, becomes active, then inactive again.
-        assert!(!app.tui_state.which_key.active);
+        assert!(!app.tui_state.global_handler.is_showing_help());
     }
 
     #[test]
@@ -1228,7 +1224,9 @@ mod tests {
         // Then pending notes path is set to the selected item's path.
         assert_eq!(
             app.fork.notes_path,
-            Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))))
+            Some(ItemPath::File(CanonicalPath::new(PathBuf::from(
+                "/path/to/video.mp4"
+            ))))
         );
     }
 
@@ -1257,7 +1255,8 @@ mod tests {
         // Then status message shows mpv launched.
         assert!(
             app.tui_state
-                .status_message
+                .status_bar
+                .message()
                 .unwrap()
                 .contains("MPV launched")
         );
@@ -1276,7 +1275,8 @@ mod tests {
         // Then status message shows mpv already running.
         assert!(
             app.tui_state
-                .status_message
+                .status_bar
+                .message()
                 .unwrap()
                 .contains("MPV already running")
         );
@@ -1288,11 +1288,7 @@ mod tests {
 
         app.handle_event(key_event('g'));
 
-        assert!(app.tui_state.which_key.active);
-        assert_eq!(
-            app.tui_state.which_key.pending_keys,
-            vec![crate::feat::keymap::Key::Char('g')]
-        );
+        assert!(app.tui_state.global_handler.is_showing_help());
     }
 
     #[test]
@@ -1306,12 +1302,12 @@ mod tests {
 
         assert!(
             app.tui_state
-                .status_message
+                .status_bar
+                .message()
                 .unwrap()
                 .contains("MPV launched")
         );
-        assert!(app.tui_state.which_key.pending_keys.is_empty());
-        assert!(!app.tui_state.which_key.active);
+        assert!(!app.tui_state.global_handler.is_showing_help());
     }
 
     #[test]
@@ -1321,8 +1317,7 @@ mod tests {
 
         app.handle_event(key_event('x'));
 
-        assert!(app.tui_state.which_key.pending_keys.is_empty());
-        assert!(!app.tui_state.which_key.active);
+        assert!(!app.tui_state.global_handler.is_showing_help());
     }
 
     #[test]
@@ -1331,11 +1326,7 @@ mod tests {
 
         app.handle_event(key_event('a'));
 
-        assert!(app.tui_state.which_key.active);
-        assert_eq!(
-            app.tui_state.which_key.pending_keys,
-            vec![crate::feat::keymap::Key::Char('a')]
-        );
+        assert!(app.tui_state.global_handler.is_showing_help());
     }
 
     #[test]
@@ -1346,8 +1337,7 @@ mod tests {
         app.handle_event(key_event('u'));
 
         assert!(app.tui_state.is_url_input());
-        assert!(app.tui_state.which_key.pending_keys.is_empty());
-        assert!(!app.tui_state.which_key.active);
+        assert!(!app.tui_state.global_handler.is_showing_help());
     }
 
     #[test]
@@ -1357,8 +1347,7 @@ mod tests {
 
         app.handle_event(key_event('x'));
 
-        assert!(app.tui_state.which_key.pending_keys.is_empty());
-        assert!(!app.tui_state.which_key.active);
+        assert!(!app.tui_state.global_handler.is_showing_help());
         assert!(!app.tui_state.is_url_input());
     }
 
@@ -1382,7 +1371,10 @@ mod tests {
         // Then the item is in playlist with is_virtual preserved.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
         assert!(app.tui_state.library_pane.items.is_empty());
-        assert_eq!(app.tui_state.playlist_pane.items[0].path, ItemPath::Url(url.to_string()));
+        assert_eq!(
+            app.tui_state.playlist_pane.items[0].path,
+            ItemPath::Url(url.to_string())
+        );
         assert!(app.tui_state.playlist_pane.items[0].is_virtual);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].mime_type,
@@ -1410,7 +1402,10 @@ mod tests {
         // Then the item is in library with is_virtual preserved.
         assert!(app.tui_state.playlist_pane.items.is_empty());
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
-        assert_eq!(app.tui_state.library_pane.items[0].path, ItemPath::Url(url.to_string()));
+        assert_eq!(
+            app.tui_state.library_pane.items[0].path,
+            ItemPath::Url(url.to_string())
+        );
         assert!(app.tui_state.library_pane.items[0].is_virtual);
         assert_eq!(
             app.tui_state.library_pane.items[0].mime_type,
@@ -1497,13 +1492,12 @@ mod tests {
                 .iter()
                 .any(|i| i.path == ItemPath::Url(url.to_string()) && i.is_virtual)
         );
-        assert!(
-            app.tui_state
-                .library_pane
-                .items
-                .iter()
-                .any(|i| i.path.as_file().is_some_and(|p| p.as_path().file_name().unwrap() == "real.mp4") && !i.is_virtual)
-        );
+        assert!(app.tui_state.library_pane.items.iter().any(|i| {
+            i.path
+                .as_file()
+                .is_some_and(|p| p.as_path().file_name().unwrap() == "real.mp4")
+                && !i.is_virtual
+        }));
     }
 
     #[test]
@@ -1567,8 +1561,8 @@ mod tests {
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
         assert!(
             app.tui_state
-                .status_message
-                .clone()
+                .status_bar
+                .message()
                 .unwrap()
                 .contains("virtual")
         );
@@ -1590,7 +1584,9 @@ mod tests {
     fn fork_take_action_returns_add_note_and_clears_flag() {
         // Given a fork with notes_path set.
         let mut fork = Fork {
-            notes_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/test/path")))),
+            notes_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from(
+                "/test/path",
+            )))),
             ..Default::default()
         };
 
@@ -1622,7 +1618,9 @@ mod tests {
     fn fork_take_action_returns_edit_sources_and_clears_flag() {
         // Given a fork with sources_path set.
         let mut fork = Fork {
-            sources_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/test/sources")))),
+            sources_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from(
+                "/test/sources",
+            )))),
             ..Default::default()
         };
 
