@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 pub mod context;
 pub mod fakes;
 pub mod fixtures;
