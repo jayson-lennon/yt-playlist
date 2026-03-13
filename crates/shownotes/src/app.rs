@@ -82,7 +82,17 @@ impl App {
             self.tui_state.handle_key(key, &ctx);
 
             if let Some(action) = self.tui_state.global_handler.take_action() {
-                crate::tui::execute_tui_action(self, action);
+                let response = {
+                    let mut tui_ctx = crate::tui::TuiActionCtx {
+                        tui_state: &mut self.tui_state,
+                        fork: &mut self.fork,
+                        ctx: &self.ctx,
+                    };
+                    crate::tui::execute_tui_action(&mut tui_ctx, action)
+                };
+                if response == crate::tui::TuiActionResponse::ShouldQuit {
+                    self.should_quit = true;
+                }
             }
             if let Some(new_alias) = self.tui_state.rename.take_submitted().flatten() {
                 crate::tui::handle_rename_submit(&self.ctx, &mut self.tui_state, new_alias);
@@ -239,7 +249,31 @@ mod tests {
 
     fn execute_actions(app: &mut App, actions: &[TuiAction]) {
         for action in actions {
-            crate::tui::execute_tui_action(app, *action);
+            let response = {
+                let mut tui_ctx = crate::tui::TuiActionCtx {
+                    tui_state: &mut app.tui_state,
+                    fork: &mut app.fork,
+                    ctx: &app.ctx,
+                };
+                crate::tui::execute_tui_action(&mut tui_ctx, *action)
+            };
+            if response == crate::tui::TuiActionResponse::ShouldQuit {
+                app.should_quit = true;
+            }
+        }
+    }
+
+    fn execute_action(app: &mut App, action: TuiAction) {
+        let response = {
+            let mut tui_ctx = crate::tui::TuiActionCtx {
+                tui_state: &mut app.tui_state,
+                fork: &mut app.fork,
+                ctx: &app.ctx,
+            };
+            crate::tui::execute_tui_action(&mut tui_ctx, action)
+        };
+        if response == crate::tui::TuiActionResponse::ShouldQuit {
+            app.should_quit = true;
         }
     }
 
@@ -256,7 +290,7 @@ mod tests {
         let mut app = TestAppBuilder::new().build();
 
         // When executing Quit action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Quit);
+        execute_action(&mut app, TuiAction::Quit);
 
         // Then the app should quit and show saved message.
         assert!(app.should_quit);
@@ -277,7 +311,7 @@ mod tests {
             .build();
 
         // When executing Save action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Save);
+        execute_action(&mut app, TuiAction::Save);
 
         // Then a saved status message is shown.
         assert!(
@@ -314,7 +348,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When executing FocusPlaylist action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::FocusPlaylist);
+        execute_action(&mut app, TuiAction::FocusPlaylist);
 
         // Then focus switches to playlist pane.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -329,7 +363,7 @@ mod tests {
             .build();
 
         // When executing FocusLibrary action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::FocusLibrary);
+        execute_action(&mut app, TuiAction::FocusLibrary);
 
         // Then focus switches to library pane.
         assert_eq!(app.tui_state.focused_pane, Pane::Library);
@@ -408,7 +442,7 @@ mod tests {
         app.tui_state.playlist_pane.selected = 1;
 
         // When executing ReorderUp action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::ReorderUp);
+        execute_action(&mut app, TuiAction::ReorderUp);
 
         // Then the item moves up and selection follows.
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
@@ -436,7 +470,7 @@ mod tests {
         app.tui_state.playlist_pane.selected = 0;
 
         // When executing ReorderDown action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::ReorderDown);
+        execute_action(&mut app, TuiAction::ReorderDown);
 
         // Then the item moves down and selection follows.
         assert_eq!(app.tui_state.playlist_pane.selected, 1);
@@ -459,7 +493,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When executing MoveToPlaylist action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::MoveToPlaylist);
+        execute_action(&mut app, TuiAction::MoveToPlaylist);
 
         // Then the item moves to the playlist.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
@@ -481,7 +515,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When executing MoveToLibrary action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::MoveToLibrary);
+        execute_action(&mut app, TuiAction::MoveToLibrary);
 
         // Then the item moves to the library.
         assert!(app.tui_state.playlist_pane.items.is_empty());
@@ -500,7 +534,7 @@ mod tests {
             .build();
 
         // When executing LaunchFile action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::LaunchFile);
+        execute_action(&mut app, TuiAction::LaunchFile);
 
         // Then an opening status message is shown.
         assert!(
@@ -520,7 +554,7 @@ mod tests {
             .build();
 
         // When executing LoadPlaylist action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::LoadPlaylist);
+        execute_action(&mut app, TuiAction::LoadPlaylist);
 
         // Then a loaded status message is shown.
         assert!(
@@ -538,7 +572,7 @@ mod tests {
         let mut app = TestAppBuilder::new().build();
 
         // When executing LoadPlaylist action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::LoadPlaylist);
+        execute_action(&mut app, TuiAction::LoadPlaylist);
 
         // Then an error is shown.
         assert!(app.tui_state.is_showing_error());
@@ -552,7 +586,7 @@ mod tests {
             .build();
 
         // When executing SwitchPane action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::SwitchPane);
+        execute_action(&mut app, TuiAction::SwitchPane);
 
         // Then focus stays on playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -566,7 +600,7 @@ mod tests {
             .build();
 
         // When executing SwitchPane action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::SwitchPane);
+        execute_action(&mut app, TuiAction::SwitchPane);
 
         // Then focus stays on library.
         assert_eq!(app.tui_state.focused_pane, Pane::Library);
@@ -581,7 +615,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When executing FocusPlaylist action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::FocusPlaylist);
+        execute_action(&mut app, TuiAction::FocusPlaylist);
 
         // Then focus stays on library.
         assert_eq!(app.tui_state.focused_pane, Pane::Library);
@@ -595,7 +629,7 @@ mod tests {
             .build();
 
         // When executing FocusLibrary action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::FocusLibrary);
+        execute_action(&mut app, TuiAction::FocusLibrary);
 
         // Then focus stays on playlist.
         assert_eq!(app.tui_state.focused_pane, Pane::Playlist);
@@ -664,7 +698,7 @@ mod tests {
             .build();
 
         // When executing StartFilter action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::StartFilter);
+        execute_action(&mut app, TuiAction::StartFilter);
 
         // Then filter mode is active.
         assert!(app.tui_state.is_filtering());
@@ -679,7 +713,7 @@ mod tests {
             .build();
 
         // When executing StartFilter action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::StartFilter);
+        execute_action(&mut app, TuiAction::StartFilter);
 
         // Then filter mode is active.
         assert!(app.tui_state.is_filtering());
@@ -693,7 +727,7 @@ mod tests {
             .build();
 
         // When executing Rename action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Rename);
+        execute_action(&mut app, TuiAction::Rename);
 
         // Then rename mode is active.
         assert!(app.tui_state.is_renaming());
@@ -707,7 +741,7 @@ mod tests {
             .build();
 
         // When executing Notes action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Notes);
+        execute_action(&mut app, TuiAction::Notes);
 
         // Then pending notes path is set to the selected item's path.
         assert_eq!(
@@ -724,7 +758,7 @@ mod tests {
         let mut app = TestAppBuilder::new().build();
 
         // When executing Notes action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Notes);
+        execute_action(&mut app, TuiAction::Notes);
 
         // Then pending notes path remains unset.
         assert!(app.fork.notes_path.is_none());
@@ -738,7 +772,7 @@ mod tests {
             .build();
 
         // When executing LaunchMpv action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::LaunchMpv);
+        execute_action(&mut app, TuiAction::LaunchMpv);
 
         // Then status message shows mpv launched.
         assert!(
@@ -758,7 +792,7 @@ mod tests {
             .build();
 
         // When executing LaunchMpv action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::LaunchMpv);
+        execute_action(&mut app, TuiAction::LaunchMpv);
 
         // Then status message shows mpv already running.
         assert!(
@@ -854,7 +888,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When moving to playlist.
-        crate::tui::execute_tui_action(&mut app, TuiAction::MoveToPlaylist);
+        execute_action(&mut app, TuiAction::MoveToPlaylist);
 
         // Then the item is in playlist with is_virtual preserved.
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
@@ -885,7 +919,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When moving to library.
-        crate::tui::execute_tui_action(&mut app, TuiAction::MoveToLibrary);
+        execute_action(&mut app, TuiAction::MoveToLibrary);
 
         // Then the item is in library with is_virtual preserved.
         assert!(app.tui_state.playlist_pane.items.is_empty());
@@ -942,7 +976,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Playlist;
 
         // When moving to library.
-        crate::tui::execute_tui_action(&mut app, TuiAction::MoveToLibrary);
+        execute_action(&mut app, TuiAction::MoveToLibrary);
 
         // Then the item is removed (not added to library).
         assert!(app.tui_state.playlist_pane.items.is_empty());
@@ -1026,7 +1060,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When executing Delete action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Delete);
+        execute_action(&mut app, TuiAction::Delete);
 
         // Then the virtual item is removed.
         assert!(app.tui_state.library_pane.items.is_empty());
@@ -1043,7 +1077,7 @@ mod tests {
         app.tui_state.focused_pane = Pane::Library;
 
         // When executing Delete action.
-        crate::tui::execute_tui_action(&mut app, TuiAction::Delete);
+        execute_action(&mut app, TuiAction::Delete);
 
         // Then the item is NOT removed (only virtual items can be deleted).
         assert_eq!(app.tui_state.library_pane.items.len(), 1);

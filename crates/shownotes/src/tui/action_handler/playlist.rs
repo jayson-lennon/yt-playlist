@@ -1,61 +1,66 @@
-use crate::app::App;
+use super::TuiActionCtx;
 use crate::command::Command;
 use crate::tui::Pane;
+use crate::tui::TuiActionResponse;
 
-pub fn handle_reorder_up(app: &mut App) {
-    if !app.tui_state.has_active_filter(Pane::Playlist) {
-        app.tui_state.reorder_playlist_up();
-        app.tui_state.needs_clear = true;
+pub fn handle_reorder_up(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+    if !ctx.tui_state.has_active_filter(Pane::Playlist) {
+        ctx.tui_state.reorder_playlist_up();
+        ctx.tui_state.needs_clear = true;
     }
+    TuiActionResponse::Continue
 }
 
-pub fn handle_reorder_down(app: &mut App) {
-    if !app.tui_state.has_active_filter(Pane::Playlist) {
-        app.tui_state.reorder_playlist_down();
-        app.tui_state.needs_clear = true;
+pub fn handle_reorder_down(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+    if !ctx.tui_state.has_active_filter(Pane::Playlist) {
+        ctx.tui_state.reorder_playlist_down();
+        ctx.tui_state.needs_clear = true;
     }
+    TuiActionResponse::Continue
 }
 
-pub fn handle_move_to_library(app: &mut App) {
-    if let Some(item) = app.tui_state.selected_playlist_item().cloned() {
+pub fn handle_move_to_library(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+    if let Some(item) = ctx.tui_state.selected_playlist_item().cloned() {
         let file_missing =
             !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
         if !file_missing {
-            app.tui_state.library_pane.items.push(item);
-            app.tui_state
+            ctx.tui_state.library_pane.items.push(item);
+            ctx.tui_state
                 .library_pane
                 .items
                 .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
         }
-        app.tui_state.remove_from_playlist();
-        if app.tui_state.playlist_pane.items.is_empty() {
-            app.tui_state.focused_pane = Pane::Library;
+        ctx.tui_state.remove_from_playlist();
+        if ctx.tui_state.playlist_pane.items.is_empty() {
+            ctx.tui_state.focused_pane = Pane::Library;
         }
-        app.tui_state.needs_clear = true;
-        let _ = app.execute(Command::PlaylistSave {
-            playlist_items: app.tui_state.playlist_pane.items.clone(),
-            library_items: app.tui_state.library_pane.items.clone(),
+        ctx.tui_state.needs_clear = true;
+        let _ = ctx.execute(Command::PlaylistSave {
+            playlist_items: ctx.tui_state.playlist_pane.items.clone(),
+            library_items: ctx.tui_state.library_pane.items.clone(),
         });
     }
+    TuiActionResponse::Continue
 }
 
-pub fn handle_move_to_playlist(app: &mut App) {
-    if let Some(item) = app.tui_state.selected_library_item().cloned() {
-        app.tui_state.add_to_playlist(
+pub fn handle_move_to_playlist(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+    if let Some(item) = ctx.tui_state.selected_library_item().cloned() {
+        ctx.tui_state.add_to_playlist(
             item.path,
             item.duration,
             item.alias,
             item.mime_type,
             item.is_virtual,
         );
-        app.tui_state.remove_from_library();
-        if app.tui_state.library_pane.items.is_empty() {
-            app.tui_state.focused_pane = Pane::Playlist;
+        ctx.tui_state.remove_from_library();
+        if ctx.tui_state.library_pane.items.is_empty() {
+            ctx.tui_state.focused_pane = Pane::Playlist;
         }
-        app.tui_state.needs_clear = true;
-        let _ = app.execute(Command::PlaylistSave {
-            playlist_items: app.tui_state.playlist_pane.items.clone(),
-            library_items: app.tui_state.library_pane.items.clone(),
+        ctx.tui_state.needs_clear = true;
+        let _ = ctx.execute(Command::PlaylistSave {
+            playlist_items: ctx.tui_state.playlist_pane.items.clone(),
+            library_items: ctx.tui_state.library_pane.items.clone(),
         });
     }
+    TuiActionResponse::Continue
 }

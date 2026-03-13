@@ -41,8 +41,8 @@ pub use status_bar::StatusBar;
 pub use url_input::UrlInput;
 pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
 
-pub use action_handler::dispatch as execute_tui_action;
-pub use tui_action::{ShowNoteKind, TuiAction};
+pub use action_handler::{dispatch as execute_tui_action, TuiActionCtx};
+pub use tui_action::{ShowNoteKind, TuiAction, TuiActionResponse};
 
 pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap, services: &Services) {
     let main_chunks = Layout::default()

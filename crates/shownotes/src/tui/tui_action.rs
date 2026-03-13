@@ -17,6 +17,16 @@ impl ShowNoteKind {
     }
 }
 
+/// Response from handling a TUI action.
+///
+/// Indicates whether the application should continue running
+/// or quit after processing an action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TuiActionResponse {
+    Continue,
+    ShouldQuit,
+}
+
 /// All available actions in the TUI.
 ///
 /// Represents every user action that can be triggered by keybindings,
