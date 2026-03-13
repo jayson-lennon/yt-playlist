@@ -14,6 +14,10 @@ pub mod sources;
 pub mod symlink;
 pub mod terminal;
 
+pub mod action_handler;
+
+pub use action_handler::dispatch;
+
 pub use config::{Config, ConfigError, load};
 
 pub use external_editor::{
