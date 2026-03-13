@@ -8,6 +8,7 @@ use ratatui::{
 
 use super::component::Component;
 use super::event::EventResult;
+use super::render::{Render, RenderContext};
 
 /// Error popup display state.
 ///
@@ -74,6 +75,31 @@ impl Component for ErrorPopup {
         }
         self.dismiss();
         EventResult::Consumed
+    }
+}
+
+impl Render for ErrorPopup {
+    fn render(&self, ctx: &mut RenderContext<'_, '_>) {
+        let area = popup_area(ctx.frame.area(), 60, 50);
+
+        ctx.frame.render_widget(Clear, area);
+
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([Constraint::Min(1)])
+            .split(area);
+
+        let error_block = Block::default()
+            .title(" Error ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Red));
+
+        let error_text = Paragraph::new(self.message.clone())
+            .block(error_block)
+            .style(Style::default().fg(Color::White))
+            .wrap(Wrap { trim: false });
+
+        ctx.frame.render_widget(error_text, chunks[0]);
     }
 }
 

@@ -85,7 +85,7 @@ fn process_fork(
 
     let keymap = app.runtime.keymap.clone();
     terminal
-        .draw(|f| tui::render(f, &app.tui_state, &keymap))
+        .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.services))
         .change_context(RunError)?;
 
     let message = match result {
@@ -295,7 +295,7 @@ fn run_app(
 
         let keymap = app.runtime.keymap.clone();
         terminal
-            .draw(|f| tui::render(f, &app.tui_state, &keymap))
+            .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.services))
             .change_context(RunError)?;
 
         if event::poll(std::time::Duration::from_millis(100)).change_context(RunError)? {

@@ -6,14 +6,16 @@ mod filter;
 mod library_pane;
 mod playlist_pane;
 mod rename;
+mod render;
 mod state;
 mod url_input;
 mod which_key;
 
 pub use crate::feat::keymap::Keymap;
+use crate::services::Services;
 pub use crate::tui::state::TuiState;
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     widgets::Paragraph,
     Frame,
@@ -27,10 +29,11 @@ pub use filter::Filter;
 pub use library_pane::LibraryPane;
 pub use playlist_pane::PlaylistPane;
 pub use rename::Rename;
+pub use render::{AreaRender, Render, RenderContext};
 pub use url_input::UrlInput;
 pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
 
-pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap) {
+pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap, services: &Services) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(1)])
@@ -44,36 +47,28 @@ pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(panes_area);
 
-    state.playlist_pane.render(
-        frame,
-        chunks[0],
-        state.focused_pane == Pane::Playlist,
-        state.display_mode,
-    );
-    state.library_pane.render(
-        frame,
-        chunks[1],
-        state.focused_pane == Pane::Library,
-        state.display_mode,
-    );
+    let mut ctx = RenderContext::new(frame, Rect::default(), keymap, services, state);
+
+    AreaRender::to(chunks[0]).render(&mut ctx, &state.playlist_pane);
+    AreaRender::to(chunks[1]).render(&mut ctx, &state.library_pane);
 
     let status_text = state.status_message.clone().unwrap_or_default();
     let status = Paragraph::new(status_text).style(Style::default().fg(Color::Yellow));
-    frame.render_widget(status, status_area);
+    ctx.frame.render_widget(status, status_area);
 
     if state.is_renaming() {
-        state.rename.render(frame, state.get_selected_item());
+        AreaRender::to(Rect::default()).render(&mut ctx, &state.rename);
     }
 
     if state.is_url_input() {
-        state.url_input.render(frame);
+        AreaRender::to(Rect::default()).render(&mut ctx, &state.url_input);
     }
 
     if state.which_key.active {
-        state.which_key.render(frame, keymap, state.focused_pane);
+        AreaRender::to(Rect::default()).render(&mut ctx, &state.which_key);
     }
 
     if state.is_showing_error() {
-        state.error_popup.render(frame);
+        AreaRender::to(Rect::default()).render(&mut ctx, &state.error_popup);
     }
 }

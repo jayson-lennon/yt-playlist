@@ -8,11 +8,12 @@ use ratatui::{
 };
 
 use super::common::{
-    filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, PlaylistItem,
+    filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, Pane, PlaylistItem,
 };
 use super::component::Component;
 use super::event::EventResult;
 use super::filter::Filter;
+use super::render::{Render, RenderContext};
 
 /// The playlist pane showing queued media files.
 ///
@@ -231,6 +232,14 @@ impl PlaylistPane {
             });
             frame.render_widget(footer, footer_area);
         }
+    }
+}
+
+impl Render for PlaylistPane {
+    fn render(&self, ctx: &mut RenderContext<'_, '_>) {
+        let is_focused = ctx.tui_state.focused_pane == Pane::Playlist;
+        let display_mode = ctx.tui_state.display_mode;
+        self.render(ctx.frame, ctx.area, is_focused, display_mode);
     }
 }
 

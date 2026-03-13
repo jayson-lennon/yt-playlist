@@ -9,6 +9,7 @@ use ratatui::{
 
 use super::component::{Component, ComponentContext};
 use super::event::EventResult;
+use super::render::{Render, RenderContext};
 use crate::feat::keymap::{Action, Key, KeyCategory, KeyNode, Keymap, LeafBinding};
 use crate::tui::Pane;
 
@@ -445,6 +446,18 @@ impl WhichKey {
                 frame.render_widget(para, Rect::new(area.x, y, area.width, 1));
                 y += 1;
             }
+        }
+    }
+}
+
+impl Render for WhichKey {
+    fn render(&self, ctx: &mut RenderContext<'_, '_>) {
+        let keymap = ctx.keymap;
+        let pane = ctx.tui_state.focused_pane;
+        if self.is_pending() {
+            self.render_sequence(ctx.frame, keymap);
+        } else {
+            self.render_main(ctx.frame, keymap, pane);
         }
     }
 }

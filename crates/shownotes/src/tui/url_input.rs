@@ -9,6 +9,7 @@ use ratatui::{
 
 use super::component::Component;
 use super::event::EventResult;
+use super::render::{Render, RenderContext};
 
 /// URL input mode state for adding virtual items.
 ///
@@ -91,6 +92,31 @@ impl UrlInput {
                 .border_style(Style::default().fg(Color::Yellow)),
         );
         frame.render_widget(input, chunks[1]);
+    }
+}
+
+impl Render for UrlInput {
+    fn render(&self, ctx: &mut RenderContext<'_, '_>) {
+        let area = popup_area(ctx.frame.area(), 60, 20);
+
+        ctx.frame.render_widget(Clear, area);
+
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(3)])
+            .split(area);
+
+        let title = Paragraph::new("Add URL to Library").style(Style::default().fg(Color::Cyan));
+        ctx.frame.render_widget(title, chunks[0]);
+
+        let input_text = format!("{}█", self.input);
+        let input = Paragraph::new(input_text).block(
+            Block::default()
+                .title("URL")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        );
+        ctx.frame.render_widget(input, chunks[1]);
     }
 }
 

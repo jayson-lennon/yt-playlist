@@ -8,6 +8,7 @@ use ratatui::{
 
 use super::component::Component;
 use super::event::EventResult;
+use super::render::{Render, RenderContext};
 
 /// Filter state for searching/filtering items in a pane.
 ///
@@ -83,6 +84,19 @@ impl Filter {
                 .add_modifier(Modifier::BOLD),
         );
         frame.render_widget(footer, area);
+    }
+}
+
+impl Render for Filter {
+    fn render(&self, ctx: &mut RenderContext<'_, '_>) {
+        let filter_text = format!("Filter: {}█", self.input);
+        let footer = Paragraph::new(filter_text).style(
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
+        ctx.frame.render_widget(footer, ctx.area);
     }
 }
 

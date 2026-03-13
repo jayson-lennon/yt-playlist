@@ -9,6 +9,7 @@ use ratatui::{
 use super::common::PlaylistItem;
 use super::component::Component;
 use super::event::EventResult;
+use super::render::{Render, RenderContext};
 
 /// Rename mode state for editing item aliases.
 ///
@@ -105,6 +106,46 @@ impl Rename {
                 .border_style(Style::default().fg(Color::Yellow)),
         );
         frame.render_widget(input, chunks[1]);
+    }
+}
+
+impl Render for Rename {
+    fn render(&self, ctx: &mut RenderContext<'_, '_>) {
+        let area = popup_area(ctx.frame.area(), 50, 20);
+        let selected_item = ctx.tui_state.get_selected_item();
+
+        ctx.frame.render_widget(Clear, area);
+
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(3)])
+            .split(area);
+
+        let filename = selected_item.map_or_else(
+            || "Unknown".to_string(),
+            |item| {
+                if item.is_virtual || item.path.is_url() {
+                    item.path.to_string_lossy().into_owned()
+                } else {
+                    item.path.file_stem().map_or_else(
+                        || item.path.to_string_lossy().into_owned(),
+                        std::string::ToString::to_string,
+                    )
+                }
+            },
+        );
+
+        let title = Paragraph::new(filename).style(Style::default().fg(Color::Cyan));
+        ctx.frame.render_widget(title, chunks[0]);
+
+        let input_text = format!("{}█", self.input);
+        let input = Paragraph::new(input_text).block(
+            Block::default()
+                .title("Alias")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        );
+        ctx.frame.render_widget(input, chunks[1]);
     }
 }
 
