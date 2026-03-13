@@ -28,7 +28,8 @@ fn given_real_file(world: &mut AliasDeletionWorld, filename: String) {
 async fn given_file_has_alias(world: &mut AliasDeletionWorld, path: String, alias: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path()).expect("failed to canonicalize workspace");
+    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path())
+        .expect("failed to canonicalize workspace");
 
     execute(
         &world.inner.services,
@@ -46,7 +47,8 @@ async fn given_file_has_alias(world: &mut AliasDeletionWorld, path: String, alia
 async fn when_remove_alias(world: &mut AliasDeletionWorld, path: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path()).expect("failed to canonicalize workspace");
+    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path())
+        .expect("failed to canonicalize workspace");
 
     execute(
         &world.inner.services,
@@ -63,7 +65,8 @@ async fn when_remove_alias(world: &mut AliasDeletionWorld, path: String) {
 async fn then_file_has_no_alias(world: &mut AliasDeletionWorld, path: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path()).expect("failed to canonicalize workspace");
+    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path())
+        .expect("failed to canonicalize workspace");
 
     let alias = world
         .inner
@@ -75,9 +78,7 @@ async fn then_file_has_no_alias(world: &mut AliasDeletionWorld, path: String) {
 
     assert!(
         alias.is_none(),
-        "expected file '{}' to have no alias, but found: '{:?}'",
-        path,
-        alias
+        "expected file '{path}' to have no alias, but found: '{alias:?}'"
     );
 }
 

@@ -2,8 +2,8 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, RwLock,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -71,7 +71,10 @@ impl FakeStorageBackend {
     fn resolve_alias_internal(&self, file_path: &PathBuf, workspace_path: &Path) -> Option<String> {
         let data = self.data.read().unwrap();
 
-        if let Some((alias, _)) = data.aliases.get(&(file_path.clone(), workspace_path.to_path_buf())) {
+        if let Some((alias, _)) = data
+            .aliases
+            .get(&(file_path.clone(), workspace_path.to_path_buf()))
+        {
             return Some(alias.clone());
         }
 
@@ -96,7 +99,10 @@ impl FakeStorageBackend {
     pub fn get_playlist(&self, workspace_id: i64) -> Option<Vec<ItemPath>> {
         let data = self.data.read().unwrap();
         data.playlists.get(&workspace_id).map(|paths| {
-            paths.iter().map(|p| pathbuf_to_item_path(p.clone())).collect()
+            paths
+                .iter()
+                .map(|p| pathbuf_to_item_path(p.clone()))
+                .collect()
         })
     }
 
@@ -115,11 +121,12 @@ impl FakeStorageBackend {
     }
 
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_alias(&self, file_path: &CanonicalPath, workspace_path: &CanonicalPath) -> Option<String> {
-        self.resolve_alias_internal(
-            &file_path.as_path().to_path_buf(),
-            workspace_path.as_path(),
-        )
+    pub fn get_alias(
+        &self,
+        file_path: &CanonicalPath,
+        workspace_path: &CanonicalPath,
+    ) -> Option<String> {
+        self.resolve_alias_internal(&file_path.as_path().to_path_buf(), workspace_path.as_path())
     }
 }
 
@@ -135,14 +142,21 @@ impl PlaylistStorage for FakeStorageBackend {
         "fake"
     }
 
-    async fn load(&self, working_directory: &CanonicalPath) -> Result<PlaylistData, Report<IoError>> {
+    async fn load(
+        &self,
+        working_directory: &CanonicalPath,
+    ) -> Result<PlaylistData, Report<IoError>> {
         self.load_called.fetch_add(1, Ordering::SeqCst);
 
         let workspace_id = self.get_or_create_workspace(working_directory);
 
         let data = self.data.read().unwrap();
 
-        let playlist_paths = data.playlists.get(&workspace_id).cloned().unwrap_or_default();
+        let playlist_paths = data
+            .playlists
+            .get(&workspace_id)
+            .cloned()
+            .unwrap_or_default();
         let playlist: Vec<ItemPath> = playlist_paths
             .iter()
             .map(|p| pathbuf_to_item_path(p.clone()))
@@ -186,11 +200,7 @@ impl PlaylistStorage for FakeStorageBackend {
 
         let mut storage = self.data.write().unwrap();
 
-        let playlist_paths: Vec<PathBuf> = data
-            .playlist
-            .iter()
-            .map(item_path_to_pathbuf)
-            .collect();
+        let playlist_paths: Vec<PathBuf> = data.playlist.iter().map(item_path_to_pathbuf).collect();
         storage.playlists.insert(workspace_id, playlist_paths);
 
         for (item_path, metadata) in &data.files {
@@ -212,7 +222,10 @@ impl PlaylistStorage for FakeStorageBackend {
     ) -> Result<(), Report<IoError>> {
         let mut data = self.data.write().unwrap();
         data.aliases.insert(
-            (file_path.as_path().to_path_buf(), workspace.as_path().to_path_buf()),
+            (
+                file_path.as_path().to_path_buf(),
+                workspace.as_path().to_path_buf(),
+            ),
             (alias.to_string(), Timestamp::now()),
         );
         Ok(())
@@ -224,7 +237,10 @@ impl PlaylistStorage for FakeStorageBackend {
         workspace: &CanonicalPath,
     ) -> Result<(), Report<IoError>> {
         let mut data = self.data.write().unwrap();
-        data.aliases.remove(&(file_path.as_path().to_path_buf(), workspace.as_path().to_path_buf()));
+        data.aliases.remove(&(
+            file_path.as_path().to_path_buf(),
+            workspace.as_path().to_path_buf(),
+        ));
         Ok(())
     }
 
@@ -233,10 +249,7 @@ impl PlaylistStorage for FakeStorageBackend {
         file_path: &CanonicalPath,
         workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>> {
-        Ok(self.resolve_alias_internal(
-            &file_path.as_path().to_path_buf(),
-            workspace.as_path(),
-        ))
+        Ok(self.resolve_alias_internal(&file_path.as_path().to_path_buf(), workspace.as_path()))
     }
 }
 
@@ -248,7 +261,9 @@ mod tests {
 
     fn item_path(path: impl Into<PathBuf>) -> ItemPath {
         let path = path.into();
-        if path.to_string_lossy().starts_with("http://") || path.to_string_lossy().starts_with("https://") {
+        if path.to_string_lossy().starts_with("http://")
+            || path.to_string_lossy().starts_with("https://")
+        {
             ItemPath::Url(path.to_string_lossy().to_string())
         } else {
             ItemPath::File(CanonicalPath::new(path))
@@ -281,13 +296,17 @@ mod tests {
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
             playlist: vec![file1.clone()],
-            files: [(file1.clone(), create_test_metadata())].into_iter().collect(),
+            files: [(file1.clone(), create_test_metadata())]
+                .into_iter()
+                .collect(),
         };
 
         let data2 = PlaylistData {
             working_directory: workspace2.clone(),
             playlist: vec![file2.clone()],
-            files: [(file2.clone(), create_test_metadata())].into_iter().collect(),
+            files: [(file2.clone(), create_test_metadata())]
+                .into_iter()
+                .collect(),
         };
 
         backend.save(&data1).await.unwrap();
@@ -317,11 +336,17 @@ mod tests {
         {
             let mut data = backend.data.write().unwrap();
             data.aliases.insert(
-                (file.as_path().to_path_buf(), workspace1.as_path().to_path_buf()),
+                (
+                    file.as_path().to_path_buf(),
+                    workspace1.as_path().to_path_buf(),
+                ),
                 ("alias_ws1".to_string(), Timestamp::now()),
             );
             data.aliases.insert(
-                (file.as_path().to_path_buf(), workspace2.as_path().to_path_buf()),
+                (
+                    file.as_path().to_path_buf(),
+                    workspace2.as_path().to_path_buf(),
+                ),
                 ("alias_ws2".to_string(), Timestamp::now()),
             );
         }
@@ -348,16 +373,25 @@ mod tests {
         {
             let mut data = backend.data.write().unwrap();
             data.aliases.insert(
-                (file.as_path().to_path_buf(), workspace1.as_path().to_path_buf()),
+                (
+                    file.as_path().to_path_buf(),
+                    workspace1.as_path().to_path_buf(),
+                ),
                 ("older_alias".to_string(), ts1),
             );
             data.aliases.insert(
-                (file.as_path().to_path_buf(), PathBuf::from("/other_workspace")),
+                (
+                    file.as_path().to_path_buf(),
+                    PathBuf::from("/other_workspace"),
+                ),
                 ("newer_alias".to_string(), ts2),
             );
         }
 
-        let alias = backend.resolve_alias(&file, &unknown_workspace).await.unwrap();
+        let alias = backend
+            .resolve_alias(&file, &unknown_workspace)
+            .await
+            .unwrap();
         assert_eq!(alias, Some("newer_alias".to_string()));
     }
 
@@ -372,7 +406,9 @@ mod tests {
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: vec![file.clone()],
-            files: [(file.clone(), create_test_metadata())].into_iter().collect(),
+            files: [(file.clone(), create_test_metadata())]
+                .into_iter()
+                .collect(),
         };
         backend.save(&data).await.unwrap();
 
@@ -400,23 +436,31 @@ mod tests {
             working_directory: workspace.clone(),
             playlist: vec![regular_file.clone(), virtual_file.clone()],
             files: [
-                (regular_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(180)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
-                }),
-                (virtual_file.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: true,
-                    deleted: false,
-                    mime_type: Some("application/x-mpegURL".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    regular_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(180)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    virtual_file.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: true,
+                        deleted: false,
+                        mime_type: Some("application/x-mpegURL".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         backend.save(&data).await.unwrap();
@@ -441,7 +485,9 @@ mod tests {
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: vec![file.clone()],
-            files: [(file.clone(), original_metadata.clone())].into_iter().collect(),
+            files: [(file.clone(), original_metadata.clone())]
+                .into_iter()
+                .collect(),
         };
 
         backend.save(&data).await.unwrap();
@@ -489,13 +535,16 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
         let files: Vec<ItemPath> = (0..5)
-            .map(|i| item_path(format!("/workspace/file{}.mp3", i)))
+            .map(|i| item_path(format!("/workspace/file{i}.mp3")))
             .collect();
 
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: files.clone(),
-            files: files.iter().map(|f| (f.clone(), create_test_metadata())).collect(),
+            files: files
+                .iter()
+                .map(|f| (f.clone(), create_test_metadata()))
+                .collect(),
         };
 
         backend.save(&data).await.unwrap();
@@ -529,10 +578,7 @@ mod tests {
             .await
             .unwrap();
 
-        let alias = backend
-            .resolve_alias(&file, &workspace)
-            .await
-            .unwrap();
+        let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
         assert_eq!(alias, Some("My File".to_string()));
     }
 

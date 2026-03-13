@@ -53,13 +53,12 @@ impl SqliteStorage {
             return Ok(id);
         }
 
-        let id = sqlx::query_scalar::<_, i64>(
-            "INSERT INTO workspaces (path) VALUES (?) RETURNING id",
-        )
-        .bind(path_str.as_ref())
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|_| Report::new(IoError))?;
+        let id =
+            sqlx::query_scalar::<_, i64>("INSERT INTO workspaces (path) VALUES (?) RETURNING id")
+                .bind(path_str.as_ref())
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|_| Report::new(IoError))?;
 
         Ok(id)
     }
@@ -88,13 +87,12 @@ impl SqliteStorage {
             return Ok(id);
         }
 
-        let id = sqlx::query_scalar::<_, i64>(
-            "INSERT INTO file_paths (path) VALUES (?) RETURNING id",
-        )
-        .bind(path_str.as_ref())
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|_| Report::new(IoError))?;
+        let id =
+            sqlx::query_scalar::<_, i64>("INSERT INTO file_paths (path) VALUES (?) RETURNING id")
+                .bind(path_str.as_ref())
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|_| Report::new(IoError))?;
 
         Ok(id)
     }
@@ -181,15 +179,17 @@ impl SqliteStorage {
         Ok(())
     }
 
-    async fn upsert_virtual_file(&self, file_path_id: i64, is_virtual: bool) -> Result<(), Report<IoError>> {
+    async fn upsert_virtual_file(
+        &self,
+        file_path_id: i64,
+        is_virtual: bool,
+    ) -> Result<(), Report<IoError>> {
         if is_virtual {
-            sqlx::query(
-                "INSERT OR IGNORE INTO virtual_files (file_path_id) VALUES (?)",
-            )
-            .bind(file_path_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|_| Report::new(IoError))?;
+            sqlx::query("INSERT OR IGNORE INTO virtual_files (file_path_id) VALUES (?)")
+                .bind(file_path_id)
+                .execute(&self.pool)
+                .await
+                .map_err(|_| Report::new(IoError))?;
         } else {
             sqlx::query("DELETE FROM virtual_files WHERE file_path_id = ?")
                 .bind(file_path_id)
@@ -230,13 +230,12 @@ impl SqliteStorage {
     }
 
     async fn is_virtual_file(&self, file_path_id: i64) -> Result<bool, Report<IoError>> {
-        let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT 1 FROM virtual_files WHERE file_path_id = ?",
-        )
-        .bind(file_path_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|_| Report::new(IoError))?;
+        let exists =
+            sqlx::query_scalar::<_, i64>("SELECT 1 FROM virtual_files WHERE file_path_id = ?")
+                .bind(file_path_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|_| Report::new(IoError))?;
 
         Ok(exists.is_some())
     }
@@ -290,7 +289,10 @@ impl PlaylistStorage for SqliteStorage {
         "sqlite"
     }
 
-    async fn load(&self, working_directory: &CanonicalPath) -> Result<PlaylistData, Report<IoError>> {
+    async fn load(
+        &self,
+        working_directory: &CanonicalPath,
+    ) -> Result<PlaylistData, Report<IoError>> {
         let Some(workspace_id) = self.get_workspace(working_directory.as_path()).await? else {
             return Ok(PlaylistData {
                 working_directory: working_directory.clone(),
@@ -360,7 +362,9 @@ impl PlaylistStorage for SqliteStorage {
     }
 
     async fn save(&self, data: &PlaylistData) -> Result<(), Report<IoError>> {
-        let workspace_id = self.get_or_create_workspace(data.working_directory.as_path()).await?;
+        let workspace_id = self
+            .get_or_create_workspace(data.working_directory.as_path())
+            .await?;
 
         let mut file_path_ids: Vec<(PathBuf, i64)> = Vec::new();
         for item_path in &data.playlist {
@@ -369,11 +373,7 @@ impl PlaylistStorage for SqliteStorage {
             file_path_ids.push((path, file_path_id));
         }
 
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|_| Report::new(IoError))?;
+        let mut tx = self.pool.begin().await.map_err(|_| Report::new(IoError))?;
 
         sqlx::query("DELETE FROM playlist_items WHERE workspace_id = ?")
             .bind(workspace_id)
@@ -401,7 +401,8 @@ impl PlaylistStorage for SqliteStorage {
             let path = item_path_to_path(item_path);
             let file_path_id = self.get_or_create_file_path(&path).await?;
             self.upsert_file_metadata(file_path_id, metadata).await?;
-            self.upsert_virtual_file(file_path_id, metadata.is_virtual).await?;
+            self.upsert_virtual_file(file_path_id, metadata.is_virtual)
+                .await?;
         }
 
         Ok(())
@@ -415,7 +416,8 @@ impl PlaylistStorage for SqliteStorage {
     ) -> Result<(), Report<IoError>> {
         let file_path_id = self.get_or_create_file_path(file_path.as_path()).await?;
         let workspace_id = self.get_or_create_workspace(workspace.as_path()).await?;
-        self.upsert_alias_by_id(file_path_id, workspace_id, alias).await
+        self.upsert_alias_by_id(file_path_id, workspace_id, alias)
+            .await
     }
 
     async fn delete_alias(
@@ -472,7 +474,9 @@ mod tests {
 
     fn item_path(path: impl Into<PathBuf>) -> ItemPath {
         let path = path.into();
-        if path.to_string_lossy().starts_with("http://") || path.to_string_lossy().starts_with("https://") {
+        if path.to_string_lossy().starts_with("http://")
+            || path.to_string_lossy().starts_with("https://")
+        {
             ItemPath::Url(path.to_string_lossy().to_string())
         } else {
             ItemPath::File(CanonicalPath::new(path))
@@ -512,31 +516,42 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![file1.clone(), file2.clone()],
             files: [
-                (file1.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(120)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-                (file2.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(240)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
-                }),
-                (non_playlist_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(300)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    file1.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(120)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    file2.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(240)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    non_playlist_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(300)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -572,23 +587,31 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![virtual_file.clone()],
             files: [
-                (virtual_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(60)),
-                    is_virtual: true,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-                (non_playlist_virtual.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(60)),
-                    is_virtual: true,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    virtual_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(60)),
+                        is_virtual: true,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    non_playlist_virtual.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(60)),
+                        is_virtual: true,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -616,23 +639,31 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![file.clone()],
             files: [
-                (file.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: true,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
-                }),
-                (non_playlist_file.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: true,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    file.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: true,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    non_playlist_file.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: true,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -653,8 +684,14 @@ mod tests {
         let workspace2 = CanonicalPath::new(PathBuf::from("/workspace2"));
         let file = CanonicalPath::new(PathBuf::from("/shared/file.mp4"));
 
-        storage.upsert_alias(&file, &workspace1, "Workspace1 Alias").await.unwrap();
-        storage.upsert_alias(&file, &workspace2, "Workspace2 Alias").await.unwrap();
+        storage
+            .upsert_alias(&file, &workspace1, "Workspace1 Alias")
+            .await
+            .unwrap();
+        storage
+            .upsert_alias(&file, &workspace2, "Workspace2 Alias")
+            .await
+            .unwrap();
 
         let alias_ws1 = storage.resolve_alias(&file, &workspace1).await.unwrap();
         assert_eq!(alias_ws1, Some("Workspace1 Alias".to_string()));
@@ -672,11 +709,17 @@ mod tests {
         let workspace3 = CanonicalPath::new(PathBuf::from("/workspace3"));
         let file = CanonicalPath::new(PathBuf::from("/shared/file.mp4"));
 
-        storage.upsert_alias(&file, &workspace1, "First Alias").await.unwrap();
+        storage
+            .upsert_alias(&file, &workspace1, "First Alias")
+            .await
+            .unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-        storage.upsert_alias(&file, &workspace2, "Second Alias").await.unwrap();
+        storage
+            .upsert_alias(&file, &workspace2, "Second Alias")
+            .await
+            .unwrap();
 
         let fallback = storage.resolve_alias(&file, &workspace3).await.unwrap();
         assert!(fallback.is_some());
@@ -693,19 +736,27 @@ mod tests {
         let data = PlaylistData {
             working_directory: working_dir.clone(),
             playlist: vec![file.clone()],
-            files: [(file.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(120)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: Some("video/mp4".to_string()),
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                file.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(120)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: Some("video/mp4".to_string()),
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
         storage.save(&data).await.unwrap();
 
         let file_canonical = CanonicalPath::new(working_dir.as_path().join("video.mp4"));
-        storage.upsert_alias(&file_canonical, &working_dir, "My Video").await.unwrap();
+        storage
+            .upsert_alias(&file_canonical, &working_dir, "My Video")
+            .await
+            .unwrap();
 
         let loaded = storage.load(&working_dir).await.unwrap();
         let meta = loaded.files.get(&file).unwrap();
@@ -720,7 +771,10 @@ mod tests {
         let file = CanonicalPath::new(PathBuf::from("/test/file.mp4"));
 
         // Given an alias exists
-        storage.upsert_alias(&file, &working_dir, "My Video").await.unwrap();
+        storage
+            .upsert_alias(&file, &working_dir, "My Video")
+            .await
+            .unwrap();
         let alias = storage.resolve_alias(&file, &working_dir).await.unwrap();
         assert_eq!(alias, Some("My Video".to_string()));
 
@@ -760,35 +814,51 @@ mod tests {
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
             playlist: vec![shared_file.clone()],
-            files: [(shared_file.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(100)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                shared_file.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(100)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         let data2 = PlaylistData {
             working_directory: workspace2.clone(),
             playlist: vec![shared_file.clone()],
-            files: [(shared_file.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(100)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                shared_file.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(100)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data1).await.unwrap();
         storage.save(&data2).await.unwrap();
 
         let shared_file_canonical = CanonicalPath::new(PathBuf::from("/shared/video.mp4"));
-        storage.upsert_alias(&shared_file_canonical, &workspace1, "WS1 Alias").await.unwrap();
-        storage.upsert_alias(&shared_file_canonical, &workspace2, "WS2 Alias").await.unwrap();
+        storage
+            .upsert_alias(&shared_file_canonical, &workspace1, "WS1 Alias")
+            .await
+            .unwrap();
+        storage
+            .upsert_alias(&shared_file_canonical, &workspace2, "WS2 Alias")
+            .await
+            .unwrap();
 
         let loaded1 = storage.load(&workspace1).await.unwrap();
         let loaded2 = storage.load(&workspace2).await.unwrap();
@@ -796,10 +866,16 @@ mod tests {
         let meta1 = loaded1.files.get(&shared_file).unwrap();
         let meta2 = loaded2.files.get(&shared_file).unwrap();
 
-        assert_eq!(meta1.alias, Some("WS1 Alias".to_string()), 
-            "Workspace1 should show its own alias");
-        assert_eq!(meta2.alias, Some("WS2 Alias".to_string()), 
-            "Workspace2 should show its own alias, not WS1's alias");
+        assert_eq!(
+            meta1.alias,
+            Some("WS1 Alias".to_string()),
+            "Workspace1 should show its own alias"
+        );
+        assert_eq!(
+            meta2.alias,
+            Some("WS2 Alias".to_string()),
+            "Workspace2 should show its own alias, not WS1's alias"
+        );
     }
 
     #[tokio::test]
@@ -816,50 +892,78 @@ mod tests {
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
             playlist: vec![shared_file.clone()],
-            files: [(shared_file.clone(), FileMetadata {
-                duration: None,
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                shared_file.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
         storage.save(&data1).await.unwrap();
 
         let data2 = PlaylistData {
             working_directory: workspace2.clone(),
             playlist: vec![shared_file.clone()],
-            files: [(shared_file.clone(), FileMetadata {
-                duration: None,
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                shared_file.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
         storage.save(&data2).await.unwrap();
 
         let shared_file_canonical = CanonicalPath::new(PathBuf::from("/shared/video.mp4"));
-        storage.upsert_alias(&shared_file_canonical, &workspace1, "Older Alias from WS1").await.unwrap();
-        
+        storage
+            .upsert_alias(&shared_file_canonical, &workspace1, "Older Alias from WS1")
+            .await
+            .unwrap();
+
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        
-        storage.upsert_alias(&shared_file_canonical, &workspace2, "Newer Alias from WS2").await.unwrap();
+
+        storage
+            .upsert_alias(&shared_file_canonical, &workspace2, "Newer Alias from WS2")
+            .await
+            .unwrap();
 
         let loaded1 = storage.load(&workspace1).await.unwrap();
         let meta1 = loaded1.files.get(&shared_file).unwrap();
-        assert_eq!(meta1.alias, Some("Older Alias from WS1".to_string()),
-            "Workspace1 should show its own alias even though workspace2's alias is newer");
+        assert_eq!(
+            meta1.alias,
+            Some("Older Alias from WS1".to_string()),
+            "Workspace1 should show its own alias even though workspace2's alias is newer"
+        );
 
         let loaded2 = storage.load(&workspace2).await.unwrap();
         let meta2 = loaded2.files.get(&shared_file).unwrap();
-        assert_eq!(meta2.alias, Some("Newer Alias from WS2".to_string()),
-            "Workspace2 should show its own alias");
+        assert_eq!(
+            meta2.alias,
+            Some("Newer Alias from WS2".to_string()),
+            "Workspace2 should show its own alias"
+        );
 
-        let direct1 = storage.resolve_alias(&shared_file_canonical, &workspace1).await.unwrap();
-        let direct2 = storage.resolve_alias(&shared_file_canonical, &workspace2).await.unwrap();
+        let direct1 = storage
+            .resolve_alias(&shared_file_canonical, &workspace1)
+            .await
+            .unwrap();
+        let direct2 = storage
+            .resolve_alias(&shared_file_canonical, &workspace2)
+            .await
+            .unwrap();
         assert_eq!(direct1, Some("Older Alias from WS1".to_string()));
         assert_eq!(direct2, Some("Newer Alias from WS2".to_string()));
     }
@@ -879,27 +983,37 @@ mod tests {
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
             playlist: vec![file1.clone()],
-            files: [(file1.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(100)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                file1.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(100)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         let data2 = PlaylistData {
             working_directory: workspace2.clone(),
             playlist: vec![file2.clone()],
-            files: [(file2.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(200)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                file2.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(200)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data1).await.unwrap();
@@ -929,23 +1043,31 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![file1.clone(), file2.clone()],
             files: [
-                (file1.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
-                }),
-                (file2.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    file1.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    file2.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data1).await.unwrap();
@@ -953,14 +1075,19 @@ mod tests {
         let data2 = PlaylistData {
             working_directory: working_dir.clone(),
             playlist: vec![file3.clone()],
-            files: [(file3.clone(), FileMetadata {
-                duration: None,
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                file3.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data2).await.unwrap();
@@ -977,22 +1104,28 @@ mod tests {
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
         let files: Vec<ItemPath> = (0..10)
-            .map(|i| item_path(format!("/file{}.mp4", i)))
+            .map(|i| item_path(format!("/file{i}.mp4")))
             .collect();
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
             playlist: files.clone(),
-            files: files.iter().map(|path| {
-                (path.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: None,
-                    alias: None,
+            files: files
+                .iter()
+                .map(|path| {
+                    (
+                        path.clone(),
+                        FileMetadata {
+                            duration: None,
+                            is_virtual: false,
+                            deleted: false,
+                            mime_type: None,
+                            time_added: None,
+                            alias: None,
+                        },
+                    )
                 })
-            }).collect(),
+                .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -1000,7 +1133,7 @@ mod tests {
         let loaded = storage.load(&working_dir).await.unwrap();
         assert_eq!(loaded.playlist.len(), 10);
         for i in 0..10 {
-            assert_eq!(loaded.playlist[i], item_path(format!("/file{}.mp4", i)));
+            assert_eq!(loaded.playlist[i], item_path(format!("/file{i}.mp4")));
         }
     }
 
@@ -1019,23 +1152,31 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![file.clone()],
             files: [
-                (file.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: Some(timestamp),
-                    alias: None,
-                }),
-                (non_playlist_file.clone(), FileMetadata {
-                    duration: None,
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: None,
-                    time_added: Some(timestamp),
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    file.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: Some(timestamp),
+                        alias: None,
+                    },
+                ),
+                (
+                    non_playlist_file.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: Some(timestamp),
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -1060,7 +1201,10 @@ mod tests {
 
         let file = PathBuf::from("/test/file.mp4");
         let file_id = storage.get_or_create_file_path(&file).await.unwrap();
-        let workspace_id = storage.get_or_create_workspace(Path::new("/test")).await.unwrap();
+        let workspace_id = storage
+            .get_or_create_workspace(Path::new("/test"))
+            .await
+            .unwrap();
 
         let meta1 = FileMetadata {
             duration: Some(Duration::from_secs(100)),
@@ -1073,7 +1217,10 @@ mod tests {
 
         storage.upsert_file_metadata(file_id, &meta1).await.unwrap();
 
-        let loaded1 = storage.get_file_metadata(file_id, workspace_id).await.unwrap();
+        let loaded1 = storage
+            .get_file_metadata(file_id, workspace_id)
+            .await
+            .unwrap();
         assert_eq!(loaded1.duration, Some(Duration::from_secs(100)));
 
         let meta2 = FileMetadata {
@@ -1087,7 +1234,10 @@ mod tests {
 
         storage.upsert_file_metadata(file_id, &meta2).await.unwrap();
 
-        let loaded2 = storage.get_file_metadata(file_id, workspace_id).await.unwrap();
+        let loaded2 = storage
+            .get_file_metadata(file_id, workspace_id)
+            .await
+            .unwrap();
         assert_eq!(loaded2.duration, Some(Duration::from_secs(200)));
         assert!(loaded2.deleted);
         assert!(loaded2.mime_type.is_none());
@@ -1118,14 +1268,19 @@ mod tests {
         let data = PlaylistData {
             working_directory: working_dir.clone(),
             playlist: vec![file.clone()],
-            files: [(file.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(120)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: Some("video/mp4".to_string()),
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                file.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(120)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: Some("video/mp4".to_string()),
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -1155,23 +1310,31 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![playlist_file.clone()],
             files: [
-                (playlist_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(60)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-                (library_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(180)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: None,
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    playlist_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(60)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    library_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(180)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -1201,31 +1364,42 @@ mod tests {
             working_directory: working_dir.clone(),
             playlist: vec![playlist_file.clone(), virtual_file.clone()],
             files: [
-                (playlist_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(300)),
-                    is_virtual: false,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: Some(timestamp),
-                    alias: None,
-                }),
-                (library_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(450)),
-                    is_virtual: false,
-                    deleted: true,
-                    mime_type: Some("video/x-matroska".to_string()),
-                    time_added: Some(timestamp),
-                    alias: None,
-                }),
-                (virtual_file.clone(), FileMetadata {
-                    duration: Some(Duration::from_secs(600)),
-                    is_virtual: true,
-                    deleted: false,
-                    mime_type: Some("video/mp4".to_string()),
-                    time_added: Some(timestamp),
-                    alias: None,
-                }),
-            ].into_iter().collect(),
+                (
+                    playlist_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(300)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: Some(timestamp),
+                        alias: None,
+                    },
+                ),
+                (
+                    library_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(450)),
+                        is_virtual: false,
+                        deleted: true,
+                        mime_type: Some("video/x-matroska".to_string()),
+                        time_added: Some(timestamp),
+                        alias: None,
+                    },
+                ),
+                (
+                    virtual_file.clone(),
+                    FileMetadata {
+                        duration: Some(Duration::from_secs(600)),
+                        is_virtual: true,
+                        deleted: false,
+                        mime_type: Some("video/mp4".to_string()),
+                        time_added: Some(timestamp),
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         storage.save(&data).await.unwrap();
@@ -1319,27 +1493,38 @@ mod tests {
 
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        
+
         let file = item_path("/shared/video.mp4");
 
         let data = PlaylistData {
             working_directory: workspace.clone(),
             playlist: vec![file.clone()],
-            files: [(file.clone(), FileMetadata {
-                duration: Some(Duration::from_secs(100)),
-                is_virtual: false,
-                deleted: false,
-                mime_type: None,
-                time_added: None,
-                alias: None,
-            })].into_iter().collect(),
+            files: [(
+                file.clone(),
+                FileMetadata {
+                    duration: Some(Duration::from_secs(100)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
         storage.save(&data).await.unwrap();
 
         let file_canonical = CanonicalPath::new(PathBuf::from("/shared/video.mp4"));
-        storage.upsert_alias(&file_canonical, &workspace, "My Alias").await.unwrap();
+        storage
+            .upsert_alias(&file_canonical, &workspace, "My Alias")
+            .await
+            .unwrap();
 
-        let alias_same = storage.resolve_alias(&file_canonical, &workspace).await.unwrap();
+        let alias_same = storage
+            .resolve_alias(&file_canonical, &workspace)
+            .await
+            .unwrap();
         assert_eq!(alias_same, Some("My Alias".to_string()));
 
         let loaded = storage.load(&workspace).await.unwrap();
