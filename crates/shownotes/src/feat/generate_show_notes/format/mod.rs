@@ -75,6 +75,7 @@ impl Default for FormatRegistry {
     }
 }
 
+#[allow(dead_code)]
 pub fn extract_filename(path: &str) -> String {
     Path::new(path)
         .file_name()

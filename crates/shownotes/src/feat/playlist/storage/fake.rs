@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, RwLock,
@@ -68,10 +68,10 @@ impl FakeStorageBackend {
         id
     }
 
-    fn resolve_alias_internal(&self, file_path: &PathBuf, workspace_path: &PathBuf) -> Option<String> {
+    fn resolve_alias_internal(&self, file_path: &PathBuf, workspace_path: &Path) -> Option<String> {
         let data = self.data.read().unwrap();
 
-        if let Some((alias, _)) = data.aliases.get(&(file_path.clone(), workspace_path.clone())) {
+        if let Some((alias, _)) = data.aliases.get(&(file_path.clone(), workspace_path.to_path_buf())) {
             return Some(alias.clone());
         }
 
@@ -118,7 +118,7 @@ impl FakeStorageBackend {
     pub fn get_alias(&self, file_path: &CanonicalPath, workspace_path: &CanonicalPath) -> Option<String> {
         self.resolve_alias_internal(
             &file_path.as_path().to_path_buf(),
-            &workspace_path.as_path().to_path_buf(),
+            workspace_path.as_path(),
         )
     }
 }
@@ -235,7 +235,7 @@ impl PlaylistStorage for FakeStorageBackend {
     ) -> Result<Option<String>, Report<IoError>> {
         Ok(self.resolve_alias_internal(
             &file_path.as_path().to_path_buf(),
-            &workspace.as_path().to_path_buf(),
+            workspace.as_path(),
         ))
     }
 }

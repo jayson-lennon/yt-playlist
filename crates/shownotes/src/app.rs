@@ -364,7 +364,7 @@ impl App {
                                                 .await;
                                                 services
                                                     .storage
-                                                    .resolve_alias(&file_path, &workspace)
+                                                    .resolve_alias(file_path, &workspace)
                                                     .await
                                                     .ok()
                                                     .flatten()
@@ -683,7 +683,7 @@ impl App {
                     .as_file()
                     .is_some_and(|p| self.config.is_video_or_audio(p.as_path()))
             })
-            .filter_map(|item| item.path.as_file().map(|p| p.clone()))
+            .filter_map(|item| item.path.as_file().cloned())
             .collect();
 
         if paths.is_empty() {

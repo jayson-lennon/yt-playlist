@@ -102,7 +102,7 @@ pub fn get_display_name(item: &PlaylistItem) -> String {
     item.alias.clone().unwrap_or_else(|| {
         item.path.file_stem().map_or_else(
             || item.path.to_string_lossy().into_owned(),
-            |s| s.to_string(),
+            std::string::ToString::to_string,
         )
     })
 }
@@ -139,7 +139,7 @@ pub fn format_item_line(item: &PlaylistItem, display_mode: ItemDisplayMode) -> S
     } else {
         item.path.file_stem().map_or_else(
             || item.path.to_string_lossy().into_owned(),
-            |s| s.to_string(),
+            std::string::ToString::to_string,
         )
     };
 

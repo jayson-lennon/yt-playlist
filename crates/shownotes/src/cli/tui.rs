@@ -113,6 +113,8 @@ pub fn run_tui(
     library_path: PathBuf,
     rt: tokio::runtime::Runtime,
 ) -> Result<(), Report<RunError>> {
+    use crate::tui::ItemPath;
+
     let config = load().change_context(RunError)?;
 
     let handle = rt.handle().clone();
@@ -145,7 +147,6 @@ pub fn run_tui(
     )
     .change_context(RunError)?;
 
-    use crate::tui::ItemPath;
     let files: std::collections::HashMap<ItemPath, FileMetadata> = result
         .files
         .into_iter()

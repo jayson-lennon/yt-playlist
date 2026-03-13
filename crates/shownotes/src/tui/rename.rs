@@ -78,7 +78,7 @@ impl Rename {
                 } else {
                     item.path.file_stem().map_or_else(
                         || item.path.to_string_lossy().into_owned(),
-                        |s| s.to_string(),
+                        std::string::ToString::to_string,
                     )
                 }
             },

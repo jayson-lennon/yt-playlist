@@ -165,12 +165,8 @@ impl LibraryPane {
             .enumerate()
             .map(|(display_idx, (_original_idx, item))| {
                 let is_selected = display_idx == self.selected && is_focused && !is_filtering;
-                let file_missing = !item
-                    .path
-                    .as_file()
-                    .map(|p| p.as_path().exists())
-                    .unwrap_or(false)
-                    && !item.is_virtual;
+                let file_missing =
+                    !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
                 let style = if is_selected {
                     if file_missing {
                         Style::default()
