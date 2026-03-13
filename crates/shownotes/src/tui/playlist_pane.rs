@@ -1,3 +1,5 @@
+use crossterm::event::{KeyCode, KeyEvent};
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -8,6 +10,8 @@ use ratatui::{
 use super::common::{
     filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, PlaylistItem,
 };
+use super::component::Component;
+use super::event::EventResult;
 use super::filter::Filter;
 
 /// The playlist pane showing queued media files.
@@ -233,6 +237,38 @@ impl PlaylistPane {
 impl Default for PlaylistPane {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Component for PlaylistPane {
+    fn is_active(&self) -> bool {
+        true
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) -> EventResult {
+        if self.filter.is_active() {
+            return self.filter.handle_key(key);
+        }
+
+        match key.code {
+            KeyCode::Char('j') => {
+                self.move_down();
+                EventResult::Consumed
+            }
+            KeyCode::Char('k') => {
+                self.move_up();
+                EventResult::Consumed
+            }
+            KeyCode::Char('J') => {
+                self.reorder_down();
+                EventResult::Consumed
+            }
+            KeyCode::Char('K') => {
+                self.reorder_up();
+                EventResult::Consumed
+            }
+            _ => EventResult::Ignored,
+        }
     }
 }
 
@@ -654,5 +690,101 @@ mod tests {
 
         // Then it is empty.
         assert!(pane.items.is_empty());
+    }
+
+    #[test]
+    fn handle_key_delegates_to_filter_when_active() {
+        // Given a pane with active filter.
+        let mut pane = PlaylistPane::new();
+        pane.filter.start();
+        pane.filter.push_char('t');
+
+        // When handling a character key.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('e')));
+
+        // Then the filter handles it.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.filter.input(), "te");
+    }
+
+    #[test]
+    fn handle_key_j_moves_down() {
+        // Given a pane with 3 items, selection at index 0.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 0;
+
+        // When pressing 'j'.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('j')));
+
+        // Then selection moves down.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.selected, 1);
+    }
+
+    #[test]
+    fn handle_key_k_moves_up() {
+        // Given a pane with 3 items, selection at index 1.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 1;
+
+        // When pressing 'k'.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('k')));
+
+        // Then selection moves up.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn handle_key_j_reorder_down() {
+        // Given a pane with 3 items, first selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 0;
+
+        // When pressing 'J' (shift+j).
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('J')));
+
+        // Then item is reordered down.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.selected, 1);
+        assert_eq!(
+            pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
+    }
+
+    #[test]
+    fn handle_key_shift_k_reorder_up() {
+        // Given a pane with 3 items, middle selected.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 1;
+
+        // When pressing 'K' (shift+k).
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('K')));
+
+        // Then item is reordered up.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.selected, 0);
+        assert_eq!(
+            pane.items[0].path,
+            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+        );
+    }
+
+    #[test]
+    fn handle_key_returns_ignored_for_unhandled() {
+        // Given a pane.
+        let mut pane = PlaylistPane::new();
+        pane.items = vec![item("a.mp4")];
+
+        // When pressing an unhandled key.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('x')));
+
+        // Then the event is ignored.
+        assert_eq!(result, EventResult::Ignored);
     }
 }

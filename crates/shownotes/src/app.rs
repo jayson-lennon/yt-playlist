@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
-use crossterm::event::{Event, KeyCode};
+use crossterm::event::Event;
 use error_stack::Report;
 use marked_path::CanonicalPath;
 
 use crate::command::{Command, CommandError, CommandResult, execute};
 use crate::feat::config::Config;
-use crate::feat::keymap::{Action, Keymap};
+use crate::feat::keymap::{Action, Key, Keymap};
 use crate::feat::playlist::PlaylistData;
 use crate::services::Services;
-use crate::tui::{ItemDisplayMode, ItemPath, Pane, PlaylistItem, TuiState, get_mime_type};
+use crate::tui::{ComponentContext, EventResult, ItemDisplayMode, ItemPath, Pane, PlaylistItem, TuiState, get_mime_type};
 
 /// Holds pending actions that require forking from the TUI.
 ///
@@ -294,181 +294,103 @@ impl App {
         self.tui_state.refresh_library(entries);
     }
 
-    #[allow(clippy::too_many_lines)]
     pub fn handle_event(&mut self, event: Event) {
         if let Event::Key(key) = event {
             self.tui_state.status_message = None;
+
             if self.tui_state.which_key.active && !self.tui_state.which_key.is_pending() {
                 self.tui_state.which_key.dismiss();
             }
 
-            if self.tui_state.is_showing_error() {
-                self.tui_state.dismiss_error();
+            let ctx = ComponentContext {
+                keymap: &self.runtime.keymap,
+            };
+            let result = self.tui_state.handle_key(key, &ctx);
+
+            if let Some(action) = self.tui_state.which_key.take_action() {
+                self.execute_action(action);
                 return;
             }
 
-            if self.tui_state.is_filtering() {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.tui_state.cancel_filter();
-                    }
-                    KeyCode::Enter => {
-                        self.tui_state.submit_filter();
-                    }
-                    KeyCode::Backspace => {
-                        self.tui_state.pop_filter_char();
-                    }
-                    KeyCode::Char(c) => {
-                        self.tui_state.push_filter_char(c);
-                    }
-                    _ => {}
-                }
+            if let Some(new_alias) = self.tui_state.rename.take_submitted().flatten() {
+                self.handle_rename_submit(new_alias);
                 return;
             }
 
-            if self.tui_state.is_renaming() {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.tui_state.cancel_rename();
-                    }
-                    KeyCode::Enter => {
-                        if let Some((path, old_alias, new_alias)) = self.tui_state.submit_rename() {
-                            if old_alias != new_alias {
-                                let path = path.clone();
-                                let services = self.services.clone();
-                                let workspace = self.runtime.library_path.clone();
-                                let is_deletion = new_alias.is_none();
-                                let fallback_alias = self.tokio_runtime.block_on(async {
-                                    if let Some(file_path) = path.as_file() {
-                                        match new_alias {
-                                            Some(ref alias) => {
-                                                let _ = crate::command::execute(
-                                                    &services,
-                                                    crate::command::Command::AliasSet {
-                                                        path: file_path.clone(),
-                                                        workspace,
-                                                        alias: alias.clone(),
-                                                    },
-                                                )
-                                                .await;
-                                                None
-                                            }
-                                            None => {
-                                                let _ = crate::command::execute(
-                                                    &services,
-                                                    crate::command::Command::AliasRemove {
-                                                        path: file_path.clone(),
-                                                        workspace: workspace.clone(),
-                                                    },
-                                                )
-                                                .await;
-                                                services
-                                                    .storage
-                                                    .resolve_alias(file_path, &workspace)
-                                                    .await
-                                                    .ok()
-                                                    .flatten()
-                                            }
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                });
-                                if is_deletion {
-                                    if let Some(item) = self.tui_state.get_selected_item_mut() {
-                                        item.alias = fallback_alias;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    KeyCode::Backspace => {
-                        self.tui_state.pop_rename_char();
-                    }
-                    KeyCode::Char(c) => {
-                        self.tui_state.push_rename_char(c);
-                    }
-                    _ => {}
-                }
+            if let Some(url) = self.tui_state.url_input.take_submitted().flatten() {
+                self.handle_url_submit(url);
                 return;
             }
 
-            if self.tui_state.is_url_input() {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.tui_state.cancel_url_input();
-                    }
-                    KeyCode::Enter => {
-                        self.submit_url_input();
-                    }
-                    KeyCode::Backspace => {
-                        self.tui_state.pop_url_char();
-                    }
-                    KeyCode::Char(c) => {
-                        self.tui_state.push_url_char(c);
-                    }
-                    _ => {}
-                }
-                return;
-            }
-
-            if self.tui_state.which_key.is_pending() {
-                if let Some(key) = crate::feat::keymap::Key::from_keycode(key.code) {
-                    match key {
-                        crate::feat::keymap::Key::Esc => {
-                            self.tui_state.which_key.dismiss();
-                            self.tui_state.pending_keys.clear();
-                        }
-                        crate::feat::keymap::Key::Backspace => {
-                            self.tui_state.which_key.pop_key();
-                            self.tui_state.pending_keys.pop();
-                            if !self.tui_state.which_key.is_pending() {
-                                self.tui_state.which_key.dismiss();
-                            }
-                        }
-                        _ => {
-                            self.tui_state.pending_keys.push(key);
-                            if let Some(node) = self
-                                .runtime
-                                .keymap
-                                .get_node_at_path(&self.tui_state.pending_keys)
-                            {
-                                match node {
-                                    crate::feat::keymap::KeyNode::Leaf { action, .. } => {
-                                        self.tui_state.which_key.dismiss();
-                                        self.tui_state.pending_keys.clear();
-                                        self.execute_action(*action);
-                                    }
-                                    crate::feat::keymap::KeyNode::Branch { .. } => {
-                                        self.tui_state.which_key.push_key(key);
-                                    }
-                                }
-                            } else {
-                                self.tui_state.which_key.dismiss();
-                                self.tui_state.pending_keys.clear();
-                            }
-                        }
+            if result == EventResult::Ignored {
+                if let Some(key) = Key::from_keycode(key.code) {
+                    if self.runtime.keymap.is_prefix_key(key) {
+                        self.tui_state.which_key.push_key(key);
+                        return;
                     }
                 }
-                return;
-            }
 
-            if let Some(key) = crate::feat::keymap::Key::from_keycode(key.code) {
-                if self.runtime.keymap.is_prefix_key(key) {
-                    self.tui_state.pending_keys.push(key);
-                    self.tui_state.which_key.push_key(key);
-                    return;
-                }
-            }
-
-            if let Some(action) =
-                self.runtime
+                if let Some(action) = self
+                    .runtime
                     .keymap
                     .get_action(key.code, key.modifiers, self.tui_state.focused_pane)
-            {
-                self.execute_action(action);
+                {
+                    self.execute_action(action);
+                }
             }
         }
+    }
+
+    fn handle_rename_submit(&mut self, new_alias: String) {
+        if let Some(item) = self.tui_state.get_selected_item_mut() {
+            let old_alias = item.alias.clone();
+            item.alias = Some(new_alias.clone());
+
+            if old_alias.as_deref() != Some(&new_alias) {
+                let path = item.path.clone();
+                let services = self.services.clone();
+                let workspace = self.runtime.library_path.clone();
+                let is_deletion = false;
+
+                let fallback_alias = self.tokio_runtime.block_on(async {
+                    if let Some(file_path) = path.as_file() {
+                        let _ = crate::command::execute(
+                            &services,
+                            crate::command::Command::AliasSet {
+                                path: file_path.clone(),
+                                workspace,
+                                alias: new_alias,
+                            },
+                        )
+                        .await;
+                    }
+                    None::<String>
+                });
+
+                if is_deletion {
+                    if let Some(item) = self.tui_state.get_selected_item_mut() {
+                        item.alias = fallback_alias;
+                    }
+                }
+            }
+        }
+    }
+
+    fn handle_url_submit(&mut self, url: String) {
+        let item = PlaylistItem {
+            path: ItemPath::Url(url),
+            duration: None,
+            alias: None,
+            mime_type: Some("url".to_string()),
+            is_virtual: true,
+        };
+        self.tui_state.library_pane.items.push(item);
+        self.tui_state
+            .library_pane
+            .items
+            .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
+        self.save_playlist();
+        self.tui_state.status_message = Some("URL added to library".to_string());
     }
 
     fn execute_action(&mut self, action: Action) {
@@ -578,25 +500,6 @@ impl App {
                 self.tui_state.status_message =
                     Some("Only virtual entries (URLs) can be deleted.".to_string());
             }
-        }
-    }
-
-    fn submit_url_input(&mut self) {
-        if let Some(url) = self.tui_state.submit_url_input() {
-            let item = PlaylistItem {
-                path: ItemPath::Url(url),
-                duration: None,
-                alias: None,
-                mime_type: Some("url".to_string()),
-                is_virtual: true,
-            };
-            self.tui_state.library_pane.items.push(item);
-            self.tui_state
-                .library_pane
-                .items
-                .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-            self.save_playlist();
-            self.tui_state.status_message = Some("URL added to library".to_string());
         }
     }
 
@@ -739,7 +642,7 @@ impl App {
 mod tests {
     use std::sync::Arc;
 
-    use crossterm::event::KeyModifiers;
+    use crossterm::event::{KeyCode, KeyModifiers};
 
     use super::*;
     use crate::feat::FileLauncherService;
@@ -801,11 +704,6 @@ mod tests {
 
         fn focused_on(mut self, pane: Pane) -> Self {
             self.focused_pane = Some(pane);
-            self
-        }
-
-        fn storage_backend(mut self, backend: FakeStorageBackend) -> Self {
-            self.storage_backend = backend;
             self
         }
 
@@ -1390,10 +1288,6 @@ mod tests {
 
         app.handle_event(key_event('g'));
 
-        assert_eq!(
-            app.tui_state.pending_keys,
-            vec![crate::feat::keymap::Key::Char('g')]
-        );
         assert!(app.tui_state.which_key.active);
         assert_eq!(
             app.tui_state.which_key.pending_keys,
@@ -1416,7 +1310,7 @@ mod tests {
                 .unwrap()
                 .contains("MPV launched")
         );
-        assert!(app.tui_state.pending_keys.is_empty());
+        assert!(app.tui_state.which_key.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
 
@@ -1427,7 +1321,7 @@ mod tests {
 
         app.handle_event(key_event('x'));
 
-        assert!(app.tui_state.pending_keys.is_empty());
+        assert!(app.tui_state.which_key.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
 
@@ -1437,10 +1331,6 @@ mod tests {
 
         app.handle_event(key_event('a'));
 
-        assert_eq!(
-            app.tui_state.pending_keys,
-            vec![crate::feat::keymap::Key::Char('a')]
-        );
         assert!(app.tui_state.which_key.active);
         assert_eq!(
             app.tui_state.which_key.pending_keys,
@@ -1456,7 +1346,7 @@ mod tests {
         app.handle_event(key_event('u'));
 
         assert!(app.tui_state.is_url_input());
-        assert!(app.tui_state.pending_keys.is_empty());
+        assert!(app.tui_state.which_key.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
     }
 
@@ -1467,7 +1357,7 @@ mod tests {
 
         app.handle_event(key_event('x'));
 
-        assert!(app.tui_state.pending_keys.is_empty());
+        assert!(app.tui_state.which_key.pending_keys.is_empty());
         assert!(!app.tui_state.which_key.active);
         assert!(!app.tui_state.is_url_input());
     }

@@ -1,9 +1,13 @@
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     widgets::Paragraph,
     Frame,
 };
+
+use super::component::Component;
+use super::event::EventResult;
 
 /// Filter state for searching/filtering items in a pane.
 ///
@@ -79,6 +83,38 @@ impl Filter {
                 .add_modifier(Modifier::BOLD),
         );
         frame.render_widget(footer, area);
+    }
+}
+
+impl Component for Filter {
+    fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) -> EventResult {
+        if !self.active {
+            return EventResult::Ignored;
+        }
+
+        match key.code {
+            KeyCode::Esc => {
+                self.cancel();
+                EventResult::Consumed
+            }
+            KeyCode::Enter => {
+                self.submit();
+                EventResult::Consumed
+            }
+            KeyCode::Backspace => {
+                self.pop_char();
+                EventResult::Consumed
+            }
+            KeyCode::Char(c) => {
+                self.push_char(c);
+                EventResult::Consumed
+            }
+            _ => EventResult::Consumed,
+        }
     }
 }
 
@@ -298,5 +334,100 @@ mod tests {
         // And canceling restores it.
         filter.cancel();
         assert_eq!(filter.applied, Some("x".to_string()));
+    }
+
+    #[test]
+    fn handle_key_returns_ignored_when_inactive() {
+        // Given an inactive filter.
+        let mut filter = Filter::new();
+        let key = KeyEvent::from(KeyCode::Char('a'));
+
+        // When handling a key.
+        let result = filter.handle_key(key);
+
+        // Then the event is ignored.
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn handle_key_esc_cancels_filter() {
+        // Given an active filter.
+        let mut filter = Filter::new();
+        filter.start();
+        filter.push_char('t');
+        filter.push_char('e');
+        filter.push_char('s');
+        filter.push_char('t');
+
+        // When pressing Escape.
+        let result = filter.handle_key(KeyEvent::from(KeyCode::Esc));
+
+        // Then the filter is canceled.
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!filter.is_active());
+        assert!(filter.input.is_empty());
+    }
+
+    #[test]
+    fn handle_key_enter_submits_filter() {
+        // Given an active filter with input.
+        let mut filter = Filter::new();
+        filter.start();
+        filter.push_char('t');
+        filter.push_char('e');
+        filter.push_char('s');
+        filter.push_char('t');
+
+        // When pressing Enter.
+        let result = filter.handle_key(KeyEvent::from(KeyCode::Enter));
+
+        // Then the filter is submitted.
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!filter.is_active());
+        assert_eq!(filter.applied, Some("test".to_string()));
+    }
+
+    #[test]
+    fn handle_key_backspace_pops_char() {
+        // Given an active filter with input.
+        let mut filter = Filter::new();
+        filter.start();
+        filter.push_char('a');
+        filter.push_char('b');
+        filter.push_char('c');
+
+        // When pressing Backspace.
+        let result = filter.handle_key(KeyEvent::from(KeyCode::Backspace));
+
+        // Then the last character is removed.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(filter.input, "ab");
+    }
+
+    #[test]
+    fn handle_key_char_pushes_char() {
+        // Given an active filter.
+        let mut filter = Filter::new();
+        filter.start();
+
+        // When pressing a character key.
+        let result = filter.handle_key(KeyEvent::from(KeyCode::Char('x')));
+
+        // Then the character is added to input.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(filter.input, "x");
+    }
+
+    #[test]
+    fn handle_key_consumes_all_keys_when_active() {
+        // Given an active filter.
+        let mut filter = Filter::new();
+        filter.start();
+
+        // When pressing any key (like arrow keys).
+        let result = filter.handle_key(KeyEvent::from(KeyCode::Up));
+
+        // Then the event is consumed (not ignored).
+        assert_eq!(result, EventResult::Consumed);
     }
 }

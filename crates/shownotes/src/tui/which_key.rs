@@ -1,4 +1,4 @@
-use crate::feat::keymap::{Key, KeyCategory, Keymap, LeafBinding};
+use crossterm::event::KeyEvent;
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -7,6 +7,9 @@ use ratatui::{
     Frame,
 };
 
+use super::component::{Component, ComponentContext};
+use super::event::EventResult;
+use crate::feat::keymap::{Action, Key, KeyCategory, KeyNode, Keymap, LeafBinding};
 use crate::tui::Pane;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -45,6 +48,7 @@ pub struct WhichKey {
     pub active: bool,
     pub config: WhichKeyConfig,
     pub pending_keys: Vec<Key>,
+    pub pending_action: Option<Action>,
 }
 
 struct ColumnData<'a> {
@@ -87,6 +91,7 @@ impl WhichKey {
             active: false,
             config,
             pending_keys: Vec::new(),
+            pending_action: None,
         }
     }
 
@@ -97,6 +102,7 @@ impl WhichKey {
     pub fn dismiss(&mut self) {
         self.active = false;
         self.pending_keys.clear();
+        self.pending_action = None;
     }
 
     pub fn push_key(&mut self, key: Key) {
@@ -110,6 +116,10 @@ impl WhichKey {
 
     pub fn is_pending(&self) -> bool {
         !self.pending_keys.is_empty()
+    }
+
+    pub fn take_action(&mut self) -> Option<Action> {
+        self.pending_action.take()
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -436,5 +446,281 @@ impl WhichKey {
                 y += 1;
             }
         }
+    }
+}
+
+impl Component for WhichKey {
+    fn is_active(&self) -> bool {
+        self.active || self.is_pending()
+    }
+
+    fn handle_key_with_context(
+        &mut self,
+        key: KeyEvent,
+        ctx: &ComponentContext<'_>,
+    ) -> EventResult {
+        if !self.is_pending() {
+            return EventResult::Ignored;
+        }
+
+        let Some(key) = Key::from_keycode(key.code) else {
+            self.dismiss();
+            return EventResult::Consumed;
+        };
+
+        match key {
+            Key::Esc => {
+                self.dismiss();
+                EventResult::Consumed
+            }
+            Key::Backspace => {
+                self.pop_key();
+                if !self.is_pending() {
+                    self.dismiss();
+                }
+                EventResult::Consumed
+            }
+            _ => {
+                let mut path = self.pending_keys.clone();
+                path.push(key);
+
+                if let Some(node) = ctx.keymap.get_node_at_path(&path) {
+                    match node {
+                        KeyNode::Leaf { action, .. } => {
+                            self.dismiss();
+                            self.pending_action = Some(*action);
+                        }
+                        KeyNode::Branch { .. } => {
+                            self.push_key(key);
+                        }
+                    }
+                } else {
+                    self.dismiss();
+                }
+                EventResult::Consumed
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::{KeyCode, KeyEvent};
+
+    use super::*;
+    use crate::feat::keymap::{KeyCategory, KeyContext};
+
+    fn make_keymap_with_sequence() -> Keymap {
+        let mut keymap = Keymap::empty();
+        keymap.describe("g", "general", |g| {
+            g.bind(
+                "m",
+                Action::LaunchMpv,
+                "launch mpv",
+                KeyCategory::General,
+                KeyContext::Global,
+            );
+        });
+        keymap.finalize().unwrap();
+        keymap
+    }
+
+    fn make_keymap_with_nested_branches() -> Keymap {
+        let mut keymap = Keymap::empty();
+        keymap.describe("g", "general", |g| {
+            g.describe("s", "search", |s| {
+                s.bind(
+                    "f",
+                    Action::FuzzyNotes,
+                    "fuzzy notes",
+                    KeyCategory::General,
+                    KeyContext::Global,
+                );
+            });
+        });
+        keymap.finalize().unwrap();
+        keymap
+    }
+
+    #[test]
+    fn handle_key_returns_ignored_when_not_pending() {
+        // Given a WhichKey that is not pending
+        let mut which_key = WhichKey::default();
+        let keymap = Keymap::default();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When handling a key
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('a')), &ctx);
+
+        // Then the event is ignored
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn handle_key_esc_dismisses() {
+        // Given a WhichKey that is pending
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        let keymap = Keymap::default();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When handling Escape
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Esc), &ctx);
+
+        // Then the event is consumed and which_key is dismissed
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!which_key.is_pending());
+        assert!(!which_key.active);
+    }
+
+    #[test]
+    fn handle_key_backspace_pops_key() {
+        // Given a WhichKey with multiple pending keys
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        which_key.push_key(Key::Char('m'));
+        let keymap = make_keymap_with_sequence();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When handling Backspace
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Backspace), &ctx);
+
+        // Then the event is consumed and one key is removed
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(which_key.pending_keys, vec![Key::Char('g')]);
+    }
+
+    #[test]
+    fn handle_key_backspace_dismisses_when_empty() {
+        // Given a WhichKey with only one pending key
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        let keymap = Keymap::default();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When handling Backspace
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Backspace), &ctx);
+
+        // Then the event is consumed and which_key is dismissed
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!which_key.is_pending());
+        assert!(!which_key.active);
+    }
+
+    #[test]
+    fn handle_key_invalid_key_dismisses() {
+        // Given a WhichKey that is pending
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        let keymap = Keymap::default();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When handling an invalid key (F1 is not mapped)
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::F(1)), &ctx);
+
+        // Then the event is consumed and which_key is dismissed
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!which_key.is_pending());
+    }
+
+    #[test]
+    fn handle_key_branch_pushes_key() {
+        // Given a WhichKey with 'g' pending and a keymap that has nested branches
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        let keymap = make_keymap_with_nested_branches();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When pressing 's' which leads to another branch (not a leaf)
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('s')), &ctx);
+
+        // Then the key is pushed and we're still pending
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(which_key.pending_keys, vec![Key::Char('g'), Key::Char('s')]);
+        assert!(which_key.is_pending());
+    }
+
+    #[test]
+    fn handle_key_leaf_sets_pending_action() {
+        // Given a WhichKey that is pending with a keymap that has a leaf at 'gm'
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        let keymap = make_keymap_with_sequence();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When pressing 'm' to complete the sequence "gm"
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('m')), &ctx);
+
+        // Then the event is consumed, action is set, and which_key is dismissed
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(which_key.pending_action, Some(Action::LaunchMpv));
+        assert!(!which_key.is_pending());
+    }
+
+    #[test]
+    fn handle_key_unknown_sequence_dismisses() {
+        // Given a WhichKey that is pending
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+        let keymap = make_keymap_with_sequence();
+        let ctx = ComponentContext { keymap: &keymap };
+
+        // When pressing a key that doesn't match any binding
+        let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('z')), &ctx);
+
+        // Then the event is consumed and which_key is dismissed
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!which_key.is_pending());
+        assert!(which_key.pending_action.is_none());
+    }
+
+    #[test]
+    fn take_action_returns_and_clears_action() {
+        // Given a WhichKey with a pending action
+        let mut which_key = WhichKey {
+            pending_action: Some(Action::Quit),
+            ..Default::default()
+        };
+
+        // When taking the action
+        let action = which_key.take_action();
+
+        // Then the action is returned and cleared
+        assert_eq!(action, Some(Action::Quit));
+        assert!(which_key.pending_action.is_none());
+    }
+
+    #[test]
+    fn is_active_returns_true_when_active() {
+        // Given a WhichKey that is active but not pending
+        let which_key = WhichKey {
+            active: true,
+            ..Default::default()
+        };
+
+        // When checking is_active
+        // Then it returns true
+        assert!(which_key.is_active());
+    }
+
+    #[test]
+    fn is_active_returns_true_when_pending() {
+        // Given a WhichKey that is pending
+        let mut which_key = WhichKey::default();
+        which_key.push_key(Key::Char('g'));
+
+        // When checking is_active
+        // Then it returns true
+        assert!(which_key.is_active());
+    }
+
+    #[test]
+    fn is_active_returns_false_when_not_active_or_pending() {
+        // Given a WhichKey that is neither active nor pending
+        let which_key = WhichKey::default();
+
+        // When checking is_active
+        // Then it returns false
+        assert!(!which_key.is_active());
     }
 }

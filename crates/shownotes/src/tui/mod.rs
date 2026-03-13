@@ -1,5 +1,7 @@
 mod common;
+mod component;
 mod error_popup;
+mod event;
 mod filter;
 mod library_pane;
 mod playlist_pane;
@@ -18,7 +20,9 @@ use ratatui::{
 };
 
 pub use common::{get_mime_type, ItemDisplayMode, ItemPath, Pane, PlaylistItem};
+pub use component::{Component, ComponentContext};
 pub use error_popup::ErrorPopup;
+pub use event::EventResult;
 pub use filter::Filter;
 pub use library_pane::LibraryPane;
 pub use playlist_pane::PlaylistPane;

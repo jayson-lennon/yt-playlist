@@ -1,5 +1,8 @@
+use crossterm::event::KeyEvent;
+
 use super::common::{ItemDisplayMode, ItemPath};
-use crate::feat::keymap::Key;
+use super::component::{Component, ComponentContext};
+use super::event::EventResult;
 use crate::tui::{
     ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput, WhichKey,
 };
@@ -11,7 +14,6 @@ use crate::tui::{
 /// input modes (filtering, renaming, URL input), error display, and the
 /// which-key help popup.
 pub struct TuiState {
-    pub pending_keys: Vec<Key>,
     pub playlist_pane: PlaylistPane,
     pub library_pane: LibraryPane,
     pub focused_pane: Pane,
@@ -27,7 +29,6 @@ pub struct TuiState {
 impl TuiState {
     pub fn new() -> Self {
         Self {
-            pending_keys: Vec::new(),
             playlist_pane: PlaylistPane::new(),
             library_pane: LibraryPane::new(),
             focused_pane: Pane::Playlist,
@@ -135,7 +136,8 @@ impl TuiState {
     }
 
     pub fn submit_rename(&mut self) -> Option<(ItemPath, Option<String>, Option<String>)> {
-        let new_alias = self.rename.submit();
+        self.rename.submit();
+        let new_alias = self.rename.take_submitted().flatten();
         if let Some(item) = self.get_selected_item_mut() {
             let old_alias = item.alias.clone();
             item.alias.clone_from(&new_alias);
@@ -166,7 +168,8 @@ impl TuiState {
     }
 
     pub fn submit_url_input(&mut self) -> Option<String> {
-        self.url_input.submit()
+        self.url_input.submit();
+        self.url_input.take_submitted().flatten()
     }
 
     pub fn push_url_char(&mut self, c: char) {
@@ -271,6 +274,38 @@ impl TuiState {
     pub fn is_showing_error(&self) -> bool {
         self.error_popup.is_active()
     }
+
+    /// Handle a key event using component-based event bubbling.
+    ///
+    /// Components are tried in priority order. When a component consumes
+    /// the event, bubbling stops. If no component handles it, returns
+    /// `EventResult::Ignored`.
+    pub fn handle_key(&mut self, key: KeyEvent, ctx: &ComponentContext<'_>) -> EventResult {
+        // 1. Error popup (blocks everything)
+        if self.error_popup.is_active() {
+            return self.error_popup.handle_key(key);
+        }
+
+        // 2. Input modes
+        if self.rename.is_active() {
+            return self.rename.handle_key(key);
+        }
+
+        if self.url_input.is_active() {
+            return self.url_input.handle_key(key);
+        }
+
+        // 3. Which-key (when pending)
+        if self.which_key.is_pending() {
+            return self.which_key.handle_key_with_context(key, ctx);
+        }
+
+        // 4. Focused pane (includes filter handling)
+        match self.focused_pane {
+            Pane::Playlist => self.playlist_pane.handle_key(key),
+            Pane::Library => self.library_pane.handle_key(key),
+        }
+    }
 }
 
 impl Default for TuiState {
@@ -282,6 +317,7 @@ impl Default for TuiState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::feat::keymap::Key;
     use marked_path::CanonicalPath;
     use std::path::PathBuf;
     use std::time::Duration;
@@ -302,7 +338,6 @@ mod tests {
         let state = TuiState::new();
 
         // Then defaults are set.
-        assert!(state.pending_keys.is_empty());
         assert!(state.playlist_pane.items.is_empty());
         assert!(state.library_pane.items.is_empty());
         assert_eq!(state.focused_pane, Pane::Playlist);
@@ -496,5 +531,107 @@ mod tests {
 
         // Then defaults are set.
         assert_eq!(state.focused_pane, Pane::Playlist);
+    }
+
+    fn ctx() -> ComponentContext<'static> {
+        use crate::feat::keymap::Keymap;
+        static KEYMAP: std::sync::OnceLock<Keymap> = std::sync::OnceLock::new();
+        let keymap = KEYMAP.get_or_init(Keymap::new);
+        ComponentContext { keymap }
+    }
+
+    #[test]
+    fn handle_key_error_popup_blocks_everything() {
+        // Given a state with an active error popup.
+        let mut state = TuiState::new();
+        state.error_popup.show("Error message".to_string());
+        let ctx = ctx();
+
+        // When handling any key.
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char('a'));
+        let result = state.handle_key(key, &ctx);
+
+        // Then the error popup consumes it and dismisses.
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!state.error_popup.is_active());
+    }
+
+    #[test]
+    fn handle_key_rename_consumes_when_active() {
+        // Given a state with active rename mode.
+        let mut state = TuiState::new();
+        state.rename.start(Some("old name"));
+        let ctx = ctx();
+
+        // When handling a character key.
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char('x'));
+        let result = state.handle_key(key, &ctx);
+
+        // Then rename consumes it.
+        assert_eq!(result, EventResult::Consumed);
+        assert!(state.rename.input().contains('x'));
+    }
+
+    #[test]
+    fn handle_key_url_input_consumes_when_active() {
+        // Given a state with active url input mode.
+        let mut state = TuiState::new();
+        state.url_input.start();
+        let ctx = ctx();
+
+        // When handling a character key.
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char('h'));
+        let result = state.handle_key(key, &ctx);
+
+        // Then url input consumes it.
+        assert_eq!(result, EventResult::Consumed);
+        assert!(state.url_input.input().contains('h'));
+    }
+
+    #[test]
+    fn handle_key_which_key_consumes_when_pending() {
+        // Given a state with pending which-key.
+        let mut state = TuiState::new();
+        state.which_key.push_key(Key::Char('g'));
+        let ctx = ctx();
+
+        // When handling escape.
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Esc);
+        let result = state.handle_key(key, &ctx);
+
+        // Then which-key consumes it and dismisses.
+        assert_eq!(result, EventResult::Consumed);
+        assert!(!state.which_key.is_pending());
+    }
+
+    #[test]
+    fn handle_key_delegates_to_focused_pane() {
+        // Given a state focused on playlist with items.
+        let mut state = TuiState::new();
+        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.focused_pane = Pane::Playlist;
+        let ctx = ctx();
+
+        // When handling 'j' key.
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char('j'));
+        let result = state.handle_key(key, &ctx);
+
+        // Then playlist pane handles it.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(state.playlist_pane.selected, 1);
+    }
+
+    #[test]
+    fn handle_key_returns_ignored_when_no_component_handles() {
+        // Given a default state with no active components.
+        let mut state = TuiState::new();
+        let ctx = ctx();
+
+        // When handling an unhandled key.
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char('z'));
+        let result = state.handle_key(key, &ctx);
+
+        // Then the event is ignored.
+        assert_eq!(result, EventResult::Ignored);
     }
 }

@@ -1,9 +1,13 @@
+use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
+
+use super::component::Component;
+use super::event::EventResult;
 
 /// Error popup display state.
 ///
@@ -56,6 +60,20 @@ impl ErrorPopup {
             .wrap(Wrap { trim: false });
 
         frame.render_widget(error_text, chunks[0]);
+    }
+}
+
+impl Component for ErrorPopup {
+    fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn handle_key(&mut self, _key: KeyEvent) -> EventResult {
+        if !self.active {
+            return EventResult::Ignored;
+        }
+        self.dismiss();
+        EventResult::Consumed
     }
 }
 
@@ -161,5 +179,55 @@ mod tests {
 
         // Then state is clean.
         assert!(popup.message.is_empty());
+    }
+
+    #[test]
+    fn handle_key_returns_ignored_when_inactive() {
+        // Given an inactive popup.
+        let mut popup = ErrorPopup::new();
+
+        // When handling a key.
+        let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
+        let result = popup.handle_key(key);
+
+        // Then the event is ignored.
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn handle_key_dismisses_on_any_key() {
+        // Given an active popup.
+        let mut popup = ErrorPopup::new();
+        popup.show("Error".to_string());
+
+        // When handling a key.
+        let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
+        let _ = popup.handle_key(key);
+
+        // Then the popup is dismissed.
+        assert!(!popup.is_active());
+    }
+
+    #[test]
+    fn handle_key_consumes_all_keys_when_active() {
+        // Given an active popup.
+        let mut popup = ErrorPopup::new();
+        popup.show("Error".to_string());
+
+        // When handling various keys.
+        let keys = [
+            KeyEvent::from(crossterm::event::KeyCode::Char('a')),
+            KeyEvent::from(crossterm::event::KeyCode::Enter),
+            KeyEvent::from(crossterm::event::KeyCode::Esc),
+            KeyEvent::from(crossterm::event::KeyCode::Backspace),
+            KeyEvent::from(crossterm::event::KeyCode::Up),
+        ];
+
+        for key in keys {
+            let mut popup = ErrorPopup::new();
+            popup.show("Error".to_string());
+            let result = popup.handle_key(key);
+            assert_eq!(result, EventResult::Consumed);
+        }
     }
 }

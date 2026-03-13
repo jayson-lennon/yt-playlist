@@ -1,3 +1,5 @@
+use crossterm::event::{KeyCode, KeyEvent};
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -8,6 +10,8 @@ use ratatui::{
 use super::common::{
     filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, PlaylistItem,
 };
+use super::component::Component;
+use super::event::EventResult;
 use super::filter::Filter;
 
 /// The library pane showing available media files.
@@ -233,6 +237,30 @@ impl LibraryPane {
 impl Default for LibraryPane {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Component for LibraryPane {
+    fn is_active(&self) -> bool {
+        true
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) -> EventResult {
+        if self.filter.is_active() {
+            return self.filter.handle_key(key);
+        }
+
+        match key.code {
+            KeyCode::Char('j') => {
+                self.move_down();
+                EventResult::Consumed
+            }
+            KeyCode::Char('k') => {
+                self.move_up();
+                EventResult::Consumed
+            }
+            _ => EventResult::Ignored,
+        }
     }
 }
 
@@ -605,5 +633,61 @@ mod tests {
             ItemPath::Url("https://youtube.com/watch?v=abc".to_string())
         );
         assert!(pane.items[0].is_virtual);
+    }
+
+    #[test]
+    fn handle_key_delegates_to_filter_when_active() {
+        // Given a pane with active filter.
+        let mut pane = LibraryPane::new();
+        pane.filter.start();
+
+        // When handling a character key.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('x')));
+
+        // Then the filter handles it.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.filter.input(), "x");
+    }
+
+    #[test]
+    fn handle_key_j_moves_down() {
+        // Given a pane with multiple items.
+        let mut pane = LibraryPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 0;
+
+        // When pressing 'j'.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('j')));
+
+        // Then selection moves down.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.selected, 1);
+    }
+
+    #[test]
+    fn handle_key_k_moves_up() {
+        // Given a pane with multiple items.
+        let mut pane = LibraryPane::new();
+        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.selected = 1;
+
+        // When pressing 'k'.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('k')));
+
+        // Then selection moves up.
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(pane.selected, 0);
+    }
+
+    #[test]
+    fn handle_key_returns_ignored_for_unhandled() {
+        // Given a pane.
+        let mut pane = LibraryPane::new();
+
+        // When pressing an unhandled key.
+        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('x')));
+
+        // Then the event is ignored.
+        assert_eq!(result, EventResult::Ignored);
     }
 }
