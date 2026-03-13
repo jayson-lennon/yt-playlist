@@ -3,6 +3,7 @@ pub mod cli;
 pub mod command;
 pub mod feat;
 pub mod services;
+pub mod system_ctx;
 pub mod tui;
 
 pub use app::App;
@@ -24,6 +25,7 @@ pub use feat::terminal::{TerminalGuard, TerminalSuspendError, suspend_and_run};
 pub use feat::{ExternalEditor, ExternalEditorError};
 pub use feat::{NoteDb, NoteDbError, PathResolutionError, PathResolver};
 pub use services::Services;
+pub use system_ctx::SystemCtx;
 pub use tui::{Filter, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, TuiState};
 
 #[cfg(test)]

@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use error_stack::{Report, fmt::ColorMode};
+use error_stack::{Report, ResultExt, fmt::ColorMode};
+use marked_path::CanonicalPath;
 
+use crate::app::App;
 use crate::cli::{
     action::{ActionCommands, run_action_mpv},
     generate::run_generate,
@@ -10,6 +12,8 @@ use crate::cli::{
     sources::{SourcesCommands, run_sources_command},
     tui::run_tui,
 };
+use crate::feat::config::Config;
+use crate::system_ctx::SystemCtx;
 
 pub mod action;
 pub mod generate;
@@ -84,6 +88,26 @@ pub enum Commands {
 #[error(debug)]
 pub struct RunError;
 
+fn create_app(
+    db_path: &std::path::Path,
+    library_path: &std::path::Path,
+    socket_path: &str,
+    rt: tokio::runtime::Runtime,
+) -> Result<App, Report<RunError>> {
+    let handle = rt.handle().clone();
+    let canonical_library = CanonicalPath::from_path(library_path).change_context(RunError)?;
+    let ctx = rt
+        .block_on(SystemCtx::new(
+            &db_path.to_string_lossy(),
+            Config::default(),
+            canonical_library,
+            socket_path.to_string(),
+            handle,
+        ))
+        .change_context(RunError)?;
+    Ok(App::new(ctx, rt))
+}
+
 /// Runs the CLI application.
 ///
 /// # Errors
@@ -95,7 +119,6 @@ pub fn run() -> Result<(), Report<RunError>> {
 
     let args = Args::parse();
     let rt = tokio::runtime::Runtime::new().map_err(|_| Report::new(RunError))?;
-    let handle = rt.handle().clone();
 
     match args.command.unwrap_or(Commands::Tui {
         socket: PathBuf::from("/tmp/mpvsocket"),
@@ -104,15 +127,21 @@ pub fn run() -> Result<(), Report<RunError>> {
         Commands::Tui { socket, path } => run_tui(socket, &args.db_path, path, rt),
         Commands::Action { action } => match action {
             ActionCommands::Mpv { path, socket } => {
-                run_action_mpv(&path, &socket, &args.db_path, &handle)
+                let mut app = create_app(&args.db_path, &std::env::current_dir().change_context(RunError)?, &socket.to_string_lossy(), rt)?;
+                run_action_mpv(&path, &socket, &mut app)
             }
         },
-        Commands::Notes { notes_cmd } => run_notes_command(notes_cmd, &args.db_path, &handle),
+        Commands::Notes { notes_cmd } => {
+            let mut app = create_app(&args.db_path, &std::env::current_dir().change_context(RunError)?, "", rt)?;
+            run_notes_command(notes_cmd, &mut app)
+        }
         Commands::Sources { sources_cmd } => {
-            run_sources_command(sources_cmd, &args.db_path, &handle)
+            let mut app = create_app(&args.db_path, &std::env::current_dir().change_context(RunError)?, "", rt)?;
+            run_sources_command(sources_cmd, &mut app)
         }
         Commands::Generate { format, path } => {
-            run_generate(&format, &path, &args.db_path, &handle)
+            let mut app = create_app(&args.db_path, &path, "", rt)?;
+            run_generate(&format, &path, &mut app)
         }
     }
 }

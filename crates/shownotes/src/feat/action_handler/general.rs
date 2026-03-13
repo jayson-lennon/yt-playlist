@@ -1,13 +1,36 @@
 use crate::app::App;
+use crate::command::{Command, CommandResult};
 use crate::tui::ItemDisplayMode;
 
 pub fn handle_quit(app: &mut App) {
-    app.save_playlist();
+    match app.execute(Command::PlaylistSave {
+        playlist_items: app.tui_state.playlist_pane.items.clone(),
+        library_items: app.tui_state.library_pane.items.clone(),
+    }) {
+        Ok(CommandResult::PlaylistSaved) => {
+            app.tui_state.status_bar.set("Playlist saved");
+        }
+        Err(e) => {
+            app.tui_state.show_error(format!("Failed to save: {e:?}"));
+        }
+        _ => unreachable!(),
+    }
     app.should_quit = true;
 }
 
 pub fn handle_save(app: &mut App) {
-    app.save_playlist();
+    match app.execute(Command::PlaylistSave {
+        playlist_items: app.tui_state.playlist_pane.items.clone(),
+        library_items: app.tui_state.library_pane.items.clone(),
+    }) {
+        Ok(CommandResult::PlaylistSaved) => {
+            app.tui_state.status_bar.set("Playlist saved");
+        }
+        Err(e) => {
+            app.tui_state.show_error(format!("Failed to save: {e:?}"));
+        }
+        _ => unreachable!(),
+    }
 }
 
 pub fn handle_show_help(app: &mut App) {
@@ -34,8 +57,18 @@ pub fn handle_delete(app: &mut App) {
     if let Some(item) = app.tui_state.selected_library_item() {
         if item.is_virtual {
             app.tui_state.library_pane.remove();
-            app.save_playlist();
-            app.tui_state.status_bar.set("Virtual entry deleted");
+            match app.execute(Command::PlaylistSave {
+                playlist_items: app.tui_state.playlist_pane.items.clone(),
+                library_items: app.tui_state.library_pane.items.clone(),
+            }) {
+                Ok(CommandResult::PlaylistSaved) => {
+                    app.tui_state.status_bar.set("Virtual entry deleted");
+                }
+                Err(e) => {
+                    app.tui_state.show_error(format!("Failed to save: {e:?}"));
+                }
+                _ => unreachable!(),
+            }
         } else {
             app.tui_state
                 .status_bar

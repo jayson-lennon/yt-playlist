@@ -39,7 +39,7 @@ async fn given_file_has_source(world: &mut SymlinkWorld, path: String, url: Stri
     let full_path = world.inner.resolve_path(&path);
 
     execute(
-        &world.inner.services,
+        &world.inner.ctx,
         Command::SourcesAdd {
             path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
             url,
@@ -74,7 +74,7 @@ async fn when_run_command(world: &mut SymlinkWorld, command: String) {
         _ => panic!("Unknown command: {command}"),
     };
 
-    let result = execute(&world.inner.services, cmd)
+    let result = execute(&world.inner.ctx, cmd)
         .await
         .expect("command failed");
 
@@ -88,7 +88,7 @@ async fn when_edit_sources(world: &mut SymlinkWorld, path: String, content: Stri
     let full_path = world.inner.resolve_path(&path);
 
     let result = execute(
-        &world.inner.services,
+        &world.inner.ctx,
         Command::SourcesEdit {
             path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
         },
@@ -114,7 +114,7 @@ async fn then_file_has_source(world: &mut SymlinkWorld, path: String, expected_u
     let full_path = world.inner.resolve_path(&path);
 
     let result = execute(
-        &world.inner.services,
+        &world.inner.ctx,
         Command::SourcesList {
             path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
         },
@@ -138,7 +138,7 @@ async fn then_file_shows_source(world: &mut SymlinkWorld, path: String, expected
     let full_path = world.inner.resolve_path(&path);
 
     let result = execute(
-        &world.inner.services,
+        &world.inner.ctx,
         Command::SourcesList {
             path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
         },

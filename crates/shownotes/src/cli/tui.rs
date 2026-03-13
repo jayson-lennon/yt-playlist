@@ -23,6 +23,7 @@ use crate::{
     feat::playlist::{FileMetadata, PlaylistData},
     feat::terminal::suspend_and_run,
     services::Services,
+    system_ctx::SystemCtx,
     tui::{self},
 };
 
@@ -83,9 +84,9 @@ fn process_fork(
         Ok(execute_fork_action(app, action))
     };
 
-    let keymap = app.runtime.keymap.clone();
+    let keymap = app.ctx.keymap.clone();
     terminal
-        .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.services))
+        .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.ctx.services))
         .change_context(RunError)?;
 
     let message = match result {
@@ -179,19 +180,21 @@ pub fn run_tui(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).change_context(RunError)?;
 
-    let mut app = App::new(
+    let ctx = SystemCtx {
         services,
         config,
-        socket.to_string_lossy().into_owned(),
-        canonical_library_path,
-        rt,
-    );
+        library_path: canonical_library_path.clone(),
+        socket_path: socket.to_string_lossy().into_owned(),
+        keymap: crate::feat::keymap::Keymap::new(),
+    };
+
+    let mut app = App::new(ctx, rt);
 
     let migration_task = {
-        let services = app.services.clone();
+        let ctx = app.ctx.clone();
         let files = files_for_migration;
         app.tokio_runtime.spawn(async move {
-            let _ = crate::command::notes::migrate_aliases_to_notes(&services, &files).await;
+            let _ = crate::command::notes::migrate_aliases_to_notes(&ctx, &files).await;
         })
     };
 
@@ -214,7 +217,7 @@ pub fn run_tui(
         tokio::time::timeout(std::time::Duration::from_secs(5), migration_task).await
     });
 
-    app.tokio_runtime.block_on(app.services.close());
+    app.tokio_runtime.block_on(app.ctx.services.close());
 
     Ok(())
 }
@@ -293,9 +296,9 @@ fn run_app(
             app.tui_state.needs_clear = false;
         }
 
-        let keymap = app.runtime.keymap.clone();
+        let keymap = app.ctx.keymap.clone();
         terminal
-            .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.services))
+            .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.ctx.services))
             .change_context(RunError)?;
 
         if event::poll(std::time::Duration::from_millis(100)).change_context(RunError)? {
@@ -316,10 +319,11 @@ fn run_app(
 fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
     let canonical = CanonicalPath::from_path(path).map_err(|e| format!("Failed to canonicalize path: {e:?}"))?;
     let result = app
+        .ctx
         .services
         .rt
         .block_on(crate::command::execute(
-            &app.services,
+            &app.ctx,
             Command::NotesAdd {
                 paths: vec![canonical],
             },
@@ -333,10 +337,11 @@ fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
 
 fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
     let result = app
+        .ctx
         .services
         .rt
         .block_on(crate::command::execute(
-            &app.services,
+            &app.ctx,
             Command::NotesFuzzy {
                 create_symlinks: true,
             },
@@ -353,10 +358,11 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
 fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
     let canonical = CanonicalPath::from_path(path).map_err(|e| format!("Failed to canonicalize path: {e:?}"))?;
     let result = app
+        .ctx
         .services
         .rt
         .block_on(crate::command::execute(
-            &app.services,
+            &app.ctx,
             Command::SourcesEdit {
                 path: canonical,
             },
@@ -369,12 +375,13 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
 }
 
 fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
-    let library_path = app.runtime.library_path.clone();
+    let library_path = app.ctx.library_path.clone();
     let result = app
+        .ctx
         .services
         .rt
         .block_on(crate::command::execute(
-            &app.services,
+            &app.ctx,
             Command::GenerateNotes {
                 format: format.to_owned(),
                 working_directory: library_path,

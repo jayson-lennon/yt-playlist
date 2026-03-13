@@ -24,6 +24,7 @@ impl AliasNotesWorld {
         let full_path = self.inner.resolve_path(path);
         let resolved = self
             .inner
+            .ctx
             .services
             .path_resolver
             .resolve(&full_path)
@@ -32,12 +33,14 @@ impl AliasNotesWorld {
         let path_str = resolved.to_string_lossy().to_string();
         let file_path_id = self
             .inner
+            .ctx
             .services
             .db
             .get_or_create_file_path(&path_str)
             .await
             .expect("failed to get or create file path");
         self.inner
+            .ctx
             .services
             .db
             .get_note(file_path_id)
@@ -49,6 +52,7 @@ impl AliasNotesWorld {
         let full_path = self.inner.resolve_path(path);
         let resolved = self
             .inner
+            .ctx
             .services
             .path_resolver
             .resolve(&full_path)
@@ -56,6 +60,7 @@ impl AliasNotesWorld {
             .expect("failed to resolve path");
         let path_str = resolved.to_string_lossy().to_string();
         self.inner
+            .ctx
             .services
             .db
             .get_or_create_file_path(&path_str)
@@ -87,6 +92,7 @@ async fn given_file_has_note(world: &mut AliasNotesWorld, path: String, note: St
 
     world
         .inner
+        .ctx
         .services
         .db
         .upsert_note(file_path_id, &new_content)
@@ -98,7 +104,7 @@ async fn given_file_has_note(world: &mut AliasNotesWorld, path: String, note: St
 async fn when_add_alias(world: &mut AliasNotesWorld, alias: String, path: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    add_alias_as_note(&world.inner.services, &canonical, &alias)
+    add_alias_as_note(&world.inner.ctx, &canonical, &alias)
         .await
         .expect("add_alias_as_note failed");
 }

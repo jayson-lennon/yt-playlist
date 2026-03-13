@@ -1,35 +1,23 @@
-use std::path::PathBuf;
-
 use crossterm::event::Event;
-use marked_path::CanonicalPath;
+use error_stack::Report;
 
-use crate::feat::config::Config;
-use crate::feat::keymap::{Action, Keymap};
-use crate::feat::playlist::PlaylistData;
-use crate::services::Services;
-use crate::tui::{ComponentContext, ItemPath, Pane, PlaylistItem, TuiState, get_mime_type};
+use crate::command::{self, Command, CommandError, CommandResult};
+use crate::feat::keymap::Action;
+use crate::system_ctx::SystemCtx;
+use crate::tui::{ComponentContext, TuiState};
 
-/// Holds pending actions that require forking from the TUI.
-///
-/// When certain actions need to spawn an external process (like opening an editor
-/// for notes or sources), the TUI must exit and the action is stored here. The
-/// main loop checks this struct and executes any pending action before continuing.
 #[derive(Default)]
 pub struct Fork {
-    pub notes_path: Option<ItemPath>,
+    pub notes_path: Option<crate::tui::ItemPath>,
     pub fuzzy_notes: bool,
-    pub sources_path: Option<ItemPath>,
+    pub sources_path: Option<crate::tui::ItemPath>,
     pub generate_notes: Option<String>,
 }
 
-/// Actions that can be taken when forking from the TUI.
-///
-/// Each variant represents an external operation that requires suspending
-/// the terminal UI to interact with an external program or output.
 pub enum ForkAction {
-    AddNote { path: ItemPath },
+    AddNote { path: crate::tui::ItemPath },
     FuzzyNotes,
-    EditSources { path: ItemPath },
+    EditSources { path: crate::tui::ItemPath },
     GenerateNotes { format: String },
 }
 
@@ -52,236 +40,35 @@ impl Fork {
     }
 }
 
-/// Runtime configuration computed at application startup.
-///
-/// Contains settings that are determined once when the application starts
-/// and remain constant throughout the application's lifetime, such as
-/// the keymap, socket path, and library/playlist paths.
-pub struct RuntimeSettings {
-    pub keymap: Keymap,
-    pub socket_path: String,
-    pub library_path: CanonicalPath,
-}
-
-/// The main application state container.
-///
-/// Holds all the state needed to run the shownotes TUI application, including
-/// services for external interactions, TUI state for rendering, user configuration,
-/// runtime settings, and the tokio runtime for async operations.
 pub struct App {
-    pub services: Services,
+    pub ctx: SystemCtx,
     pub tui_state: TuiState,
-    pub config: Config,
     pub should_quit: bool,
     pub fork: Fork,
-    pub runtime: RuntimeSettings,
     pub tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl App {
-    pub fn new(
-        services: Services,
-        config: Config,
-        socket_path: String,
-        library_path: CanonicalPath,
-        tokio_runtime: tokio::runtime::Runtime,
-    ) -> Self {
+    pub fn new(ctx: SystemCtx, tokio_runtime: tokio::runtime::Runtime) -> Self {
         let mut app = Self {
-            services,
+            ctx,
             tui_state: TuiState::new(),
-            config,
             should_quit: false,
             fork: Fork::default(),
-            runtime: RuntimeSettings {
-                keymap: Keymap::new(),
-                socket_path,
-                library_path,
-            },
             tokio_runtime,
         };
-        app.load_playlist();
-        app.refresh_library();
-        app.set_initial_focus();
+        crate::tui::load_playlist(&app.ctx, &mut app.tui_state);
+        crate::tui::set_initial_focus(&mut app.tui_state);
         app
     }
 
-    fn set_initial_focus(&mut self) {
-        let playlist_empty = self.tui_state.playlist_pane.items.is_empty();
-        let library_empty = self.tui_state.library_pane.items.is_empty();
-        if playlist_empty && !library_empty {
-            self.tui_state.focused_pane = Pane::Library;
-        } else if library_empty && !playlist_empty {
-            self.tui_state.focused_pane = Pane::Playlist;
-        }
-    }
-
-    pub fn load_playlist(&mut self) {
-        let result = self
-            .tokio_runtime
-            .block_on(async { self.services.storage.load(&self.runtime.library_path).await });
-        match result {
-            Ok(data) => {
-                let playlist_paths: std::collections::HashSet<_> =
-                    data.playlist.iter().cloned().collect();
-
-                self.tui_state.playlist_pane.items = data
-                    .playlist
-                    .into_iter()
-                    .map(|path| {
-                        let metadata = data.files.get(&path);
-                        let is_virtual = metadata.is_some_and(|m| m.is_virtual);
-                        let duration = metadata.and_then(|m| m.duration);
-                        let mime_type = metadata
-                            .and_then(|m| m.mime_type.clone())
-                            .or_else(|| get_mime_type(&path));
-                        PlaylistItem {
-                            path,
-                            duration,
-                            alias: metadata.and_then(|m| m.alias.clone()),
-                            mime_type,
-                            is_virtual,
-                        }
-                    })
-                    .collect();
-
-                let mut virtual_library_items: Vec<PlaylistItem> = data
-                    .files
-                    .into_iter()
-                    .filter(|(path, metadata)| {
-                        metadata.is_virtual && !playlist_paths.contains(path)
-                    })
-                    .map(|(path, metadata)| {
-                        let item_path = ItemPath::Url(path.to_string_lossy().to_string());
-                        let mime_type = metadata.mime_type.or_else(|| get_mime_type(&item_path));
-                        PlaylistItem {
-                            path: item_path,
-                            duration: metadata.duration,
-                            alias: metadata.alias.clone(),
-                            mime_type,
-                            is_virtual: true,
-                        }
-                    })
-                    .collect();
-                virtual_library_items
-                    .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-
-                self.refresh_library();
-
-                for item in virtual_library_items {
-                    self.tui_state.library_pane.items.push(item);
-                }
-                self.tui_state
-                    .library_pane
-                    .items
-                    .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-            }
-            Err(e) => {
-                self.tui_state
-                    .show_error(format!("Failed to load playlist: {e:?}"));
-            }
-        }
-    }
-
-    pub fn save_playlist(&mut self) {
-        let mut files = std::collections::HashMap::new();
-        for item in &self.tui_state.playlist_pane.items {
-            files.insert(
-                item.path.clone(),
-                crate::feat::playlist::FileMetadata {
-                    duration: item.duration,
-                    is_virtual: item.is_virtual,
-                    deleted: false,
-                    mime_type: item.mime_type.clone(),
-                    time_added: None,
-                    alias: item.alias.clone(),
-                },
-            );
-        }
-        for item in &self.tui_state.library_pane.items {
-            files.insert(
-                item.path.clone(),
-                crate::feat::playlist::FileMetadata {
-                    duration: item.duration,
-                    is_virtual: item.is_virtual,
-                    deleted: false,
-                    mime_type: item.mime_type.clone(),
-                    time_added: None,
-                    alias: item.alias.clone(),
-                },
-            );
-        }
-        let playlist_paths: Vec<ItemPath> = self
-            .tui_state
-            .playlist_pane
-            .items
-            .iter()
-            .map(|item| item.path.clone())
-            .collect();
-        let data = PlaylistData {
-            working_directory: self.runtime.library_path.clone(),
-            playlist: playlist_paths,
-            files,
-        };
-        let result = self
-            .tokio_runtime
-            .block_on(async { self.services.storage.save(&data).await });
-        match result {
-            Ok(()) => {
-                self.tui_state.status_bar.set("Playlist saved");
-            }
-            Err(e) => {
-                self.tui_state
-                    .show_error(format!("Failed to save playlist: {e:?}"));
-            }
-        }
-    }
-
-    pub fn refresh_library(&mut self) {
-        let mut entries = Vec::new();
-        if let Ok(read_dir) = std::fs::read_dir(self.runtime.library_path.as_path()) {
-            let paths: Vec<_> = read_dir
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.is_file())
-                .collect();
-
-            let workspace = self.runtime.library_path.clone();
-            let services = self.services.clone();
-            let aliases: std::collections::HashMap<PathBuf, Option<String>> =
-                self.tokio_runtime.block_on(async {
-                    let mut result = std::collections::HashMap::new();
-                    for path in &paths {
-                        let canonical = CanonicalPath::new(
-                            path.canonicalize().unwrap_or_else(|_| path.clone()),
-                        );
-                        let alias = services
-                            .storage
-                            .resolve_alias(&canonical, &workspace)
-                            .await
-                            .ok()
-                            .flatten();
-                        result.insert(canonical.to_path_buf(), alias);
-                    }
-                    result
-                });
-
-            for path in paths {
-                let canonical = path.canonicalize().unwrap_or(path);
-                let duration = self.services.media.get_duration(&canonical).ok();
-                let item_path = ItemPath::File(CanonicalPath::new(canonical.clone()));
-                let mime_type = get_mime_type(&item_path);
-                let alias = aliases.get(&canonical).cloned().flatten();
-                entries.push(PlaylistItem {
-                    path: item_path,
-                    duration,
-                    alias,
-                    mime_type,
-                    is_virtual: false,
-                });
-            }
-        }
-        entries.sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-        self.tui_state.refresh_library(entries);
+    /// Executes a command and returns the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the command execution fails.
+    pub fn execute(&mut self, command: Command) -> Result<CommandResult, Report<CommandError>> {
+        self.tokio_runtime.block_on(command::execute(&self.ctx, command))
     }
 
     pub fn handle_event(&mut self, event: Event) {
@@ -289,7 +76,7 @@ impl App {
             self.tui_state.status_bar.clear();
 
             let ctx = ComponentContext {
-                keymap: &self.runtime.keymap,
+                keymap: &self.ctx.keymap,
                 focused_pane: self.tui_state.focused_pane,
             };
 
@@ -299,64 +86,12 @@ impl App {
                 self.execute_action(action);
             }
             if let Some(new_alias) = self.tui_state.rename.take_submitted().flatten() {
-                self.handle_rename_submit(new_alias);
+                crate::tui::handle_rename_submit(&self.ctx, &mut self.tui_state, new_alias);
             }
             if let Some(url) = self.tui_state.url_input.take_submitted().flatten() {
-                self.handle_url_submit(url);
+                crate::tui::handle_url_submit(&self.ctx, &mut self.tui_state, url);
             }
         }
-    }
-
-    fn handle_rename_submit(&mut self, new_alias: String) {
-        if let Some(item) = self.tui_state.get_selected_item_mut() {
-            let old_alias = item.alias.clone();
-            item.alias = Some(new_alias.clone());
-
-            if old_alias.as_deref() != Some(&new_alias) {
-                let path = item.path.clone();
-                let services = self.services.clone();
-                let workspace = self.runtime.library_path.clone();
-                let is_deletion = false;
-
-                let fallback_alias = self.tokio_runtime.block_on(async {
-                    if let Some(file_path) = path.as_file() {
-                        let _ = crate::command::execute(
-                            &services,
-                            crate::command::Command::AliasSet {
-                                path: file_path.clone(),
-                                workspace,
-                                alias: new_alias,
-                            },
-                        )
-                        .await;
-                    }
-                    None::<String>
-                });
-
-                if is_deletion {
-                    if let Some(item) = self.tui_state.get_selected_item_mut() {
-                        item.alias = fallback_alias;
-                    }
-                }
-            }
-        }
-    }
-
-    fn handle_url_submit(&mut self, url: String) {
-        let item = PlaylistItem {
-            path: ItemPath::Url(url),
-            duration: None,
-            alias: None,
-            mime_type: Some("url".to_string()),
-            is_virtual: true,
-        };
-        self.tui_state.library_pane.items.push(item);
-        self.tui_state
-            .library_pane
-            .items
-            .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-        self.save_playlist();
-        self.tui_state.status_bar.set("URL added to library");
     }
 
     fn execute_action(&mut self, action: Action) {
@@ -366,18 +101,23 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     use crossterm::event::{KeyCode, KeyModifiers};
+    use marked_path::CanonicalPath;
 
     use super::*;
+    use crate::feat::config::Config;
     use crate::feat::FileLauncherService;
     use crate::feat::keymap::{Action, Keymap};
     use crate::feat::media_query::MediaQueryService;
     use crate::feat::mpv::{MpvClientService, MpvLauncherService};
     use crate::feat::playlist::FakeStorageBackend;
     use crate::feat::playlist::PlaylistStorageService;
+    use crate::services::Services;
     use crate::test_utils::{FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher};
+    use crate::tui::{get_mime_type, ItemPath, Pane, PlaylistItem};
 
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
@@ -451,23 +191,25 @@ mod tests {
                 rt: core.rt,
             };
 
-            let mut app = App {
+            let ctx = SystemCtx {
                 services,
-                tui_state: TuiState::new(),
                 config: Config::default(),
+                library_path: self.library_path,
+                socket_path: String::from("/tmp/mpvsocket"),
+                keymap: Keymap::new(),
+            };
+
+            let mut app = App {
+                ctx,
+                tui_state: TuiState::new(),
                 should_quit: false,
                 fork: Fork::default(),
-                runtime: RuntimeSettings {
-                    keymap: Keymap::new(),
-                    socket_path: String::from("/tmp/mpvsocket"),
-                    library_path: self.library_path,
-                },
                 tokio_runtime: rt,
             };
 
             for path in self.playlist_items {
-                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
-                let duration = app.services.media.get_duration(&path).ok();
+                let item_path = crate::tui::ItemPath::File(CanonicalPath::new(path.clone()));
+                let duration = app.ctx.services.media.get_duration(&path).ok();
                 let mime_type = get_mime_type(&item_path);
                 app.tui_state.playlist_pane.items.push(PlaylistItem {
                     path: item_path,
@@ -479,8 +221,8 @@ mod tests {
             }
 
             for path in self.library_items {
-                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
-                let duration = app.services.media.get_duration(&path).ok();
+                let item_path = crate::tui::ItemPath::File(CanonicalPath::new(path.clone()));
+                let duration = app.ctx.services.media.get_duration(&path).ok();
                 let mime_type = get_mime_type(&item_path);
                 app.tui_state.library_pane.items.push(PlaylistItem {
                     path: item_path,
@@ -491,7 +233,7 @@ mod tests {
                 });
             }
 
-            app.set_initial_focus();
+            crate::tui::set_initial_focus(&mut app.tui_state);
             if let Some(pane) = self.focused_pane {
                 app.tui_state.focused_pane = pane;
             }
@@ -1231,7 +973,7 @@ mod tests {
         });
 
         // When refreshing the library.
-        app.refresh_library();
+        crate::tui::refresh_library(&app.ctx, &mut app.tui_state);
 
         // Then both the virtual item and real file are present.
         assert_eq!(app.tui_state.library_pane.items.len(), 2);
@@ -1267,7 +1009,7 @@ mod tests {
         });
 
         // When refreshing the library.
-        app.refresh_library();
+        crate::tui::refresh_library(&app.ctx, &mut app.tui_state);
 
         // Then the missing non-virtual item is removed.
         assert!(app.tui_state.library_pane.items.is_empty());

@@ -8,7 +8,7 @@ use crate::feat::{
     external_editor::ExternalEditor, note_db::NoteDb,
     symlink::create_symlink_with_suffix,
 };
-use crate::services::Services;
+use crate::system_ctx::SystemCtx;
 
 use super::CommandError;
 
@@ -16,7 +16,7 @@ use super::CommandError;
 ///
 /// Returns an error if database operations or editor invocation fails.
 pub async fn add(
-    services: &Services,
+    ctx: &SystemCtx,
     paths: Vec<CanonicalPath>,
 ) -> Result<Vec<CanonicalPath>, Report<CommandError>> {
     if paths.is_empty() {
@@ -26,38 +26,42 @@ pub async fn add(
     if paths.len() == 1 {
         let resolved_path = &paths[0];
         let path_str = resolved_path.as_path().to_string_lossy();
-        let file_path_id = services
+        let file_path_id = ctx
+            .services
             .db
             .get_or_create_file_path(&path_str)
             .await
             .change_context(CommandError)?;
 
-        let existing_note = services
+        let existing_note = ctx
+            .services
             .db
             .get_note(file_path_id)
             .await
             .change_context(CommandError)?;
 
         let initial_content = existing_note.unwrap_or_default();
-        if let Some(new_content) = services
+        if let Some(new_content) = ctx
+            .services
             .editor
             .open(&initial_content)
             .await
             .change_context(CommandError)?
         {
-            services
+            ctx
+                .services
                 .db
                 .upsert_note(file_path_id, &new_content)
                 .await
                 .change_context(CommandError)?;
         }
     } else {
-        let Some(new_content) = services.editor.open("").await.change_context(CommandError)? else {
+        let Some(new_content) = ctx.services.editor.open("").await.change_context(CommandError)? else {
             return Ok(paths);
         };
 
         for resolved_path in &paths {
-            upsert_note_with_prepend(services, resolved_path, &new_content).await?;
+            upsert_note_with_prepend(ctx, resolved_path, &new_content).await?;
         }
     }
 
@@ -65,18 +69,20 @@ pub async fn add(
 }
 
 async fn upsert_note_with_prepend(
-    services: &Services,
+    ctx: &SystemCtx,
     resolved_path: &CanonicalPath,
     new_content: &str,
 ) -> Result<(), Report<CommandError>> {
     let path_str = resolved_path.as_path().to_string_lossy();
-    let file_path_id = services
+    let file_path_id = ctx
+        .services
         .db
         .get_or_create_file_path(&path_str)
         .await
         .change_context(CommandError)?;
 
-    let existing_note = services
+    let existing_note = ctx
+        .services
         .db
         .get_note(file_path_id)
         .await
@@ -87,7 +93,8 @@ async fn upsert_note_with_prepend(
         None => new_content.to_owned(),
     };
 
-    services
+    ctx
+        .services
         .db
         .upsert_note(file_path_id, &final_content)
         .await
@@ -100,11 +107,12 @@ async fn upsert_note_with_prepend(
 ///
 /// Returns an error if database search or current directory retrieval fails.
 pub async fn search(
-    services: &Services,
+    ctx: &SystemCtx,
     query: &str,
     create_symlinks: bool,
 ) -> Result<(Vec<String>, usize), Report<CommandError>> {
-    let results: Vec<_> = services
+    let results: Vec<_> = ctx
+        .services
         .db
         .search_notes(query)
         .await
@@ -131,7 +139,7 @@ pub async fn search(
 ///
 /// Returns an error if database operations fail.
 pub async fn add_alias_as_note(
-    services: &Services,
+    ctx: &SystemCtx,
     path: &CanonicalPath,
     alias: &str,
 ) -> Result<bool, Report<CommandError>> {
@@ -141,12 +149,14 @@ pub async fn add_alias_as_note(
 
     let path_str = path.as_path().to_string_lossy();
 
-    let file_path_id = services
+    let file_path_id = ctx
+        .services
         .db
         .get_or_create_file_path(&path_str)
         .await
         .change_context(CommandError)?;
-    let existing = services
+    let existing = ctx
+        .services
         .db
         .get_note(file_path_id)
         .await
@@ -165,7 +175,8 @@ pub async fn add_alias_as_note(
         _ => alias.to_string(),
     };
 
-    services
+    ctx
+        .services
         .db
         .upsert_note(file_path_id, &new_content)
         .await
@@ -177,13 +188,14 @@ pub async fn add_alias_as_note(
 ///
 /// Returns an error if database or storage operations fail.
 pub async fn set_alias(
-    services: &Services,
+    ctx: &SystemCtx,
     path: &CanonicalPath,
     workspace: &CanonicalPath,
     alias: &str,
 ) -> Result<CanonicalPath, Report<CommandError>> {
-    let _ = add_alias_as_note(services, path, alias).await;
-    services
+    let _ = add_alias_as_note(ctx, path, alias).await;
+    ctx
+        .services
         .storage
         .upsert_alias(path, workspace, alias)
         .await
@@ -195,11 +207,12 @@ pub async fn set_alias(
 ///
 /// Returns an error if storage operations fail.
 pub async fn remove_alias(
-    services: &Services,
+    ctx: &SystemCtx,
     path: &CanonicalPath,
     workspace: &CanonicalPath,
 ) -> Result<CanonicalPath, Report<CommandError>> {
-    services
+    ctx
+        .services
         .storage
         .delete_alias(path, workspace)
         .await
@@ -209,7 +222,7 @@ pub async fn remove_alias(
 
 #[allow(clippy::unused_async)]
 pub async fn migrate_aliases_to_notes<S>(
-    _services: &Services,
+    _ctx: &SystemCtx,
     _files: &HashMap<CanonicalPath, crate::feat::playlist::FileMetadata, S>,
 ) -> (usize, usize)
 where
@@ -222,10 +235,11 @@ where
 ///
 /// Returns an error if database operations, fuzzy search, or current directory retrieval fails.
 pub async fn fuzzy(
-    services: &Services,
+    ctx: &SystemCtx,
     create_symlinks: bool,
 ) -> Result<(Vec<String>, usize), Report<CommandError>> {
-    let notes = services
+    let notes = ctx
+        .services
         .db
         .get_all_notes_with_paths()
         .await
@@ -235,7 +249,8 @@ pub async fn fuzzy(
         return Ok((Vec::new(), 0));
     }
 
-    let result = services
+    let result = ctx
+        .services
         .fuzzy_search
         .search(&notes)
         .change_context(CommandError)?;
@@ -262,14 +277,14 @@ mod tests {
     use marked_path::CanonicalPath;
 
     use crate::feat::note_db::NoteDb;
-    use crate::test_utils::{create_test_services, create_temp_file, NoteTestContext};
+    use crate::test_utils::{create_temp_file, NoteTestContext};
 
     #[tokio::test]
     async fn add_alias_as_note_skips_blank_alias() {
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, &canonical, "").await.unwrap();
+        let result = super::add_alias_as_note(&ctx.ctx, &canonical, "").await.unwrap();
 
         assert!(!result);
     }
@@ -279,12 +294,12 @@ mod tests {
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, &canonical, "my-alias")
+        let result = super::add_alias_as_note(&ctx.ctx, &canonical, "my-alias")
             .await
             .unwrap();
 
         assert!(result);
-        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
+        let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("my-alias".to_string()));
     }
 
@@ -292,18 +307,18 @@ mod tests {
     async fn add_alias_as_note_skips_exact_match() {
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
-        ctx.services
+        ctx.ctx.services
             .db
             .upsert_note(ctx.file_path_id, "foo")
             .await
             .unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, &canonical, "foo")
+        let result = super::add_alias_as_note(&ctx.ctx, &canonical, "foo")
             .await
             .unwrap();
 
         assert!(!result);
-        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
+        let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("foo".to_string()));
     }
 
@@ -311,18 +326,18 @@ mod tests {
     async fn add_alias_as_note_skips_substring_match() {
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
-        ctx.services
+        ctx.ctx.services
             .db
             .upsert_note(ctx.file_path_id, "foo bar")
             .await
             .unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, &canonical, "foo")
+        let result = super::add_alias_as_note(&ctx.ctx, &canonical, "foo")
             .await
             .unwrap();
 
         assert!(!result);
-        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
+        let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("foo bar".to_string()));
     }
 
@@ -330,24 +345,24 @@ mod tests {
     async fn add_alias_as_note_appends_to_existing() {
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
-        ctx.services
+        ctx.ctx.services
             .db
             .upsert_note(ctx.file_path_id, "first")
             .await
             .unwrap();
 
-        let result = super::add_alias_as_note(&ctx.services, &canonical, "second")
+        let result = super::add_alias_as_note(&ctx.ctx, &canonical, "second")
             .await
             .unwrap();
 
         assert!(result);
-        let note = ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
+        let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("first\nsecond".to_string()));
     }
 
     #[tokio::test]
     async fn migrate_aliases_to_notes_migrates_files_with_aliases() {
-        let services = create_test_services().await;
+        let ctx = NoteTestContext::new().await;
         let temp1 = create_temp_file();
         let temp2 = create_temp_file();
 
@@ -375,7 +390,7 @@ mod tests {
             },
         );
 
-        let (migrated, skipped) = super::migrate_aliases_to_notes(&services, &files).await;
+        let (migrated, skipped) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
 
         assert_eq!(migrated, 0);
         assert_eq!(skipped, 0);
@@ -383,7 +398,7 @@ mod tests {
 
     #[tokio::test]
     async fn migrate_aliases_to_notes_skips_files_without_aliases() {
-        let services = create_test_services().await;
+        let ctx = NoteTestContext::new().await;
         let temp1 = create_temp_file();
         let temp2 = create_temp_file();
 
@@ -411,7 +426,7 @@ mod tests {
             },
         );
 
-        let (migrated, skipped) = super::migrate_aliases_to_notes(&services, &files).await;
+        let (migrated, skipped) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
 
         assert_eq!(migrated, 0);
         assert_eq!(skipped, 0);
@@ -419,7 +434,7 @@ mod tests {
 
     #[tokio::test]
     async fn migrate_aliases_to_notes_is_idempotent() {
-        let services = create_test_services().await;
+        let ctx = NoteTestContext::new().await;
         let temp = create_temp_file();
 
         let mut files = HashMap::new();
@@ -435,8 +450,8 @@ mod tests {
             },
         );
 
-        let (migrated1, skipped1) = super::migrate_aliases_to_notes(&services, &files).await;
-        let (migrated2, skipped2) = super::migrate_aliases_to_notes(&services, &files).await;
+        let (migrated1, skipped1) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
+        let (migrated2, skipped2) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
 
         assert_eq!(migrated1, 0);
         assert_eq!(skipped1, 0);

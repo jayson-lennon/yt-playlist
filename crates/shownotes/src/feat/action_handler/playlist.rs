@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::command::Command;
 use crate::tui::Pane;
 
 pub fn handle_reorder_up(app: &mut App) {
@@ -31,7 +32,10 @@ pub fn handle_move_to_library(app: &mut App) {
             app.tui_state.focused_pane = Pane::Library;
         }
         app.tui_state.needs_clear = true;
-        app.save_playlist();
+        let _ = app.execute(Command::PlaylistSave {
+            playlist_items: app.tui_state.playlist_pane.items.clone(),
+            library_items: app.tui_state.library_pane.items.clone(),
+        });
     }
 }
 
@@ -49,6 +53,9 @@ pub fn handle_move_to_playlist(app: &mut App) {
             app.tui_state.focused_pane = Pane::Playlist;
         }
         app.tui_state.needs_clear = true;
-        app.save_playlist();
+        let _ = app.execute(Command::PlaylistSave {
+            playlist_items: app.tui_state.playlist_pane.items.clone(),
+            library_items: app.tui_state.library_pane.items.clone(),
+        });
     }
 }

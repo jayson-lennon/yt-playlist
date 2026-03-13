@@ -32,7 +32,7 @@ async fn given_file_has_alias(world: &mut AliasDeletionWorld, path: String, alia
         .expect("failed to canonicalize workspace");
 
     execute(
-        &world.inner.services,
+        &world.inner.ctx,
         Command::AliasSet {
             path: canonical,
             workspace,
@@ -51,7 +51,7 @@ async fn when_remove_alias(world: &mut AliasDeletionWorld, path: String) {
         .expect("failed to canonicalize workspace");
 
     execute(
-        &world.inner.services,
+        &world.inner.ctx,
         Command::AliasRemove {
             path: canonical,
             workspace,
@@ -70,6 +70,7 @@ async fn then_file_has_no_alias(world: &mut AliasDeletionWorld, path: String) {
 
     let alias = world
         .inner
+        .ctx
         .services
         .storage
         .resolve_alias(&canonical, &workspace)

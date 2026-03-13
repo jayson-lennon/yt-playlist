@@ -4,13 +4,15 @@ mod mpv;
 pub mod notes;
 mod output;
 mod sources;
+mod tui;
 
 use std::path::PathBuf;
 
 use error_stack::Report;
 use marked_path::CanonicalPath;
 
-use crate::services::Services;
+use crate::system_ctx::SystemCtx;
+use crate::tui::{ItemPath, PlaylistItem};
 
 pub use output::format_output;
 
@@ -40,6 +42,15 @@ pub enum Command {
 
     AliasSet { path: CanonicalPath, workspace: CanonicalPath, alias: String },
     AliasRemove { path: CanonicalPath, workspace: CanonicalPath },
+
+    PlaylistLoad,
+    PlaylistSave {
+        playlist_items: Vec<PlaylistItem>,
+        library_items: Vec<PlaylistItem>,
+    },
+    LibraryRefresh,
+    UrlAdd { url: String },
+    AliasRename { path: ItemPath, alias: String },
 }
 
 /// Results from command execution.
@@ -65,42 +76,51 @@ pub enum CommandResult {
 
     AliasSet { path: CanonicalPath, alias: String },
     AliasRemoved { path: CanonicalPath },
+
+    PlaylistLoaded {
+        playlist_items: Vec<PlaylistItem>,
+        virtual_library_items: Vec<PlaylistItem>,
+    },
+    PlaylistSaved,
+    LibraryRefreshed { items: Vec<PlaylistItem> },
+    UrlAdded { item: PlaylistItem },
+    AliasRenamed { path: ItemPath, alias: String },
 }
 
 /// # Errors
 ///
 /// Returns an error if the command execution fails.
 pub async fn execute(
-    services: &Services,
+    ctx: &SystemCtx,
     command: Command,
 ) -> Result<CommandResult, Report<CommandError>> {
     match command {
         Command::SourcesAdd { path, url } => {
-            sources::add(services, &path, &url).await?;
+            sources::add(ctx, &path, &url).await?;
             Ok(CommandResult::SourcesAdded { path, url })
         }
         Command::SourcesList { path } => {
-            let urls = sources::list(services, &path).await?;
+            let urls = sources::list(ctx, &path).await?;
             Ok(CommandResult::SourcesList { path, urls })
         }
         Command::SourcesEdit { path } => {
-            sources::edit(services, &path).await?;
+            sources::edit(ctx, &path).await?;
             Ok(CommandResult::SourcesEdited { path })
         }
         Command::NotesAdd { paths } => {
-            let resolved_paths = notes::add(services, paths).await?;
+            let resolved_paths = notes::add(ctx, paths).await?;
             Ok(CommandResult::NotesAdded { paths: resolved_paths })
         }
         Command::NotesSearch { query, create_symlinks } => {
-            let (paths, symlinks_created) = notes::search(services, &query, create_symlinks).await?;
+            let (paths, symlinks_created) = notes::search(ctx, &query, create_symlinks).await?;
             Ok(CommandResult::NotesSearch { paths, symlinks_created })
         }
         Command::NotesFuzzy { create_symlinks } => {
-            let (paths, symlinks_created) = notes::fuzzy(services, create_symlinks).await?;
+            let (paths, symlinks_created) = notes::fuzzy(ctx, create_symlinks).await?;
             Ok(CommandResult::NotesFuzzy { paths, symlinks_created })
         }
         Command::GenerateNotes { format, working_directory } => {
-            let output = generate::execute(services, &working_directory, &format).await?;
+            let output = generate::execute(ctx, &working_directory, &format).await?;
             Ok(CommandResult::NotesGenerated { output })
         }
         Command::MpvLoad { path, socket } => {
@@ -108,26 +128,42 @@ pub async fn execute(
             Ok(CommandResult::MpvLoaded { path })
         }
         Command::LaunchFile { path, command, socket_path } => {
-            let result = launcher::launch(services, &path, command.as_deref(), &socket_path)?;
+            let result = launcher::launch(ctx, &path, command.as_deref(), &socket_path)?;
             Ok(CommandResult::FileLaunched { path, used_default_opener: result.used_default_opener })
         }
         Command::MpvLoadPlaylist { paths } => {
-            mpv::load_playlist(services, &paths)?;
+            mpv::load_playlist(ctx, &paths)?;
             Ok(CommandResult::MpvPlaylistLoaded { count: paths.len() })
         }
         Command::MpvSpawn { socket_path } => {
-            let was_already_running = mpv::spawn(services, &socket_path)?;
+            let was_already_running = mpv::spawn(ctx, &socket_path)?;
             Ok(CommandResult::MpvSpawned { was_already_running })
         }
         Command::AliasSet { path, workspace, alias } => {
             let alias_clone = alias.clone();
-            notes::set_alias(services, &path, &workspace, &alias).await?;
+            notes::set_alias(ctx, &path, &workspace, &alias).await?;
             Ok(CommandResult::AliasSet { path, alias: alias_clone })
         }
         Command::AliasRemove { path, workspace } => {
             let path_clone = path.clone();
-            notes::remove_alias(services, &path, &workspace).await?;
+            notes::remove_alias(ctx, &path, &workspace).await?;
             Ok(CommandResult::AliasRemoved { path: path_clone })
+        }
+        Command::PlaylistLoad => {
+            tui::load_playlist(ctx).await
+        }
+        Command::PlaylistSave { playlist_items, library_items } => {
+            tui::save_playlist(ctx, &playlist_items, &library_items).await
+        }
+        Command::LibraryRefresh => {
+            tui::refresh_library(ctx).await
+        }
+        Command::UrlAdd { url } => {
+            let item = tui::add_url(&url);
+            Ok(CommandResult::UrlAdded { item })
+        }
+        Command::AliasRename { path, alias } => {
+            tui::rename_alias(ctx, &path, &alias).await
         }
     }
 }

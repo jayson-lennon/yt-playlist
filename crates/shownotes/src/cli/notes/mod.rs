@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 
-use crate::command::{format_output, execute, Command};
-use crate::services::Services;
+use crate::app::App;
+use crate::command::{format_output, Command};
 
 use super::RunError;
 
@@ -50,38 +50,27 @@ pub enum NotesCommand {
 /// - Path resolution fails
 /// - The editor fails to open
 /// - The fuzzy search process fails
-pub fn run_notes_command(
-    cmd: NotesCommand,
-    db_path: &std::path::Path,
-    rt: &tokio::runtime::Handle,
-) -> Result<(), Report<RunError>> {
-    rt.block_on(async {
-        let services = Services::new(&db_path.to_string_lossy(), rt.clone())
-            .await
-            .change_context(RunError)?;
-
-        let command = match cmd {
-            NotesCommand::Add { paths } => {
-                let canonical_paths: Vec<_> = paths
-                    .into_iter()
-                    .filter_map(|p| marked_path::CanonicalPath::from_path(&p).ok())
-                    .collect();
-                Command::NotesAdd { paths: canonical_paths }
+pub fn run_notes_command(cmd: NotesCommand, app: &mut App) -> Result<(), Report<RunError>> {
+    let command = match cmd {
+        NotesCommand::Add { paths } => {
+            let canonical_paths: Vec<_> = paths
+                .into_iter()
+                .filter_map(|p| marked_path::CanonicalPath::from_path(&p).ok())
+                .collect();
+            Command::NotesAdd {
+                paths: canonical_paths,
             }
-            NotesCommand::Search { query, symlink } => Command::NotesSearch {
-                query,
-                create_symlinks: symlink,
-            },
-            NotesCommand::Fuzzy { symlink } => Command::NotesFuzzy {
-                create_symlinks: symlink,
-            },
-        };
+        }
+        NotesCommand::Search { query, symlink } => Command::NotesSearch {
+            query,
+            create_symlinks: symlink,
+        },
+        NotesCommand::Fuzzy { symlink } => Command::NotesFuzzy {
+            create_symlinks: symlink,
+        },
+    };
 
-        let result = execute(&services, command)
-            .await
-            .change_context(RunError)?;
-
-        println!("{}", format_output(&result));
-        Ok(())
-    })
+    let result = app.execute(command).change_context(RunError)?;
+    println!("{}", format_output(&result));
+    Ok(())
 }

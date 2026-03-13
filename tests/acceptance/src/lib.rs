@@ -5,15 +5,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use cucumber::World;
+use marked_path::CanonicalPath;
 use tempfile::TempDir;
 
+use shownotes::feat::config::Config;
 use shownotes::feat::external_editor::{ExternalEditorService, FakeEditor};
 use shownotes::services::Services;
+use shownotes::SystemCtx;
 
 #[derive(Debug, World)]
 #[world(init = Self::new)]
 pub struct ShownotesWorld {
-    pub services: Services,
+    pub ctx: SystemCtx,
     pub temp_dir: TempDir,
     pub file_paths: HashMap<String, PathBuf>,
     pub fake_editor: Arc<FakeEditor>,
@@ -36,8 +39,17 @@ impl ShownotesWorld {
             ..services
         };
 
-        Self {
+        let library_path = CanonicalPath::from_path(temp_dir.path()).expect("failed to canonicalize library path");
+        let ctx = SystemCtx {
             services,
+            config: Config::default(),
+            library_path,
+            socket_path: String::new(),
+            keymap: shownotes::Keymap::new(),
+        };
+
+        Self {
+            ctx,
             temp_dir,
             file_paths: HashMap::new(),
             fake_editor,

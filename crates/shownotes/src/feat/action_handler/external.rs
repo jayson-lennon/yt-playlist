@@ -1,16 +1,16 @@
 use crate::app::App;
-use crate::command::{execute, Command, CommandResult};
+use crate::command::{Command, CommandResult};
 
 pub fn handle_launch_file(app: &mut App) {
-    if let Some(item) = app.tui_state.get_selected_item() {
+    if let Some(item) = app.tui_state.get_selected_item().cloned() {
         if let Some(file_path) = item.path.as_file() {
-            let cmd = app.config.get_cmd(file_path.as_path());
+            let cmd = app.ctx.config.get_cmd(file_path.as_path());
             let command = Command::LaunchFile {
                 path: file_path.clone(),
                 command: cmd.map(str::to_string),
-                socket_path: app.runtime.socket_path.clone(),
+                socket_path: app.ctx.socket_path.clone(),
             };
-            match app.tokio_runtime.block_on(execute(&app.services, command)) {
+            match app.execute(command) {
                 Ok(CommandResult::FileLaunched {
                     used_default_opener,
                     ..
@@ -45,7 +45,7 @@ pub fn handle_load_playlist(app: &mut App) {
         .filter(|item| {
             item.path
                 .as_file()
-                .is_some_and(|p| app.config.is_video_or_audio(p.as_path()))
+                .is_some_and(|p| app.ctx.config.is_video_or_audio(p.as_path()))
         })
         .filter_map(|item| item.path.as_file().cloned())
         .collect();
@@ -57,7 +57,7 @@ pub fn handle_load_playlist(app: &mut App) {
     }
 
     let command = Command::MpvLoadPlaylist { paths };
-    match app.tokio_runtime.block_on(execute(&app.services, command)) {
+    match app.execute(command) {
         Ok(CommandResult::MpvPlaylistLoaded { count }) => {
             app.tui_state
                 .status_bar
@@ -73,9 +73,9 @@ pub fn handle_load_playlist(app: &mut App) {
 
 pub fn handle_launch_mpv(app: &mut App) {
     let command = Command::MpvSpawn {
-        socket_path: app.runtime.socket_path.clone(),
+        socket_path: app.ctx.socket_path.clone(),
     };
-    match app.tokio_runtime.block_on(execute(&app.services, command)) {
+    match app.execute(command) {
         Ok(CommandResult::MpvSpawned {
             was_already_running: true,
         }) => {

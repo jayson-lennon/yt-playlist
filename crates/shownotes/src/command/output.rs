@@ -55,5 +55,16 @@ pub fn format_output(result: &CommandResult) -> String {
         CommandResult::AliasRemoved { path } => {
             format!("Removed alias for: {}", path.as_path().display())
         }
+        CommandResult::PlaylistLoaded { .. } => "Playlist loaded".to_string(),
+        CommandResult::PlaylistSaved => "Playlist saved".to_string(),
+        CommandResult::LibraryRefreshed { items } => {
+            format!("Library refreshed: {} items", items.len())
+        }
+        CommandResult::UrlAdded { item } => {
+            format!("URL added: {}", item.path.to_string_lossy())
+        }
+        CommandResult::AliasRenamed { path, alias } => {
+            format!("Renamed to '{}': {}", alias, path.to_string_lossy())
+        }
     }
 }

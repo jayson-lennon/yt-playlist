@@ -4,8 +4,8 @@ use clap::Subcommand;
 use error_stack::{Report, ResultExt};
 use marked_path::CanonicalPath;
 
-use crate::command::{format_output, execute, Command};
-use crate::services::Services;
+use crate::app::App;
+use crate::command::{format_output, Command};
 
 use super::RunError;
 
@@ -40,36 +40,26 @@ pub enum SourcesCommands {
 /// - The database cannot be accessed
 /// - Path resolution fails
 /// - The editor fails to open
-pub fn run_sources_command(
-    cmd: SourcesCommands,
-    db_path: &std::path::Path,
-    rt: &tokio::runtime::Handle,
-) -> Result<(), Report<RunError>> {
-    rt.block_on(async {
-        let services = Services::new(&db_path.to_string_lossy(), rt.clone())
-            .await
-            .change_context(RunError)?;
-
-        let command = match cmd {
-            SourcesCommands::Add { path, url } => {
-                let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
-                Command::SourcesAdd { path: canonical, url }
+pub fn run_sources_command(cmd: SourcesCommands, app: &mut App) -> Result<(), Report<RunError>> {
+    let command = match cmd {
+        SourcesCommands::Add { path, url } => {
+            let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
+            Command::SourcesAdd {
+                path: canonical,
+                url,
             }
-            SourcesCommands::List { path } => {
-                let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
-                Command::SourcesList { path: canonical }
-            }
-            SourcesCommands::Edit { path } => {
-                let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
-                Command::SourcesEdit { path: canonical }
-            }
-        };
+        }
+        SourcesCommands::List { path } => {
+            let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
+            Command::SourcesList { path: canonical }
+        }
+        SourcesCommands::Edit { path } => {
+            let canonical = CanonicalPath::from_path(&path).change_context(RunError)?;
+            Command::SourcesEdit { path: canonical }
+        }
+    };
 
-        let result = execute(&services, command)
-            .await
-            .change_context(RunError)?;
-
-        println!("{}", format_output(&result));
-        Ok(())
-    })
+    let result = app.execute(command).change_context(RunError)?;
+    println!("{}", format_output(&result));
+    Ok(())
 }
