@@ -49,26 +49,15 @@ pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap, services: &S
 
     let mut ctx = RenderContext::new(frame, Rect::default(), keymap, services, state);
 
-    AreaRender::to(chunks[0]).render(&mut ctx, &state.playlist_pane);
-    AreaRender::to(chunks[1]).render(&mut ctx, &state.library_pane);
+    AreaRender::to(chunks[0]).try_render(&mut ctx, &state.playlist_pane);
+    AreaRender::to(chunks[1]).try_render(&mut ctx, &state.library_pane);
 
     let status_text = state.status_message.clone().unwrap_or_default();
     let status = Paragraph::new(status_text).style(Style::default().fg(Color::Yellow));
     ctx.frame.render_widget(status, status_area);
 
-    if state.is_renaming() {
-        AreaRender::to(Rect::default()).render(&mut ctx, &state.rename);
-    }
-
-    if state.is_url_input() {
-        AreaRender::to(Rect::default()).render(&mut ctx, &state.url_input);
-    }
-
-    if state.which_key.active {
-        AreaRender::to(Rect::default()).render(&mut ctx, &state.which_key);
-    }
-
-    if state.is_showing_error() {
-        AreaRender::to(Rect::default()).render(&mut ctx, &state.error_popup);
-    }
+    AreaRender::to(Rect::default()).try_render(&mut ctx, &state.rename);
+    AreaRender::to(Rect::default()).try_render(&mut ctx, &state.url_input);
+    AreaRender::to(Rect::default()).try_render(&mut ctx, &state.which_key);
+    AreaRender::to(Rect::default()).try_render(&mut ctx, &state.error_popup);
 }

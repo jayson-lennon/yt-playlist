@@ -88,6 +88,10 @@ impl Filter {
 }
 
 impl Render for Filter {
+    fn should_render(&self, _ctx: &RenderContext<'_, '_>) -> bool {
+        self.is_active()
+    }
+
     fn render(&self, ctx: &mut RenderContext<'_, '_>) {
         let filter_text = format!("Filter: {}█", self.input);
         let footer = Paragraph::new(filter_text).style(

@@ -236,6 +236,10 @@ impl PlaylistPane {
 }
 
 impl Render for PlaylistPane {
+    fn should_render(&self, _ctx: &RenderContext<'_, '_>) -> bool {
+        true
+    }
+
     fn render(&self, ctx: &mut RenderContext<'_, '_>) {
         let is_focused = ctx.tui_state.focused_pane == Pane::Playlist;
         let display_mode = ctx.tui_state.display_mode;

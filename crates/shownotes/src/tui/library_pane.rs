@@ -242,6 +242,10 @@ impl Default for LibraryPane {
 }
 
 impl Render for LibraryPane {
+    fn should_render(&self, _ctx: &RenderContext<'_, '_>) -> bool {
+        true
+    }
+
     fn render(&self, ctx: &mut RenderContext<'_, '_>) {
         let is_focused = ctx.tui_state.focused_pane == Pane::Library;
         let display_mode = ctx.tui_state.display_mode;

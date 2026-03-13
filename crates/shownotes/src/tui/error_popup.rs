@@ -79,6 +79,10 @@ impl Component for ErrorPopup {
 }
 
 impl Render for ErrorPopup {
+    fn should_render(&self, _ctx: &RenderContext<'_, '_>) -> bool {
+        self.is_active()
+    }
+
     fn render(&self, ctx: &mut RenderContext<'_, '_>) {
         let area = popup_area(ctx.frame.area(), 60, 50);
 

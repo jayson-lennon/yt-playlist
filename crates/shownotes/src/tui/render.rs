@@ -52,10 +52,24 @@ impl AreaRender {
         ctx.area = self.area;
         Render::render(component, ctx);
     }
+
+    /// Try to render a component to this builder's area.
+    ///
+    /// Sets `ctx.area` to the builder's area, then calls `Render::try_render`.
+    pub fn try_render<C: Render>(self, ctx: &mut RenderContext<'_, '_>, component: &C) {
+        ctx.area = self.area;
+        Render::try_render(component, ctx);
+    }
 }
 
 pub trait Render {
+    fn should_render(&self, ctx: &RenderContext<'_, '_>) -> bool;
     fn render(&self, ctx: &mut RenderContext<'_, '_>);
+    fn try_render(&self, ctx: &mut RenderContext<'_, '_>) {
+        if self.should_render(ctx) {
+            self.render(ctx);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -67,6 +81,9 @@ mod tests {
     struct DummyComponent;
 
     impl Render for DummyComponent {
+        fn should_render(&self, _ctx: &RenderContext<'_, '_>) -> bool {
+            true
+        }
         fn render(&self, _ctx: &mut RenderContext<'_, '_>) {}
     }
 

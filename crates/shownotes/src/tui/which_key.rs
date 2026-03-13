@@ -451,6 +451,10 @@ impl WhichKey {
 }
 
 impl Render for WhichKey {
+    fn should_render(&self, _ctx: &RenderContext<'_, '_>) -> bool {
+        self.is_active()
+    }
+
     fn render(&self, ctx: &mut RenderContext<'_, '_>) {
         let keymap = ctx.keymap;
         let pane = ctx.tui_state.focused_pane;
