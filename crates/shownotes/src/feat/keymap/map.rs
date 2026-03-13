@@ -2,11 +2,8 @@ use std::fmt;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
-use super::{
-    Action, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding, ShowNoteKind,
-    parse_key_sequence,
-};
-use crate::tui::Pane;
+use super::{parse_key_sequence, Key, KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding};
+use crate::tui::{Pane, ShowNoteKind, TuiAction};
 
 /// Error indicating a key sequence is missing a description.
 ///
@@ -71,37 +68,37 @@ impl Keymap {
         };
 
         keymap
-            .bind("?", Action::ShowHelp, "show help", Cat::General, Ctx::Global)
-            .bind("/", Action::StartFilter, "filter", Cat::General, Ctx::Global)
-            .bind("q", Action::Quit, "quit", Cat::General, Ctx::Global)
-            .bind("j", Action::MoveDown, "down", Cat::Navigation, Ctx::Global)
-            .bind("k", Action::MoveUp, "up", Cat::Navigation, Ctx::Global)
-            .bind("h", Action::FocusPlaylist, "focus playlist", Cat::PaneSwitch, Ctx::Global)
-            .bind("l", Action::FocusLibrary, "focus library", Cat::PaneSwitch, Ctx::Global)
-            .bind("r", Action::Rename, "rename", Cat::ItemActions, Ctx::Global)
-            .bind("J", Action::ReorderDown, "move down", Cat::PlaylistActions, Ctx::Playlist)
-            .bind("K", Action::ReorderUp, "move up", Cat::PlaylistActions, Ctx::Playlist)
-            .bind("o", Action::LaunchFile, "open file", Cat::ItemActions, Ctx::Global)
-            .bind("L", Action::MoveToLibrary, "to library", Cat::ItemActions, Ctx::Playlist)
-            .bind("H", Action::MoveToPlaylist, "to playlist", Cat::ItemActions, Ctx::Library)
-            .bind("x", Action::Delete, "delete", Cat::ItemActions, Ctx::Library)
+            .bind("?", TuiAction::ShowHelp, "show help", Cat::General, Ctx::Global)
+            .bind("/", TuiAction::StartFilter, "filter", Cat::General, Ctx::Global)
+            .bind("q", TuiAction::Quit, "quit", Cat::General, Ctx::Global)
+            .bind("j", TuiAction::MoveDown, "down", Cat::Navigation, Ctx::Global)
+            .bind("k", TuiAction::MoveUp, "up", Cat::Navigation, Ctx::Global)
+            .bind("h", TuiAction::FocusPlaylist, "focus playlist", Cat::PaneSwitch, Ctx::Global)
+            .bind("l", TuiAction::FocusLibrary, "focus library", Cat::PaneSwitch, Ctx::Global)
+            .bind("r", TuiAction::Rename, "rename", Cat::ItemActions, Ctx::Global)
+            .bind("J", TuiAction::ReorderDown, "move down", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("K", TuiAction::ReorderUp, "move up", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("o", TuiAction::LaunchFile, "open file", Cat::ItemActions, Ctx::Global)
+            .bind("L", TuiAction::MoveToLibrary, "to library", Cat::ItemActions, Ctx::Playlist)
+            .bind("H", TuiAction::MoveToPlaylist, "to playlist", Cat::ItemActions, Ctx::Library)
+            .bind("x", TuiAction::Delete, "delete", Cat::ItemActions, Ctx::Library)
             .describe_prefix("e", "edit")
-            .bind("en", Action::Notes, "notes", Cat::ItemActions, Ctx::Global)
-            .bind("es", Action::EditSources, "edit sources", Cat::ItemActions, Ctx::Global)
+            .bind("en", TuiAction::Notes, "notes", Cat::ItemActions, Ctx::Global)
+            .bind("es", TuiAction::EditSources, "edit sources", Cat::ItemActions, Ctx::Global)
             .describe_prefix("g", "general")
-            .bind("gm", Action::LaunchMpv, "launch mpv", Cat::General, Ctx::Global)
-            .bind("gp", Action::LoadPlaylist, "playlist to mpv", Cat::PlaylistActions, Ctx::Playlist)
+            .bind("gm", TuiAction::LaunchMpv, "launch mpv", Cat::General, Ctx::Global)
+            .bind("gp", TuiAction::LoadPlaylist, "playlist to mpv", Cat::PlaylistActions, Ctx::Playlist)
             .describe_prefix("gn", "generate show notes")
-            .bind("gnh", Action::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
-            .bind("gnm", Action::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
+            .bind("gnh", TuiAction::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
+            .bind("gnm", TuiAction::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
             .describe_prefix("a", "add")
-            .bind("au", Action::AddUrl, "add url", Cat::General, Ctx::Global)
+            .bind("au", TuiAction::AddUrl, "add url", Cat::General, Ctx::Global)
             .describe_prefix("<leader>", "<leader>")
             .describe_prefix("<leader>u", "ui")
-            .bind("<leader>ua", Action::ShowAlias, "show alias", Cat::General, Ctx::Global)
-            .bind("<leader>up", Action::ShowPath, "show path", Cat::General, Ctx::Global)
+            .bind("<leader>ua", TuiAction::ShowAlias, "show alias", Cat::General, Ctx::Global)
+            .bind("<leader>up", TuiAction::ShowPath, "show path", Cat::General, Ctx::Global)
             .describe_prefix("<leader>s", "search")
-            .bind("<leader>sf", Action::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global);
+            .bind("<leader>sf", TuiAction::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global);
 
         keymap.finalize().expect("keymap has missing descriptions");
         keymap
@@ -245,7 +242,7 @@ impl Keymap {
     pub fn bind(
         &mut self,
         sequence: &str,
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,
@@ -262,7 +259,7 @@ impl Keymap {
     pub(super) fn insert_into_tree(
         &mut self,
         keys: &[Key],
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,
@@ -281,7 +278,7 @@ impl Keymap {
 
     fn build_tree(
         keys: &[Key],
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,
@@ -299,7 +296,7 @@ impl Keymap {
     fn insert_into_child(
         child: &mut KeyChild,
         keys: &[Key],
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,
@@ -428,7 +425,12 @@ impl Keymap {
         &self.bindings
     }
 
-    pub fn get_action(&self, key: KeyCode, _modifiers: KeyModifiers, pane: Pane) -> Option<Action> {
+    pub fn get_action(
+        &self,
+        key: KeyCode,
+        _modifiers: KeyModifiers,
+        pane: Pane,
+    ) -> Option<TuiAction> {
         let key = Key::from_keycode(key)?;
         let child = self.bindings.iter().find(|c| c.key == key)?;
         match &child.node {
@@ -440,7 +442,11 @@ impl Keymap {
                     KeyContext::Playlist => pane == Pane::Playlist,
                     KeyContext::Library => pane == Pane::Library,
                 };
-                if context_matches { Some(*action) } else { None }
+                if context_matches {
+                    Some(*action)
+                } else {
+                    None
+                }
             }
             KeyNode::Branch { .. } => None,
         }

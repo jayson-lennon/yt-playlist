@@ -4,11 +4,12 @@ use super::component::{Component, ComponentContext};
 use super::event::EventResult;
 use super::render::{Render, RenderContext};
 use super::which_key::{WhichKey, WhichKeyConfig};
-use crate::feat::keymap::{Action, Key};
+use crate::feat::keymap::Key;
+use crate::tui::TuiAction;
 
 pub struct GlobalKeyHandler {
     which_key: WhichKey,
-    pending_action: Option<Action>,
+    pending_action: Option<TuiAction>,
 }
 
 impl GlobalKeyHandler {
@@ -19,7 +20,7 @@ impl GlobalKeyHandler {
         }
     }
 
-    pub fn take_action(&mut self) -> Option<Action> {
+    pub fn take_action(&mut self) -> Option<TuiAction> {
         self.pending_action
             .take()
             .or_else(|| self.which_key.take_action())

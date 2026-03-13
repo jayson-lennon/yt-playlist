@@ -10,8 +10,9 @@ use ratatui::{
 use super::component::{Component, ComponentContext};
 use super::event::EventResult;
 use super::render::{Render, RenderContext};
-use crate::feat::keymap::{Action, Key, KeyCategory, KeyNode, Keymap, LeafBinding};
+use crate::feat::keymap::{Key, KeyCategory, KeyNode, Keymap, LeafBinding};
 use crate::tui::Pane;
+use crate::tui::TuiAction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WhichKeyPosition {
@@ -49,7 +50,7 @@ pub struct WhichKey {
     pub active: bool,
     pub config: WhichKeyConfig,
     pub pending_keys: Vec<Key>,
-    pub pending_action: Option<Action>,
+    pub pending_action: Option<TuiAction>,
 }
 
 struct ColumnData<'a> {
@@ -119,7 +120,7 @@ impl WhichKey {
         !self.pending_keys.is_empty()
     }
 
-    pub fn take_action(&mut self) -> Option<Action> {
+    pub fn take_action(&mut self) -> Option<TuiAction> {
         self.pending_action.take()
     }
 
@@ -532,7 +533,7 @@ mod tests {
         keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
-                Action::LaunchMpv,
+                TuiAction::LaunchMpv,
                 "launch mpv",
                 KeyCategory::General,
                 KeyContext::Global,
@@ -548,7 +549,7 @@ mod tests {
             g.describe("s", "search", |s| {
                 s.bind(
                     "f",
-                    Action::FuzzyNotes,
+                    TuiAction::FuzzyNotes,
                     "fuzzy notes",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -691,7 +692,7 @@ mod tests {
 
         // Then the event is consumed, action is set, and which_key is dismissed
         assert_eq!(result, EventResult::Consumed);
-        assert_eq!(which_key.pending_action, Some(Action::LaunchMpv));
+        assert_eq!(which_key.pending_action, Some(TuiAction::LaunchMpv));
         assert!(!which_key.is_pending());
     }
 
@@ -719,7 +720,7 @@ mod tests {
     fn take_action_returns_and_clears_action() {
         // Given a WhichKey with a pending action
         let mut which_key = WhichKey {
-            pending_action: Some(Action::Quit),
+            pending_action: Some(TuiAction::Quit),
             ..Default::default()
         };
 
@@ -727,7 +728,7 @@ mod tests {
         let action = which_key.take_action();
 
         // Then the action is returned and cleared
-        assert_eq!(action, Some(Action::Quit));
+        assert_eq!(action, Some(TuiAction::Quit));
         assert!(which_key.pending_action.is_none());
     }
 

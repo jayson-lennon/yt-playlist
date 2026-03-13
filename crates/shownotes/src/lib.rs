@@ -11,7 +11,8 @@ pub use command::{Command, CommandError, CommandResult, execute, format_output};
 pub use feat::config::{Config, ConfigError, load};
 pub use feat::fuzzy_search::{FuzzySearch, FuzzySearchError, FuzzySearchResult, FuzzySearchService};
 pub use feat::generate_show_notes::{FormatRegistry, ShowNotesEntry, ShowNotesFormat};
-pub use feat::keymap::{Action, Key, KeyCategory, KeyContext, Keymap, LeafBinding};
+pub use feat::keymap::{Key, KeyCategory, KeyContext, Keymap, LeafBinding};
+pub use tui::{ShowNoteKind, TuiAction};
 pub use feat::launcher::{
     FileLauncher, FileLauncherService, LaunchError, LaunchResult, XdgLauncher,
 };

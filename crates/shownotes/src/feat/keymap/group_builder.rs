@@ -1,4 +1,5 @@
-use super::{parse_key_sequence, Action, Key, KeyCategory, KeyContext, Keymap};
+use super::{parse_key_sequence, Key, KeyCategory, KeyContext, Keymap};
+use crate::tui::TuiAction;
 
 /// Builder for creating keybinding groups under a prefix.
 ///
@@ -18,7 +19,7 @@ impl<'a> GroupBuilder<'a> {
     pub fn bind(
         &mut self,
         sequence: &str,
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,

@@ -1,3 +1,4 @@
+mod action_handler;
 mod commands;
 mod common;
 mod component;
@@ -11,6 +12,7 @@ mod rename;
 mod render;
 mod state;
 mod status_bar;
+mod tui_action;
 mod url_input;
 mod which_key;
 
@@ -38,6 +40,9 @@ pub use render::{AreaRender, Render, RenderContext};
 pub use status_bar::StatusBar;
 pub use url_input::UrlInput;
 pub use which_key::{WhichKey, WhichKeyConfig, WhichKeyPosition};
+
+pub use action_handler::dispatch as execute_tui_action;
+pub use tui_action::{ShowNoteKind, TuiAction};
 
 pub fn render(frame: &mut Frame, state: &TuiState, keymap: &Keymap, services: &Services) {
     let main_chunks = Layout::default()

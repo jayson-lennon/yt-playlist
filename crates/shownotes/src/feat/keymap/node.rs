@@ -1,4 +1,5 @@
-use super::{Action, Key};
+use super::Key;
+use crate::tui::TuiAction;
 
 /// Where a keybinding can be used.
 ///
@@ -32,7 +33,7 @@ pub enum KeyCategory {
 #[derive(Debug, Clone)]
 pub enum KeyNode {
     Leaf {
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,
@@ -79,7 +80,7 @@ impl KeyChild {
 
     pub fn leaf(
         key: Key,
-        action: Action,
+        action: TuiAction,
         description: &'static str,
         category: KeyCategory,
         context: KeyContext,
@@ -113,7 +114,7 @@ impl KeyChild {
 #[derive(Debug, Clone)]
 pub struct LeafBinding {
     pub key: Key,
-    pub action: Action,
+    pub action: TuiAction,
     pub description: &'static str,
     pub category: KeyCategory,
     pub context: KeyContext,

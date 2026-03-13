@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::feat::keymap::ShowNoteKind;
+use crate::tui::ShowNoteKind;
 
 pub fn handle_notes(app: &mut App) {
     if let Some(item) = app.tui_state.get_selected_item() {

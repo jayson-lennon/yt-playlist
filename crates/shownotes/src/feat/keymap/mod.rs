@@ -1,10 +1,8 @@
-mod action;
 mod group_builder;
 mod key;
 mod map;
 mod node;
 
-pub use action::{Action, ShowNoteKind};
 pub use group_builder::GroupBuilder;
 pub use key::{parse_key_sequence, Key};
 pub use map::{FinalizeError, Keymap, MissingDescription};
@@ -13,7 +11,7 @@ pub use node::{KeyCategory, KeyChild, KeyContext, KeyNode, LeafBinding};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::Pane;
+    use crate::tui::{Pane, TuiAction};
     use crossterm::event::{KeyCode, KeyModifiers};
 
     #[test]
@@ -107,7 +105,7 @@ mod tests {
         let action = keymap.get_action(KeyCode::Char('q'), KeyModifiers::empty(), pane);
 
         // Then the action is returned
-        assert_eq!(action, Some(Action::Quit));
+        assert_eq!(action, Some(TuiAction::Quit));
     }
 
     #[test]
@@ -119,7 +117,7 @@ mod tests {
         let action = keymap.get_action(KeyCode::Char('J'), KeyModifiers::empty(), Pane::Playlist);
 
         // Then the action is returned
-        assert_eq!(action, Some(Action::ReorderDown));
+        assert_eq!(action, Some(TuiAction::ReorderDown));
     }
 
     #[test]
@@ -143,7 +141,7 @@ mod tests {
         let action = keymap.get_action(KeyCode::Char('H'), KeyModifiers::empty(), Pane::Library);
 
         // Then the action is returned
-        assert_eq!(action, Some(Action::MoveToPlaylist));
+        assert_eq!(action, Some(TuiAction::MoveToPlaylist));
     }
 
     #[test]
@@ -169,7 +167,7 @@ mod tests {
         let action = keymap.get_action(KeyCode::Char('o'), KeyModifiers::empty(), pane);
 
         // Then the action is returned
-        assert_eq!(action, Some(Action::LaunchFile));
+        assert_eq!(action, Some(TuiAction::LaunchFile));
     }
 
     #[test]
@@ -193,7 +191,7 @@ mod tests {
         let bindings = keymap.get_bindings_for_pane(Pane::Playlist);
 
         // Then global bindings are included
-        assert!(bindings.iter().any(|b| b.action == Action::Quit));
+        assert!(bindings.iter().any(|b| b.action == TuiAction::Quit));
     }
 
     #[test]
@@ -205,7 +203,7 @@ mod tests {
         let bindings = keymap.get_bindings_for_pane(Pane::Playlist);
 
         // Then playlist bindings are included
-        assert!(bindings.iter().any(|b| b.action == Action::ReorderUp));
+        assert!(bindings.iter().any(|b| b.action == TuiAction::ReorderUp));
     }
 
     #[test]
@@ -215,7 +213,7 @@ mod tests {
 
         let bindings = keymap.get_bindings_for_pane(Pane::Library);
 
-        assert!(!bindings.iter().any(|b| b.action == Action::ReorderUp));
+        assert!(!bindings.iter().any(|b| b.action == TuiAction::ReorderUp));
     }
 
     #[test]
@@ -227,7 +225,9 @@ mod tests {
         let bindings = keymap.get_bindings_for_pane(Pane::Library);
 
         // Then library bindings are included
-        assert!(bindings.iter().any(|b| b.action == Action::MoveToPlaylist));
+        assert!(bindings
+            .iter()
+            .any(|b| b.action == TuiAction::MoveToPlaylist));
     }
 
     #[test]
@@ -248,7 +248,7 @@ mod tests {
         // When binding a single key
         keymap.bind(
             "x",
-            Action::Quit,
+            TuiAction::Quit,
             "quit",
             KeyCategory::General,
             KeyContext::Global,
@@ -265,7 +265,7 @@ mod tests {
         let mut keymap = Keymap::empty();
         keymap.bind(
             "x",
-            Action::Quit,
+            TuiAction::Quit,
             "quit",
             KeyCategory::General,
             KeyContext::Global,
@@ -278,7 +278,7 @@ mod tests {
         assert!(matches!(
             node,
             KeyNode::Leaf {
-                action: Action::Quit,
+                action: TuiAction::Quit,
                 ..
             }
         ));
@@ -290,7 +290,7 @@ mod tests {
         let mut keymap = Keymap::empty();
         keymap.bind(
             "x",
-            Action::Quit,
+            TuiAction::Quit,
             "quit",
             KeyCategory::General,
             KeyContext::Global,
@@ -309,7 +309,7 @@ mod tests {
         let mut keymap = Keymap::empty();
         keymap.bind(
             "x",
-            Action::Quit,
+            TuiAction::Quit,
             "quit",
             KeyCategory::General,
             KeyContext::Global,
@@ -331,7 +331,7 @@ mod tests {
         let mut keymap = Keymap::empty();
 
         // When binding with a specific context
-        keymap.bind("x", Action::Quit, "quit", KeyCategory::General, context);
+        keymap.bind("x", TuiAction::Quit, "quit", KeyCategory::General, context);
 
         // Then the leaf has that context
         let node = keymap.get_node_at_path(&[Key::Char('x')]).unwrap();
@@ -352,7 +352,7 @@ mod tests {
         // When binding a multi-key sequence
         keymap.bind(
             "gm",
-            Action::LaunchMpv,
+            TuiAction::LaunchMpv,
             "launch mpv",
             KeyCategory::General,
             KeyContext::Global,
@@ -372,7 +372,7 @@ mod tests {
         let mut keymap = Keymap::empty();
         keymap.bind(
             "gm",
-            Action::LaunchMpv,
+            TuiAction::LaunchMpv,
             "launch mpv",
             KeyCategory::General,
             KeyContext::Global,
@@ -397,7 +397,7 @@ mod tests {
         keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
-                Action::LaunchMpv,
+                TuiAction::LaunchMpv,
                 "launch mpv",
                 KeyCategory::General,
                 KeyContext::Global,
@@ -416,7 +416,7 @@ mod tests {
         keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
-                Action::LaunchMpv,
+                TuiAction::LaunchMpv,
                 "launch mpv",
                 KeyCategory::General,
                 KeyContext::Global,
@@ -440,7 +440,7 @@ mod tests {
             .describe("g", "general", |g| {
                 g.bind(
                     "m",
-                    Action::LaunchMpv,
+                    TuiAction::LaunchMpv,
                     "launch mpv",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -450,7 +450,7 @@ mod tests {
                 leader.describe("s", "search", |s| {
                     s.bind(
                         "f",
-                        Action::FuzzyNotes,
+                        TuiAction::FuzzyNotes,
                         "fuzzy notes",
                         KeyCategory::General,
                         KeyContext::Global,
@@ -464,9 +464,9 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case(&[Key::Char('g'), Key::Char('m')], Action::LaunchMpv)]
-    #[case(&[Key::Char(' '), Key::Char('s'), Key::Char('f')], Action::FuzzyNotes)]
-    fn describe_creates_leaf_children(#[case] path: &[Key], #[case] expected_action: Action) {
+    #[case(&[Key::Char('g'), Key::Char('m')], TuiAction::LaunchMpv)]
+    #[case(&[Key::Char(' '), Key::Char('s'), Key::Char('f')], TuiAction::FuzzyNotes)]
+    fn describe_creates_leaf_children(#[case] path: &[Key], #[case] expected_action: TuiAction) {
         // Given an empty keymap
         let mut keymap = Keymap::empty();
 
@@ -475,7 +475,7 @@ mod tests {
             .describe("g", "general", |g| {
                 g.bind(
                     "m",
-                    Action::LaunchMpv,
+                    TuiAction::LaunchMpv,
                     "launch mpv",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -485,7 +485,7 @@ mod tests {
                 leader.describe("s", "search", |s| {
                     s.bind(
                         "f",
-                        Action::FuzzyNotes,
+                        TuiAction::FuzzyNotes,
                         "fuzzy notes",
                         KeyCategory::General,
                         KeyContext::Global,
@@ -516,7 +516,7 @@ mod tests {
             .describe("g", "general", |g| {
                 g.bind(
                     "m",
-                    Action::LaunchMpv,
+                    TuiAction::LaunchMpv,
                     "launch mpv",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -525,7 +525,7 @@ mod tests {
             .describe("a", "add", |a| {
                 a.bind(
                     "u",
-                    Action::AddUrl,
+                    TuiAction::AddUrl,
                     "add url",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -543,14 +543,14 @@ mod tests {
         let mut keymap = Keymap::empty();
         keymap.bind(
             "gm",
-            Action::LaunchMpv,
+            TuiAction::LaunchMpv,
             "launch mpv",
             KeyCategory::General,
             KeyContext::Global,
         );
         keymap.bind(
             "au",
-            Action::AddUrl,
+            TuiAction::AddUrl,
             "add url",
             KeyCategory::General,
             KeyContext::Global,
@@ -574,14 +574,14 @@ mod tests {
         keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
-                Action::LaunchMpv,
+                TuiAction::LaunchMpv,
                 "launch mpv",
                 KeyCategory::General,
                 KeyContext::Global,
             )
             .bind(
                 "d",
-                Action::Delete,
+                TuiAction::Delete,
                 "delete",
                 KeyCategory::General,
                 KeyContext::Global,
@@ -603,7 +603,7 @@ mod tests {
             g.describe("m", "mpv", |m| {
                 m.bind(
                     "p",
-                    Action::LaunchMpv,
+                    TuiAction::LaunchMpv,
                     "mpv play",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -627,7 +627,7 @@ mod tests {
             g.describe("m", "mpv", |m| {
                 m.bind(
                     "p",
-                    Action::LaunchMpv,
+                    TuiAction::LaunchMpv,
                     "mpv play",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -651,7 +651,7 @@ mod tests {
             g.describe("m", "mpv", |m| {
                 m.bind(
                     "p",
-                    Action::LaunchMpv,
+                    TuiAction::LaunchMpv,
                     "mpv play",
                     KeyCategory::General,
                     KeyContext::Global,
@@ -666,7 +666,7 @@ mod tests {
         assert!(matches!(
             node,
             KeyNode::Leaf {
-                action: Action::LaunchMpv,
+                action: TuiAction::LaunchMpv,
                 ..
             }
         ));
@@ -678,7 +678,7 @@ mod tests {
         let mut keymap = Keymap::empty();
         keymap.bind(
             "x",
-            Action::Quit,
+            TuiAction::Quit,
             "quit",
             KeyCategory::General,
             KeyContext::Global,
@@ -729,7 +729,7 @@ mod tests {
         keymap.describe("g", "general", |g| {
             g.bind(
                 "m",
-                Action::LaunchMpv,
+                TuiAction::LaunchMpv,
                 "launch mpv",
                 KeyCategory::General,
                 KeyContext::Global,
@@ -758,11 +758,11 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case(&[Key::Char('g'), Key::Char('m')], Action::LaunchMpv)]
-    #[case(&[Key::Char('a'), Key::Char('u')], Action::AddUrl)]
+    #[case(&[Key::Char('g'), Key::Char('m')], TuiAction::LaunchMpv)]
+    #[case(&[Key::Char('a'), Key::Char('u')], TuiAction::AddUrl)]
     fn default_keymap_has_sequence_leaf_bindings(
         #[case] path: &[Key],
-        #[case] expected_action: Action,
+        #[case] expected_action: TuiAction,
     ) {
         // Given the default keymap
         let keymap = Keymap::new();
@@ -800,7 +800,7 @@ mod tests {
         // When binding with a special key
         keymap.bind(
             "<Tab>",
-            Action::SwitchPane,
+            TuiAction::SwitchPane,
             "switch pane",
             KeyCategory::PaneSwitch,
             KeyContext::Global,
@@ -811,7 +811,7 @@ mod tests {
         assert!(matches!(
             node,
             Some(KeyNode::Leaf {
-                action: Action::SwitchPane,
+                action: TuiAction::SwitchPane,
                 ..
             })
         ));
