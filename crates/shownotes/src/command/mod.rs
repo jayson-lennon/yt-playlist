@@ -4,7 +4,7 @@ mod mpv;
 pub mod notes;
 mod output;
 mod sources;
-mod tui;
+mod playlist;
 
 use std::path::PathBuf;
 
@@ -150,20 +150,20 @@ pub async fn execute(
             Ok(CommandResult::AliasRemoved { path: path_clone })
         }
         Command::PlaylistLoad => {
-            tui::load_playlist(ctx).await
+            playlist::load_playlist(ctx).await
         }
         Command::PlaylistSave { playlist_items, library_items } => {
-            tui::save_playlist(ctx, &playlist_items, &library_items).await
+            playlist::save_playlist(ctx, &playlist_items, &library_items).await
         }
         Command::LibraryRefresh => {
-            tui::refresh_library(ctx).await
+            playlist::refresh_library(ctx).await
         }
         Command::UrlAdd { url } => {
-            let item = tui::add_url(&url);
+            let item = playlist::add_url(&url);
             Ok(CommandResult::UrlAdded { item })
         }
         Command::AliasRename { path, alias } => {
-            tui::rename_alias(ctx, &path, &alias).await
+            playlist::rename_alias(ctx, &path, &alias).await
         }
     }
 }
