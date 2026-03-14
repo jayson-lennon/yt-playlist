@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 
 use super::super::{PathResolutionError, PathResolver};
 
@@ -14,10 +14,10 @@ impl PathResolver for SystemPathResolver {
         let path = path.to_path_buf();
         tokio::task::spawn_blocking(move || {
             path.canonicalize()
-                .map_err(|_| Report::new(PathResolutionError))
+                .change_context(PathResolutionError)
         })
         .await
-        .map_err(|_| Report::new(PathResolutionError))?
+        .change_context(PathResolutionError)?
     }
 }
 

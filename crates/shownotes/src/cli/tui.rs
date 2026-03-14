@@ -29,6 +29,10 @@ use crate::{
 
 use super::RunError;
 
+#[derive(Debug, wherror::Error)]
+#[error("TUI action failed")]
+pub struct TuiActionError;
+
 enum ForkResult {
     Success(String),
     Failed(String),
@@ -316,8 +320,8 @@ fn run_app(
     }
 }
 
-fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let canonical = CanonicalPath::from_path(path).map_err(|e| format!("Failed to canonicalize path: {e:?}"))?;
+fn add_note_for_path(app: &App, path: &Path) -> Result<(), Report<TuiActionError>> {
+    let canonical = CanonicalPath::from_path(path).change_context(TuiActionError)?;
     let result = app
         .ctx
         .services
@@ -328,14 +332,14 @@ fn add_note_for_path(app: &App, path: &Path) -> Result<(), String> {
                 paths: vec![canonical],
             },
         ))
-        .map_err(|e| format!("Add note failed: {e:?}"))?;
+        .change_context(TuiActionError)?;
     match result {
         CommandResult::NotesAdded { .. } => Ok(()),
-        _ => Err("Unexpected result type".to_string()),
+        _ => Err(Report::new(TuiActionError)),
     }
 }
 
-fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
+fn run_fuzzy_notes(app: &App) -> Result<usize, Report<TuiActionError>> {
     let result = app
         .ctx
         .services
@@ -346,17 +350,17 @@ fn run_fuzzy_notes(app: &App) -> Result<usize, String> {
                 create_symlinks: true,
             },
         ))
-        .map_err(|e| format!("Fuzzy notes failed: {e:?}"))?;
+        .change_context(TuiActionError)?;
     match result {
         CommandResult::NotesFuzzy {
             symlinks_created, ..
         } => Ok(symlinks_created),
-        _ => Err("Unexpected result type".to_string()),
+        _ => Err(Report::new(TuiActionError)),
     }
 }
 
-fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
-    let canonical = CanonicalPath::from_path(path).map_err(|e| format!("Failed to canonicalize path: {e:?}"))?;
+fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), Report<TuiActionError>> {
+    let canonical = CanonicalPath::from_path(path).change_context(TuiActionError)?;
     let result = app
         .ctx
         .services
@@ -367,14 +371,14 @@ fn edit_sources_for_path(app: &App, path: &Path) -> Result<(), String> {
                 path: canonical,
             },
         ))
-        .map_err(|e| format!("Edit sources failed: {e:?}"))?;
+        .change_context(TuiActionError)?;
     match result {
         CommandResult::SourcesEdited { .. } => Ok(()),
-        _ => Err("Unexpected result type".to_string()),
+        _ => Err(Report::new(TuiActionError)),
     }
 }
 
-fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
+fn run_generate_notes(app: &App, format: &str) -> Result<(), Report<TuiActionError>> {
     let library_path = app.ctx.library_path.clone();
     let result = app
         .ctx
@@ -387,16 +391,16 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
                 working_directory: library_path,
             },
         ))
-        .map_err(|e| format!("Generation failed: {e:?}"))?;
+        .change_context(TuiActionError)?;
 
     let CommandResult::NotesGenerated { output } = result else {
-        return Err("Unexpected result type".to_string());
+        return Err(Report::new(TuiActionError));
     };
 
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;
+    let mut clipboard = arboard::Clipboard::new().change_context(TuiActionError)?;
     clipboard
         .set_text(&output)
-        .map_err(|e| format!("Clipboard error: {e}"))?;
+        .change_context(TuiActionError)?;
     Ok(())
 }
 

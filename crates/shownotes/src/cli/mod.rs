@@ -118,7 +118,7 @@ pub fn run() -> Result<(), Report<RunError>> {
     Report::set_color_mode(ColorMode::None);
 
     let args = Args::parse();
-    let rt = tokio::runtime::Runtime::new().map_err(|_| Report::new(RunError))?;
+    let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
 
     match args.command.unwrap_or(Commands::Tui {
         socket: PathBuf::from("/tmp/mpvsocket"),

@@ -11,7 +11,7 @@ pub async fn execute(
     format: &str,
 ) -> Result<String, Report<CommandError>> {
     let working_directory = CanonicalPath::from_path(working_directory.as_path())
-        .map_err(|_| Report::new(CommandError))
+        .change_context(CommandError)
         .attach("Failed to canonicalize working directory")?;
     let playlist_data = ctx.services.storage.load(&working_directory).await.change_context(CommandError)?;
 

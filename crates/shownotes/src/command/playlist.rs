@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use marked_path::CanonicalPath;
 
 use crate::command::{CommandError, CommandResult};
@@ -17,7 +17,7 @@ pub async fn load_playlist(
         .storage
         .load(&ctx.library_path)
         .await
-        .map_err(|_| Report::new(CommandError))?;
+        .change_context(CommandError)?;
 
     let playlist_paths: HashSet<_> = data.playlist.iter().cloned().collect();
 
@@ -103,7 +103,7 @@ pub async fn save_playlist(
         playlist: playlist_paths,
         files,
     };
-    ctx.services.storage.save(&data).await.map_err(|_| Report::new(CommandError))?;
+    ctx.services.storage.save(&data).await.change_context(CommandError)?;
     Ok(CommandResult::PlaylistSaved)
 }
 
@@ -172,7 +172,7 @@ pub async fn rename_alias(
             .storage
             .upsert_alias(file_path, &ctx.library_path, alias)
             .await
-            .map_err(|_| Report::new(CommandError))?;
+            .change_context(CommandError)?;
     }
     Ok(CommandResult::AliasRenamed {
         path: path.clone(),

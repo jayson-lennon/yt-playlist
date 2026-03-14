@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use wherror::Error;
 
 /// Error type for path operations.
@@ -153,10 +153,7 @@ impl MarkedPath<Absolute> {
     /// Returns a [`PathError`] if the path cannot be canonicalized
     /// (e.g., if it doesn't exist or there are permission issues).
     pub fn canonicalize(&self) -> Result<CanonicalPath, Report<PathError>> {
-        let canonicalized = self
-            .path
-            .canonicalize()
-            .map_err(|_| Report::new(PathError))?;
+        let canonicalized = self.path.canonicalize().change_context(PathError)?;
         Ok(CanonicalPath::new(canonicalized))
     }
 
@@ -242,7 +239,7 @@ impl CanonicalPath {
     /// Returns a [`PathError`] if the path cannot be canonicalized
     /// (e.g., if it doesn't exist or there are permission issues).
     pub fn from_path(path: &Path) -> Result<Self, Report<PathError>> {
-        let canonicalized = path.canonicalize().map_err(|_| Report::new(PathError))?;
+        let canonicalized = path.canonicalize().change_context(PathError)?;
         Ok(Self::new(canonicalized))
     }
 

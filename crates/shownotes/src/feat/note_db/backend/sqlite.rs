@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use sqlx::SqlitePool;
 use sqlx::sqlite::SqliteConnectOptions;
 use wherror::Error;
@@ -30,7 +30,7 @@ pub async fn connect_and_migrate(
     database_url: &str,
 ) -> Result<SqlitePool, Report<SqliteNoteDbError>> {
     let options = SqliteConnectOptions::from_str(database_url)
-        .map_err(|_| Report::new(SqliteNoteDbError::Connect))?
+        .change_context(SqliteNoteDbError::Connect)?
         .create_if_missing(true)
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .busy_timeout(std::time::Duration::from_secs(30))
@@ -39,12 +39,12 @@ pub async fn connect_and_migrate(
 
     let pool = SqlitePool::connect_with(options)
         .await
-        .map_err(|_| Report::new(SqliteNoteDbError::Connect))?;
+        .change_context(SqliteNoteDbError::Connect)?;
 
     sqlx::migrate!()
         .run(&pool)
         .await
-        .map_err(|_| Report::new(SqliteNoteDbError::Migrate))?;
+        .change_context(SqliteNoteDbError::Migrate)?;
 
     Ok(pool)
 }
@@ -73,7 +73,7 @@ impl NoteDb for SqliteNoteDb {
             .bind(path)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|_| Report::new(NoteDbError))?;
+            .change_context(NoteDbError)?;
 
         if let Some(id) = result {
             return Ok(id);
@@ -84,7 +84,7 @@ impl NoteDb for SqliteNoteDb {
                 .bind(path)
                 .fetch_one(&self.pool)
                 .await
-                .map_err(|_| Report::new(NoteDbError))?;
+                .change_context(NoteDbError)?;
 
         Ok(id)
     }
@@ -95,7 +95,7 @@ impl NoteDb for SqliteNoteDb {
                 .bind(file_path_id)
                 .fetch_optional(&self.pool)
                 .await
-                .map_err(|_| Report::new(NoteDbError))?;
+                .change_context(NoteDbError)?;
 
         Ok(result)
     }
@@ -118,7 +118,7 @@ impl NoteDb for SqliteNoteDb {
         .bind(content)
         .execute(&self.pool)
         .await
-        .map_err(|_| Report::new(NoteDbError))?;
+        .change_context(NoteDbError)?;
 
         Ok(())
     }
@@ -151,7 +151,7 @@ impl NoteDb for SqliteNoteDb {
         let results = query_builder
             .fetch_all(&self.pool)
             .await
-            .map_err(|_| Report::new(NoteDbError))?;
+            .change_context(NoteDbError)?;
 
         Ok(results.into_iter().map(|(path,)| path).collect())
     }
@@ -162,7 +162,7 @@ impl NoteDb for SqliteNoteDb {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|_| Report::new(NoteDbError))?;
+        .change_context(NoteDbError)?;
 
         Ok(results)
     }

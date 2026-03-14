@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use dialoguer::Editor;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 
 use super::super::{DialoguerEditorError, ExternalEditor, ExternalEditorError};
 
@@ -17,7 +17,7 @@ impl ExternalEditor for SystemEditor {
         tokio::task::spawn_blocking(move || {
             let edited = Editor::new()
                 .edit(&content)
-                .map_err(|_| Report::new(ExternalEditorError).attach(DialoguerEditorError::Open))?;
+                .change_context(ExternalEditorError).attach(DialoguerEditorError::Open)?;
 
             match edited {
                 Some(new_content) if new_content != content => Ok(Some(new_content)),
@@ -25,6 +25,6 @@ impl ExternalEditor for SystemEditor {
             }
         })
         .await
-        .map_err(|_| Report::new(ExternalEditorError))?
+        .change_context(ExternalEditorError)?
     }
 }

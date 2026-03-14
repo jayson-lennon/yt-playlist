@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use sqlx::SqlitePool;
 use wherror::Error;
 
@@ -37,7 +37,7 @@ impl SourceDb for SqliteSourceDb {
         .bind(file_path_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|_| Report::new(SourceDbError))?;
+        .change_context(SourceDbError)?;
 
         Ok(results
             .into_iter()
@@ -58,13 +58,13 @@ impl SourceDb for SqliteSourceDb {
             .pool
             .begin()
             .await
-            .map_err(|_| Report::new(SourceDbError))?;
+            .change_context(SourceDbError)?;
 
         sqlx::query("DELETE FROM sources WHERE file_path_id = ?")
             .bind(file_path_id)
             .execute(&mut *tx)
             .await
-            .map_err(|_| Report::new(SourceDbError))?;
+            .change_context(SourceDbError)?;
 
         for url in urls {
             if url.trim().is_empty() {
@@ -77,10 +77,10 @@ impl SourceDb for SqliteSourceDb {
             .bind(url.trim())
             .execute(&mut *tx)
             .await
-            .map_err(|_| Report::new(SourceDbError))?;
+            .change_context(SourceDbError)?;
         }
 
-        tx.commit().await.map_err(|_| Report::new(SourceDbError))?;
+        tx.commit().await.change_context(SourceDbError)?;
 
         Ok(())
     }
@@ -110,7 +110,7 @@ impl SourceDb for SqliteSourceDb {
         let results = query
             .fetch_all(&self.pool)
             .await
-            .map_err(|_| Report::new(SourceDbError))?;
+            .change_context(SourceDbError)?;
 
         let mut map: HashMap<String, Vec<Source>> = HashMap::new();
         for (path, id, source_url, label) in results {

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use marked_path::CanonicalPath;
 use sqlx::SqlitePool;
 use wherror::Error;
@@ -48,7 +48,7 @@ impl SqliteStorage {
             .bind(path_str.as_ref())
             .fetch_optional(&self.pool)
             .await
-            .map_err(|_| Report::new(IoError))?
+            .change_context(IoError)?
         {
             return Ok(id);
         }
@@ -58,7 +58,7 @@ impl SqliteStorage {
                 .bind(path_str.as_ref())
                 .fetch_one(&self.pool)
                 .await
-                .map_err(|_| Report::new(IoError))?;
+                .change_context(IoError)?;
 
         Ok(id)
     }
@@ -70,7 +70,7 @@ impl SqliteStorage {
             .bind(path_str.as_ref())
             .fetch_optional(&self.pool)
             .await
-            .map_err(|_| Report::new(IoError))?;
+            .change_context(IoError)?;
 
         Ok(id)
     }
@@ -82,7 +82,7 @@ impl SqliteStorage {
             .bind(path_str.as_ref())
             .fetch_optional(&self.pool)
             .await
-            .map_err(|_| Report::new(IoError))?
+            .change_context(IoError)?
         {
             return Ok(id);
         }
@@ -92,7 +92,7 @@ impl SqliteStorage {
                 .bind(path_str.as_ref())
                 .fetch_one(&self.pool)
                 .await
-                .map_err(|_| Report::new(IoError))?;
+                .change_context(IoError)?;
 
         Ok(id)
     }
@@ -103,7 +103,7 @@ impl SqliteStorage {
             .bind(path_str.as_ref())
             .fetch_optional(&self.pool)
             .await
-            .map_err(|_| Report::new(IoError))?;
+            .change_context(IoError)?;
         Ok(id)
     }
 
@@ -127,7 +127,7 @@ impl SqliteStorage {
         .bind(workspace_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?
+        .change_context(IoError)?
         {
             return Ok(Some(alias));
         }
@@ -139,7 +139,7 @@ impl SqliteStorage {
         .bind(file_path_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         Ok(fallback)
     }
@@ -174,7 +174,7 @@ impl SqliteStorage {
         .bind(&time_added)
         .execute(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         Ok(())
     }
@@ -189,13 +189,13 @@ impl SqliteStorage {
                 .bind(file_path_id)
                 .execute(&self.pool)
                 .await
-                .map_err(|_| Report::new(IoError))?;
+                .change_context(IoError)?;
         } else {
             sqlx::query("DELETE FROM virtual_files WHERE file_path_id = ?")
                 .bind(file_path_id)
                 .execute(&self.pool)
                 .await
-                .map_err(|_| Report::new(IoError))?;
+                .change_context(IoError)?;
         }
 
         Ok(())
@@ -224,7 +224,7 @@ impl SqliteStorage {
         .bind(alias)
         .execute(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         Ok(())
     }
@@ -235,7 +235,7 @@ impl SqliteStorage {
                 .bind(file_path_id)
                 .fetch_optional(&self.pool)
                 .await
-                .map_err(|_| Report::new(IoError))?;
+                .change_context(IoError)?;
 
         Ok(exists.is_some())
     }
@@ -251,7 +251,7 @@ impl SqliteStorage {
         .bind(file_path_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         let is_virtual = self.is_virtual_file(file_path_id).await?;
         let alias = self.resolve_alias_by_id(file_path_id, workspace_id).await?;
@@ -313,7 +313,7 @@ impl PlaylistStorage for SqliteStorage {
         .bind(workspace_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         let playlist: Vec<ItemPath> = items
             .iter()
@@ -342,7 +342,7 @@ impl PlaylistStorage for SqliteStorage {
         .bind(format!("{}%", working_dir_str.as_ref()))
         .fetch_all(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         for (path_str, file_path_id) in all_metadata_files {
             if playlist_file_ids.contains(&file_path_id) {
@@ -373,13 +373,13 @@ impl PlaylistStorage for SqliteStorage {
             file_path_ids.push((path, file_path_id));
         }
 
-        let mut tx = self.pool.begin().await.map_err(|_| Report::new(IoError))?;
+        let mut tx = self.pool.begin().await.change_context(IoError)?;
 
         sqlx::query("DELETE FROM playlist_items WHERE workspace_id = ?")
             .bind(workspace_id)
             .execute(&mut *tx)
             .await
-            .map_err(|_| Report::new(IoError))?;
+            .change_context(IoError)?;
 
         for (position, (_, file_path_id)) in file_path_ids.iter().enumerate() {
             #[allow(clippy::cast_possible_wrap)]
@@ -392,10 +392,10 @@ impl PlaylistStorage for SqliteStorage {
             .bind(position)
             .execute(&mut *tx)
             .await
-            .map_err(|_| Report::new(IoError))?;
+            .change_context(IoError)?;
         }
 
-        tx.commit().await.map_err(|_| Report::new(IoError))?;
+        tx.commit().await.change_context(IoError)?;
 
         for (item_path, metadata) in &data.files {
             let path = item_path_to_path(item_path);
@@ -432,7 +432,7 @@ impl PlaylistStorage for SqliteStorage {
             .bind(workspace_id)
             .execute(&self.pool)
             .await
-            .map_err(|_| Report::new(IoError))?;
+            .change_context(IoError)?;
         Ok(())
     }
 
@@ -459,7 +459,7 @@ impl PlaylistStorage for SqliteStorage {
         .bind(file_path_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| Report::new(IoError))?;
+        .change_context(IoError)?;
 
         Ok(fallback)
     }
