@@ -5,18 +5,35 @@ use crate::command::{self, Command, CommandError, CommandResult};
 use crate::system_ctx::SystemCtx;
 use crate::tui::{ComponentContext, TuiState};
 
+/// Manages deferred actions that execute after the TUI suspends.
+///
+/// When the TUI needs to fork a process (e.g., launching an external editor),
+/// it sets flags here to track what action should be taken after resuming.
+/// The main loop checks [`Fork::take_action`] to determine what to do next.
 #[derive(Default)]
 pub struct Fork {
+    /// Path to the item whose notes file should be opened in an editor.
     pub notes_path: Option<crate::common::domain::ItemPath>,
+    /// Whether to open the fuzzy notes search interface.
     pub fuzzy_notes: bool,
+    /// Path to the item whose sources file should be opened in an editor.
     pub sources_path: Option<crate::common::domain::ItemPath>,
+    /// Output format for generating notes (e.g., "markdown").
     pub generate_notes: Option<String>,
 }
 
+/// Actions that execute after the TUI resumes from a fork.
+///
+/// These are extracted from [`Fork`] by calling [`Fork::take_action`],
+/// which returns the highest-priority pending action and clears its flag.
 pub enum ForkAction {
+    /// Open the notes file for the given item path in an external editor.
     AddNote { path: crate::common::domain::ItemPath },
+    /// Open the fuzzy notes search interface to find and open a notes file.
     FuzzyNotes,
+    /// Open the sources file for the given item path in an external editor.
     EditSources { path: crate::common::domain::ItemPath },
+    /// Generate notes for the current playlist in the specified format.
     GenerateNotes { format: String },
 }
 
@@ -39,11 +56,21 @@ impl Fork {
     }
 }
 
+/// Main application state container.
+///
+/// Holds all state needed to run the TUI application, including the system
+/// context with services and configuration, the current TUI state, and
+/// runtime for async operations.
 pub struct App {
+    /// System context containing services, configuration, and paths.
     pub ctx: SystemCtx,
+    /// Current state of the TUI (focused pane, playlist items, etc.).
     pub tui_state: TuiState,
+    /// Whether the application should exit on the next loop iteration.
     pub should_quit: bool,
+    /// Pending actions to execute after the TUI suspends.
     pub fork: Fork,
+    /// Tokio runtime for executing async operations synchronously.
     pub tokio_runtime: tokio::runtime::Runtime,
 }
 

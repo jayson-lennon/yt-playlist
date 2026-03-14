@@ -4,16 +4,28 @@ pub use crate::common::domain::{get_mime_type, ItemPath, PlaylistItem};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 
+/// Controls how playlist items are displayed in the TUI.
+///
+/// Determines what text is shown as the primary identifier for each
+/// playlist item in the list view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ItemDisplayMode {
+    /// Show the file path or filename as the primary text.
     Path,
+    /// Show the user-defined alias if available, falling back to filename.
     #[default]
     Alias,
 }
 
+/// Identifies which pane is currently focused in the TUI.
+///
+/// The application displays two side-by-side panes: the playlist being
+/// edited and the library of available files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pane {
+    /// The active playlist being edited by the user.
     Playlist,
+    /// Available files from the working directory that can be added.
     Library,
 }
 

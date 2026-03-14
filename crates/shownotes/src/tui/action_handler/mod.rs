@@ -12,9 +12,16 @@ use crate::Command;
 use crate::CommandError;
 use crate::CommandResult;
 
+/// Context passed to action handlers.
+///
+/// Provides mutable access to TUI state and fork, and read access to system context
+/// for executing commands and accessing services.
 pub struct TuiActionCtx<'a> {
+    /// Mutable TUI state for reading and modifying UI state.
     pub tui_state: &'a mut crate::tui::TuiState,
+    /// Mutable fork for spawning external processes.
     pub fork: &'a mut crate::app::Fork,
+    /// System context for executing commands and accessing services.
     pub ctx: &'a crate::system_ctx::SystemCtx,
 }
 

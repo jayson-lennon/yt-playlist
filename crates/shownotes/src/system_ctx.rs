@@ -6,12 +6,21 @@ use crate::feat::keymap::Keymap;
 use crate::feat::note_db::SqliteNoteDbError;
 use crate::services::Services;
 
+/// Main system context container holding all dependencies.
+///
+/// Provides centralized access to services, configuration, and paths
+/// needed throughout the application.
 #[derive(Debug, Clone)]
 pub struct SystemCtx {
+    /// Service dependencies for database, media, and external integrations.
     pub services: Services,
+    /// User configuration settings.
     pub config: Config,
+    /// Path to the media library directory.
     pub library_path: CanonicalPath,
+    /// Path to the mpv IPC socket.
     pub socket_path: String,
+    /// Key mappings for keyboard shortcuts.
     pub keymap: Keymap,
 }
 

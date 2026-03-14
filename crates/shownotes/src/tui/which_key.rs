@@ -14,9 +14,12 @@ use crate::feat::keymap::{Key, KeyCategory, KeyNode, Keymap, LeafBinding};
 use crate::tui::Pane;
 use crate::tui::TuiAction;
 
+/// Position of the which-key popup on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WhichKeyPosition {
+    /// Position the popup in the bottom-left corner.
     BottomLeft,
+    /// Position the popup in the bottom-right corner.
     #[default]
     BottomRight,
 }
@@ -27,7 +30,9 @@ pub enum WhichKeyPosition {
 /// that shows available keybindings.
 #[derive(Debug, Clone)]
 pub struct WhichKeyConfig {
+    /// Maximum height of the popup in rows.
     pub max_height: u16,
+    /// Position of the popup on screen.
     pub position: WhichKeyPosition,
 }
 
@@ -47,9 +52,13 @@ impl Default for WhichKeyConfig {
 /// descriptions for each binding.
 #[derive(Debug, Clone, Default)]
 pub struct WhichKey {
+    /// Whether the which-key popup is currently visible.
     pub active: bool,
+    /// Configuration for display settings.
     pub config: WhichKeyConfig,
+    /// Keys pressed so far in a multi-key sequence.
     pub pending_keys: Vec<Key>,
+    /// Action to execute once a complete key sequence is resolved.
     pub pending_action: Option<TuiAction>,
 }
 

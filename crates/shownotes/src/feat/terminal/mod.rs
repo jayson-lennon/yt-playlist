@@ -13,6 +13,11 @@ use wherror::Error;
 #[error(debug)]
 pub struct TerminalSuspendError;
 
+/// RAII guard for terminal suspend/resume.
+///
+/// Suspends the TUI when created (exits raw mode, leaves alternate screen)
+/// and automatically restores it when dropped. Used to temporarily return
+/// to the normal terminal for external editor sessions.
 pub struct TerminalGuard<'a> {
     terminal: &'a mut Terminal<CrosstermBackend<io::Stdout>>,
 }

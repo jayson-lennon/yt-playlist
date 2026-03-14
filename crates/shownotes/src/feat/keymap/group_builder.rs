@@ -6,6 +6,17 @@ use crate::tui::TuiAction;
 /// Used within `Keymap::describe()` closures to add bindings under
 /// a common prefix key. Provides a fluent interface for defining
 /// multiple related keybindings.
+///
+/// # Lifetime Parameter
+///
+/// `'a` ties the builder to the parent [`Keymap`] reference, ensuring
+/// bindings are inserted directly into the keymap during construction.
+///
+/// # Key Methods
+///
+/// - [`bind`](Self::bind): Add a single keybinding under the prefix
+/// - [`describe`](Self::describe): Create a nested group with a description
+/// - [`describe_prefix`](Self::describe_prefix): Add a prefix description without bindings
 pub struct GroupBuilder<'a> {
     keymap: &'a mut Keymap,
     prefix: Vec<Key>,
@@ -16,6 +27,10 @@ impl<'a> GroupBuilder<'a> {
         Self { keymap, prefix }
     }
 
+    /// Adds a keybinding under the current prefix.
+    ///
+    /// The sequence is combined with the builder's prefix to form the full
+    /// key sequence. Returns `&mut Self` for method chaining.
     pub fn bind(
         &mut self,
         sequence: &str,
@@ -35,6 +50,10 @@ impl<'a> GroupBuilder<'a> {
         self
     }
 
+    /// Creates a nested group with a description for the prefix key.
+    ///
+    /// Useful for organizing related bindings under a sub-prefix with its
+    /// own description in the which-key display.
     pub fn describe<F>(&mut self, prefix: &str, description: &'static str, bindings: F) -> &mut Self
     where
         F: FnOnce(&mut GroupBuilder),
@@ -53,6 +72,10 @@ impl<'a> GroupBuilder<'a> {
         self
     }
 
+    /// Adds a description for a prefix key without adding bindings.
+    ///
+    /// Use this when a prefix needs a description for the which-key display
+    /// but bindings are added separately.
     pub fn describe_prefix(&mut self, prefix: &str, description: &'static str) -> &mut Self {
         let keys = parse_key_sequence(prefix);
         if keys.is_empty() {

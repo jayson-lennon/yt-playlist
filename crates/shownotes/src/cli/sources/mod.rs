@@ -9,6 +9,11 @@ use crate::command::{format_output, Command};
 
 use super::RunError;
 
+/// CLI subcommands for source URL management.
+///
+/// Source URLs track the provenance of files (e.g., where a video was
+/// downloaded from). Each variant provides a different operation for
+/// managing these associations.
 #[derive(Subcommand)]
 pub enum SourcesCommands {
     /// Add a source URL to a file

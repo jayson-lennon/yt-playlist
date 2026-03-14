@@ -2,9 +2,16 @@ use std::{borrow::Cow, time::Duration};
 
 use marked_path::CanonicalPath;
 
+/// A path to a media item, which can be either a local file or a URL.
+///
+/// This enum distinguishes between local filesystem paths and web resources,
+/// allowing the application to handle both types uniformly while maintaining
+/// type safety.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemPath {
+    /// A local file path, wrapped in a [`CanonicalPath`] for normalized access.
     File(CanonicalPath),
+    /// A URL string pointing to a web resource.
     Url(String),
 }
 
@@ -49,12 +56,22 @@ impl ItemPath {
     }
 }
 
+/// An item in a playlist or library.
+///
+/// Represents a media entry with its location, metadata, and display properties.
+/// Used throughout the application to track both user-added playlist items and
+/// library items discovered from source directories.
 #[derive(Debug, Clone)]
 pub struct PlaylistItem {
+    /// The location of this item, either a local file or URL.
     pub path: ItemPath,
+    /// The duration of the media, if known.
     pub duration: Option<Duration>,
+    /// A user-defined display name overriding the filename.
     pub alias: Option<String>,
+    /// The MIME type of the media file (e.g., "video/mp4").
     pub mime_type: Option<String>,
+    /// Whether this item exists only in memory (not on disk).
     pub is_virtual: bool,
 }
 

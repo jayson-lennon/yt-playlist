@@ -5,11 +5,20 @@ use crate::services::Services;
 
 use super::state::TuiState;
 
+/// Context for rendering operations.
+///
+/// Provides access to the frame for drawing, the target area, and shared state
+/// needed by components during rendering.
 pub struct RenderContext<'a, 'frame> {
+    /// The ratatui frame to render into.
     pub frame: &'a mut Frame<'frame>,
+    /// The target area for rendering.
     pub area: Rect,
+    /// Keymap for key binding lookups.
     pub keymap: &'a Keymap,
+    /// Services for async operations.
     pub services: &'a Services,
+    /// Current TUI state.
     pub tui_state: &'a TuiState,
 }
 

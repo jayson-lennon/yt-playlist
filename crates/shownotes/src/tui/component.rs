@@ -10,7 +10,9 @@ use crate::feat::keymap::Keymap;
 /// (like WhichKey which needs the keymap for tree traversal,
 /// or components that need to know the focused_pane).
 pub struct ComponentContext<'a> {
+    /// Keymap for key binding lookups and which-key display.
     pub keymap: &'a Keymap,
+    /// Currently focused pane in the UI.
     pub focused_pane: Pane,
 }
 

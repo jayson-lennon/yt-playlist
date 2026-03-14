@@ -56,6 +56,12 @@ pub struct Keymap {
 }
 
 impl Keymap {
+    /// Creates a new keymap with all default bindings configured.
+    ///
+    /// This initializes the full keybinding tree including navigation keys,
+    /// item actions, prefix groups (like "g" for general, "e" for edit),
+    /// and leader-based bindings. The keymap is finalized after construction,
+    /// so it will panic if any bindings are missing descriptions.
     #[rustfmt::skip]
     #[allow(clippy::too_many_lines, clippy::missing_panics_doc)]
     pub fn new() -> Self {
@@ -104,6 +110,7 @@ impl Keymap {
         keymap
     }
 
+    /// Creates an empty keymap with the default leader key (space).
     pub fn empty() -> Self {
         Self {
             bindings: Vec::new(),
@@ -111,6 +118,7 @@ impl Keymap {
         }
     }
 
+    /// Creates an empty keymap with a custom leader key.
     pub fn with_leader(leader: Key) -> Self {
         Self {
             bindings: Vec::new(),
@@ -239,6 +247,11 @@ impl Keymap {
         }
     }
 
+    /// Binds a key sequence to an action with description and context.
+    ///
+    /// The sequence is parsed and inserted into the tree, creating intermediate
+    /// branch nodes as needed. Supports multi-key sequences like "gm" or
+    /// "<leader>ua".
     pub fn bind(
         &mut self,
         sequence: &str,
@@ -408,6 +421,7 @@ impl Keymap {
         }
     }
 
+    /// Checks if the given key is a prefix key (leads to more bindings).
     pub fn is_prefix_key(&self, key: Key) -> bool {
         self.bindings
             .iter()
@@ -421,10 +435,15 @@ impl Keymap {
             .any(|c| c.key == self.leader_key && c.node.is_branch())
     }
 
+    /// Returns the root-level bindings in this keymap.
     pub fn get_bindings(&self) -> &[KeyChild] {
         &self.bindings
     }
 
+    /// Looks up the action for a single key press in the given pane context.
+    ///
+    /// Returns `None` if the key is a prefix key (has children) or if the
+    /// binding's context doesn't match the current pane.
     pub fn get_action(
         &self,
         key: KeyCode,
@@ -452,6 +471,10 @@ impl Keymap {
         }
     }
 
+    /// Returns all leaf bindings that apply to the given pane.
+    ///
+    /// Filters bindings by their context, returning only those that are
+    /// either global or specific to the current pane.
     pub fn get_bindings_for_pane(&self, pane: Pane) -> Vec<LeafBinding> {
         self.bindings
             .iter()

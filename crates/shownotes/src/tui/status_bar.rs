@@ -5,6 +5,10 @@ use ratatui::{
 
 use super::render::{Render, RenderContext};
 
+/// Status bar displayed at the bottom of the TUI.
+///
+/// Shows temporary messages to the user, such as operation results
+/// or helpful hints. Messages persist until explicitly cleared.
 #[derive(Debug, Clone, Default)]
 pub struct StatusBar {
     message: Option<String>,

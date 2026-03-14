@@ -9,9 +9,13 @@ use crate::command::{format_output, Command};
 
 use super::RunError;
 
+/// CLI subcommands for file actions.
+///
+/// Each variant represents a specific action that can be performed on a file,
+/// such as loading it in an external application via IPC.
 #[derive(Subcommand)]
 pub enum ActionCommands {
-    /// Load a file in mpv via IPC
+    /// Load a file in mpv via IPC.
     Mpv {
         /// File path to open
         path: std::path::PathBuf,

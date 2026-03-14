@@ -12,9 +12,13 @@ use derive_more::Debug;
 /// including its path, alias, duration, source URLs, and notes content.
 #[derive(Debug, Clone)]
 pub struct ShowNotesEntry {
+    /// The full path to the media file.
     pub path: String,
+    /// The basename of the file (e.g., "video.mp4").
     pub filename: String,
+    /// Optional display name override for the entry.
     pub alias: Option<String>,
+    /// Source URLs associated with this entry.
     pub sources: Vec<String>,
 }
 
@@ -43,6 +47,7 @@ pub trait ShowNotesFormat: Send + Sync {
 /// Manages the available format implementations (HTML, Markdown, plain text)
 /// and provides lookup by format name for the generate command.
 pub struct FormatRegistry {
+    /// Registered format implementations, mapping format names to their formatters.
     formats: Vec<Box<dyn ShowNotesFormat>>,
 }
 

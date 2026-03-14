@@ -7,16 +7,60 @@ use std::str::FromStr;
 use error_stack::Report;
 use wherror::Error;
 
+/// Error type for path operations.
+///
+/// This error is returned when a path operation fails, such as attempting to
+/// create a `MarkedPath<Absolute>` from a relative path, or vice versa.
 #[derive(Debug, Error)]
 #[error(debug)]
 pub struct PathError;
 
+/// Marker type for absolute paths.
+///
+/// This is a phantom marker type used with [`MarkedPath`] to indicate that
+/// the contained path is guaranteed to be absolute. An absolute path starts
+/// from the root of the filesystem (e.g., `/path/to/file` on Unix or
+/// `C:\path\to\file` on Windows).
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Absolute;
 
+/// Marker type for relative paths.
+///
+/// This is a phantom marker type used with [`MarkedPath`] to indicate that
+/// the contained path is guaranteed to be relative. A relative path does not
+/// start from the root of the filesystem (e.g., `path/to/file`).
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Relative;
 
+/// A type-safe path wrapper with an absolute/relative marker.
+///
+/// This struct provides compile-time guarantees about whether a path is
+/// absolute or relative through its generic parameter `M`. The marker type
+/// ensures that absolute and relative paths cannot be accidentally mixed.
+///
+/// # Type Parameters
+///
+/// * `M` - A marker type indicating the path's nature:
+///   - [`Absolute`]: The path is guaranteed to be absolute
+///   - [`Relative`]: The path is guaranteed to be relative
+///
+/// # Example
+///
+/// ```
+/// use std::path::PathBuf;
+/// use marked_path::{MarkedPath, Absolute, Relative};
+///
+/// // Create an absolute path (validated at construction)
+/// let abs = MarkedPath::<Absolute>::new(PathBuf::from("/home/user"))?;
+///
+/// // Create a relative path
+/// let rel = MarkedPath::<Relative>::new(PathBuf::from("documents/file.txt"))?;
+///
+/// // You can push relative paths onto absolute paths
+/// let mut abs = MarkedPath::<Absolute>::new(PathBuf::from("/home"))?;
+/// abs.push_path(&rel);
+/// # Ok::<(), error_stack::Report<marked_path::PathError>>(())
+/// ```
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MarkedPath<M> {
     path: PathBuf,
@@ -69,20 +113,28 @@ impl From<CanonicalPath> for MarkedPath<Absolute> {
 }
 
 impl<M> MarkedPath<M> {
+    /// Returns a reference to the underlying [`Path`].
     pub fn as_path(&self) -> &Path {
         &self.path
     }
 
+    /// Returns a clone of the underlying [`PathBuf`].
     pub fn to_path_buf(&self) -> PathBuf {
         self.path.clone()
     }
 
+    /// Consumes this `MarkedPath` and returns the underlying [`PathBuf`].
     pub fn into_inner(self) -> PathBuf {
         self.path
     }
 }
 
 impl MarkedPath<Absolute> {
+    /// Creates a new `MarkedPath<Absolute>` from the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PathError`] if the path is not absolute.
     pub fn new(path: PathBuf) -> Result<Self, Report<PathError>> {
         if path.is_absolute() {
             Ok(Self {
@@ -94,6 +146,12 @@ impl MarkedPath<Absolute> {
         }
     }
 
+    /// Canonicalizes this absolute path, returning a [`CanonicalPath`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PathError`] if the path cannot be canonicalized
+    /// (e.g., if it doesn't exist or there are permission issues).
     pub fn canonicalize(&self) -> Result<CanonicalPath, Report<PathError>> {
         let canonicalized = self
             .path
@@ -102,12 +160,18 @@ impl MarkedPath<Absolute> {
         Ok(CanonicalPath::new(canonicalized))
     }
 
+    /// Appends a relative path to this absolute path.
     pub fn push_path(&mut self, other: &MarkedPath<Relative>) {
         self.path.push(&other.path);
     }
 }
 
 impl MarkedPath<Relative> {
+    /// Creates a new `MarkedPath<Relative>` from the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PathError`] if the path is not relative (i.e., if it's absolute).
     pub fn new(path: PathBuf) -> Result<Self, Report<PathError>> {
         if path.is_relative() {
             Ok(Self {
@@ -119,11 +183,37 @@ impl MarkedPath<Relative> {
         }
     }
 
+    /// Appends another relative path to this relative path.
     pub fn push_path(&mut self, other: &MarkedPath<Relative>) {
         self.path.push(&other.path);
     }
 }
 
+/// A wrapper for canonicalized absolute paths.
+///
+/// This type represents a path that has been resolved to its canonical form:
+/// it is guaranteed to be absolute, with all `.` and `..` components resolved,
+/// and all symbolic links followed. The path must exist on the filesystem
+/// at the time of construction.
+///
+/// # Type Safety
+///
+/// A `CanonicalPath` provides stronger guarantees than [`MarkedPath<Absolute>`]:
+/// - The path is absolute and fully resolved
+/// - The path existed at construction time
+/// - The path can be safely used for comparisons (no `.` or `..` ambiguity)
+///
+/// # Example
+///
+/// ```
+/// use std::path::Path;
+/// use marked_path::CanonicalPath;
+///
+/// // Create from an existing path
+/// let canonical = CanonicalPath::from_path(Path::new("/etc/hosts"))?;
+/// println!("Canonical path: {}", canonical.as_path().display());
+/// # Ok::<(), error_stack::Report<marked_path::PathError>>(())
+/// ```
 #[derive(Debug, PartialOrd, Ord)]
 pub struct CanonicalPath(MarkedPath<Absolute>);
 
@@ -134,6 +224,10 @@ impl Clone for CanonicalPath {
 }
 
 impl CanonicalPath {
+    /// Creates a new `CanonicalPath` from a pre-canonicalized path.
+    ///
+    /// This constructor should only be used when you are certain the path
+    /// is already canonicalized. For most cases, prefer [`from_path`](Self::from_path).
     pub fn new(path: PathBuf) -> Self {
         Self(MarkedPath {
             path,
@@ -141,23 +235,36 @@ impl CanonicalPath {
         })
     }
 
+    /// Creates a `CanonicalPath` by canonicalizing the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PathError`] if the path cannot be canonicalized
+    /// (e.g., if it doesn't exist or there are permission issues).
     pub fn from_path(path: &Path) -> Result<Self, Report<PathError>> {
         let canonicalized = path.canonicalize().map_err(|_| Report::new(PathError))?;
         Ok(Self::new(canonicalized))
     }
 
+    /// Returns a reference to the underlying [`Path`].
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
     }
 
+    /// Returns a clone of the underlying [`PathBuf`].
     pub fn to_path_buf(&self) -> PathBuf {
         self.0.to_path_buf()
     }
 
+    /// Consumes this `CanonicalPath` and returns the underlying [`PathBuf`].
     pub fn into_inner(self) -> PathBuf {
         self.0.into_inner()
     }
 
+    /// Appends a relative path to this canonical path.
+    ///
+    /// Note: After calling this method, the path may no longer be canonical
+    /// (it could contain `.` or `..` components).
     pub fn push_path(&mut self, other: &MarkedPath<Relative>) {
         self.0.push_path(other);
     }

@@ -22,8 +22,11 @@ use super::render::{Render, RenderContext};
 /// selection navigation, and moving items to the playlist.
 #[derive(Debug, Clone)]
 pub struct LibraryPane {
+    /// Available media items in the library, excluding those already in the playlist.
     pub items: Vec<PlaylistItem>,
+    /// Index of the currently selected item in the list.
     pub selected: usize,
+    /// Filter state for searching and narrowing the displayed items.
     pub filter: Filter,
 }
 

@@ -6,7 +6,12 @@ use marked_path::CanonicalPath;
 use super::media_query::{MediaError, MediaQuery};
 use super::playlist::FileMetadata;
 
+/// Result of media duration analysis.
+///
+/// Contains a mapping from canonical file paths to their metadata,
+/// including resolved durations for media files.
 pub struct AnalysisResult {
+    /// Map of canonical file paths to their metadata.
     pub files: HashMap<CanonicalPath, FileMetadata>,
 }
 

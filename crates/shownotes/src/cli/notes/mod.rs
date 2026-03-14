@@ -8,6 +8,10 @@ use crate::command::{format_output, Command};
 
 use super::RunError;
 
+/// CLI subcommands for notes management.
+///
+/// Each variant provides a different way to interact with stored notes,
+/// from editing to searching through existing notes.
 #[derive(Subcommand)]
 pub enum NotesCommand {
     /// Add or edit notes for one or more files

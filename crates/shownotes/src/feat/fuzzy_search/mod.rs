@@ -8,15 +8,19 @@ use derive_more::Debug;
 use error_stack::Report;
 use wherror::Error;
 
+/// Error type for fuzzy search failures.
+///
+/// Wraps an error message describing what went wrong during
+/// the fuzzy search operation.
 #[derive(Debug, Error)]
 #[error(debug)]
 pub struct FuzzySearchError(pub String);
 
 /// Result from a fuzzy search operation.
 ///
-/// Contains the matched file path and its associated note content
-/// for display in search results.
+/// Contains the paths selected by the user from the fuzzy search interface.
 pub struct FuzzySearchResult {
+    /// The file paths that were selected by the user.
     pub selected_paths: Vec<String>,
 }
 
@@ -31,11 +35,12 @@ pub trait FuzzySearch: Send + Sync {
     ) -> Result<FuzzySearchResult, Report<FuzzySearchError>>;
 }
 
-/// Service for fuzzy searching through notes.
+/// Service wrapper for fuzzy search operations.
 ///
-/// Provides an interface for searching across all stored notes using
-/// fuzzy matching. Delegates to a backend implementation (skim) for
-/// actual search operations.
+/// Provides a type-safe interface around a fuzzy search backend,
+/// delegating all search operations to the configured implementation.
+/// Uses dynamic dispatch to allow swapping backends (e.g., skim)
+/// without changing calling code.
 #[derive(Debug, Clone)]
 pub struct FuzzySearchService {
     #[debug("<FuzzySearch>")]

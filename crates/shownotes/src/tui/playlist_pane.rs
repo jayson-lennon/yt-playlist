@@ -22,8 +22,11 @@ use super::render::{Render, RenderContext};
 /// The playlist order determines the sequence for playback in mpv.
 #[derive(Debug, Clone)]
 pub struct PlaylistPane {
+    /// Items in the current playlist, ordered for playback.
     pub items: Vec<PlaylistItem>,
+    /// Index of the currently selected item in the list.
     pub selected: usize,
+    /// Filter state for searching and narrowing the displayed items.
     pub filter: Filter,
 }
 
