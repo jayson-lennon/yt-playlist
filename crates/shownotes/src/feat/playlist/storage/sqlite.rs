@@ -9,7 +9,7 @@ use sqlx::SqlitePool;
 use wherror::Error;
 
 use super::super::{FileMetadata, IoError, PlaylistData, PlaylistStorage};
-use crate::tui::ItemPath;
+use crate::common::domain::ItemPath;
 
 fn path_to_item_path(path: &str) -> ItemPath {
     if path.starts_with("http://") || path.starts_with("https://") {

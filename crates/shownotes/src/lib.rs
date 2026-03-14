@@ -1,6 +1,7 @@
 pub mod app;
 pub mod cli;
 pub mod command;
+pub mod common;
 pub mod feat;
 pub mod services;
 pub mod system_ctx;

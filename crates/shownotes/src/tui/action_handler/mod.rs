@@ -6,11 +6,11 @@ mod playlist;
 
 use error_stack::Report;
 
+use crate::tui::TuiAction;
+use crate::tui::TuiActionResponse;
 use crate::Command;
 use crate::CommandError;
 use crate::CommandResult;
-use crate::tui::TuiAction;
-use crate::tui::TuiActionResponse;
 
 pub struct TuiActionCtx<'a> {
     pub tui_state: &'a mut crate::tui::TuiState,

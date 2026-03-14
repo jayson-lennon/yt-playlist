@@ -7,7 +7,7 @@ use marked_path::CanonicalPath;
 use crate::command::{CommandError, CommandResult};
 use crate::feat::playlist::{FileMetadata, PlaylistData};
 use crate::system_ctx::SystemCtx;
-use crate::tui::{get_mime_type, ItemPath, PlaylistItem};
+use crate::common::domain::{get_mime_type, ItemPath, PlaylistItem};
 
 pub async fn load_playlist(
     ctx: &SystemCtx,

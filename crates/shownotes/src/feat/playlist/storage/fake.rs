@@ -13,7 +13,7 @@ use jiff::Timestamp;
 use marked_path::CanonicalPath;
 
 use super::super::{FileMetadata, IoError, PlaylistData, PlaylistStorage};
-use crate::tui::ItemPath;
+use crate::common::domain::ItemPath;
 
 fn item_path_to_pathbuf(item_path: &ItemPath) -> PathBuf {
     match item_path {

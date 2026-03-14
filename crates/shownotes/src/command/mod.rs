@@ -12,7 +12,7 @@ use error_stack::Report;
 use marked_path::CanonicalPath;
 
 use crate::system_ctx::SystemCtx;
-use crate::tui::{ItemPath, PlaylistItem};
+use crate::common::domain::{ItemPath, PlaylistItem};
 
 pub use output::format_output;
 

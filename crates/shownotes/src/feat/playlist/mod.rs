@@ -34,7 +34,7 @@ use jiff::Timestamp;
 use marked_path::CanonicalPath;
 use wherror::Error;
 
-use crate::tui::ItemPath;
+use crate::common::domain::ItemPath;
 
 #[derive(Debug, Error)]
 #[error(debug)]

@@ -114,7 +114,7 @@ pub fn run_tui(
     library_path: PathBuf,
     rt: tokio::runtime::Runtime,
 ) -> Result<(), Report<RunError>> {
-    use crate::tui::ItemPath;
+    use crate::common::domain::ItemPath;
 
     let config = load().change_context(RunError)?;
 
@@ -403,7 +403,7 @@ fn run_generate_notes(app: &App, format: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::ItemPath;
+    use crate::common::domain::ItemPath;
     use marked_path::CanonicalPath;
     use std::path::PathBuf;
 

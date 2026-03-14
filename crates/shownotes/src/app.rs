@@ -7,16 +7,16 @@ use crate::tui::{ComponentContext, TuiState};
 
 #[derive(Default)]
 pub struct Fork {
-    pub notes_path: Option<crate::tui::ItemPath>,
+    pub notes_path: Option<crate::common::domain::ItemPath>,
     pub fuzzy_notes: bool,
-    pub sources_path: Option<crate::tui::ItemPath>,
+    pub sources_path: Option<crate::common::domain::ItemPath>,
     pub generate_notes: Option<String>,
 }
 
 pub enum ForkAction {
-    AddNote { path: crate::tui::ItemPath },
+    AddNote { path: crate::common::domain::ItemPath },
     FuzzyNotes,
-    EditSources { path: crate::tui::ItemPath },
+    EditSources { path: crate::common::domain::ItemPath },
     GenerateNotes { format: String },
 }
 
@@ -123,7 +123,8 @@ mod tests {
     use crate::feat::playlist::PlaylistStorageService;
     use crate::services::Services;
     use crate::test_utils::{FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher};
-    use crate::tui::{get_mime_type, ItemPath, Pane, PlaylistItem};
+    use crate::common::domain::{ItemPath, PlaylistItem};
+    use crate::tui::{get_mime_type, Pane};
 
     struct TestAppBuilder {
         playlist_items: Vec<PathBuf>,
@@ -214,7 +215,7 @@ mod tests {
             };
 
             for path in self.playlist_items {
-                let item_path = crate::tui::ItemPath::File(CanonicalPath::new(path.clone()));
+                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
                 let duration = app.ctx.services.media.get_duration(&path).ok();
                 let mime_type = get_mime_type(&item_path);
                 app.tui_state.playlist_pane.items.push(PlaylistItem {
@@ -227,7 +228,7 @@ mod tests {
             }
 
             for path in self.library_items {
-                let item_path = crate::tui::ItemPath::File(CanonicalPath::new(path.clone()));
+                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
                 let duration = app.ctx.services.media.get_duration(&path).ok();
                 let mime_type = get_mime_type(&item_path);
                 app.tui_state.library_pane.items.push(PlaylistItem {

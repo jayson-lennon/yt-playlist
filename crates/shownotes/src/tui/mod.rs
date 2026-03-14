@@ -27,7 +27,7 @@ use ratatui::{
 pub use commands::{
     handle_rename_submit, handle_url_submit, load_playlist, refresh_library, set_initial_focus,
 };
-pub use common::{get_mime_type, ItemDisplayMode, ItemPath, Pane, PlaylistItem};
+pub use common::{get_mime_type, ItemDisplayMode, Pane, PlaylistItem};
 pub use component::{Component, ComponentContext};
 pub use error_popup::ErrorPopup;
 pub use event::EventResult;
