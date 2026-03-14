@@ -1,6 +1,6 @@
 # Style Guide
 
-This document defines the coding conventions and architectural patterns for the Shownotes codebase. Load this context for any code changes to ensure consistency.
+This document defines the coding conventions and architectural patterns for the Shownotes codebase.
 
 ## 1. Overview
 
