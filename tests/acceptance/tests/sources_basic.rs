@@ -89,7 +89,7 @@ async fn when_list_sources(world: &mut SourcesBasicWorld, path: String) {
     .expect("list command failed");
 
     if let CommandResult::SourcesList { urls, .. } = &result {
-        world.last_urls = urls.clone();
+        world.last_urls.clone_from(urls);
     }
     world.output = format_output(&result);
 }
@@ -135,7 +135,11 @@ async fn then_file_has_source(world: &mut SourcesBasicWorld, path: String, expec
 }
 
 #[then(expr = r#"the file {string} does not have source {string}"#)]
-async fn then_file_does_not_have_source(world: &mut SourcesBasicWorld, path: String, expected_url: String) {
+async fn then_file_does_not_have_source(
+    world: &mut SourcesBasicWorld,
+    path: String,
+    expected_url: String,
+) {
     let full_path = world.inner.resolve_path(&path);
 
     let result = execute(

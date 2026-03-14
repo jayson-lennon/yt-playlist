@@ -162,10 +162,7 @@ fn then_playlist_contains_in_order(world: &mut PlaylistWorld, expected_files: St
         let item_name = item.path.to_string_lossy();
         assert!(
             item_name.ends_with(expected_name),
-            "Item {} is '{}' but expected to end with '{}'",
-            i,
-            item_name,
-            expected_name
+            "Item {i} is '{item_name}' but expected to end with '{expected_name}'"
         );
     }
 }
