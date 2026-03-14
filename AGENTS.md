@@ -396,3 +396,7 @@ When implementing features:
 6. **Wire into Services** - Add to `Services` struct and `create_test_services()`
 7. **Write tests** - Use Given/When/Then structure with test context and fakes
 8. **Add documentation** - Module docs, type docs, error docs
+
+## 8. Tooling
+
+Read the `justfile` to determine what additional tooling is related to this project. Prioritize running commands from the `justfile` instead of manual invocation. If there is a `just test` command, then use that instead of `cargo test`, etc.
