@@ -24,3 +24,19 @@ harness = false
 [[test]]
 name = "alias_deletion"
 harness = false
+
+[[test]]
+name = "sources_basic"
+harness = false
+
+[[test]]
+name = "playlist_persistence"
+harness = false
+
+[[test]]
+name = "notes_cli"
+harness = false
+
+[[test]]
+name = "generate_show_notes"
+harness = false
