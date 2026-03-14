@@ -1,3 +1,47 @@
+//! TUI Action System
+//!
+//! This module defines all user-triggered actions in the TUI layer, representing
+//! user intent decoupled from key input handling and execution.
+//!
+//! # Core Types
+//!
+//! - [`TuiAction`]: Represents every action a user can trigger via keybindings,
+//!   including navigation, editing, playlist management, and external operations.
+//! - [`TuiActionResponse`]: Signals whether the application should continue running
+//!   or quit after processing an action.
+//! - [`ShowNoteKind`]: Specifies output format (HTML/Markdown) for show note generation.
+//!
+//! # Architecture Role
+//!
+//! This module sits between the keymap layer and the action handler layer:
+//!
+//! ```text
+//! ┌─────────────┐    ┌─────────────┐    ┌──────────────────┐
+//! │   Keymap    │───▶│  TuiAction  │───▶│ Action Handler   │
+//! │ (key input) │    │  (intent)   │    │ (dispatch/exec)  │
+//! └─────────────┘    └─────────────┘    └──────────────────┘
+//! ```
+//!
+//! This design decouples "what the user wants to do" from "which key triggers it"
+//! and "how it's executed", enabling keybinding customization without changing
+//! action logic.
+//!
+//! # Flow Through System
+//!
+//! 1. User presses key → Keymap lookup → [`TuiAction`] produced
+//! 2. [`TuiAction`] → `action_handler::dispatch()` → Domain-specific handler
+//! 3. Handler may construct [`Command`] and call `execute()` for side effects
+//! 4. Handler returns [`TuiActionResponse`] (Continue or ShouldQuit)
+//!
+//! # Relationship to Command Module
+//!
+//! - [`TuiAction`] represents user intent in the TUI context
+//! - [`Command`] represents executable operations with business logic
+//! - Some [`TuiAction`]s trigger [`Command`]s (e.g., `LaunchFile`, `Save`)
+//! - Some [`TuiAction`]s are UI-only (e.g., `MoveUp`, `SwitchPane`)
+//!
+//! [`Command`]: crate::tui::command::Command
+
 /// Output format for generating show notes.
 ///
 /// Specifies the format to use when exporting playlist notes,

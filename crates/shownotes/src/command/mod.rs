@@ -1,3 +1,55 @@
+//! # Command Execution System
+//!
+//! This module is the central command execution system implementing the Command pattern.
+//! It provides a single entry point for all business logic operations in the application.
+//!
+//! ## Core Types
+//!
+//! - [`Command`]: An enum defining all executable operations in the application, including
+//!   sources management, notes operations, mpv control, playlist operations, and more.
+//! - [`CommandResult`]: An enum providing type-safe outcomes for each command variant,
+//!   enabling callers to receive structured feedback about command execution.
+//! - [`execute()`]: The dispatch function that routes commands to their domain-specific handlers.
+//!
+//! ## Architecture Role
+//!
+//! This module acts as the bridge between the presentation layer (CLI/TUI) and the service layer:
+//!
+//! - Both CLI subcommands and TUI actions funnel through this module
+//! - Domain-specific logic is delegated to sub-modules:
+//!   - [`sources`]: Source file management operations
+//!   - [`notes`]: Notes creation, search, and alias management
+//!   - [`mpv`]: MPV player control operations
+//!   - [`launcher`]: File launching with fallback handling
+//!   - [`generate`]: Notes generation from templates
+//!   - [`playlist`]: Playlist and library management
+//!
+//! ## Usage Flow
+//!
+//! 1. Presentation layer constructs a [`Command`] variant
+//! 2. Calls [`execute(ctx, command)`][`execute()`] with a [`SystemCtx`]
+//! 3. Receives a [`CommandResult`] for feedback to the user
+//!
+//! ## Example Flows
+//!
+//! ### TUI Flow
+//! ```text
+//! Keymap → TuiAction → action_handler → Command → execute() → CommandResult
+//! ```
+//!
+//! ### CLI Flow
+//! ```text
+//! Args → subcommand handler → Command → execute() → CommandResult
+//! ```
+//!
+//! ## Adding New Commands
+//!
+//! To add a new command:
+//! 1. Add a variant to [`Command`]
+//! 2. Add a corresponding variant to [`CommandResult`]
+//! 3. Add a match arm in [`execute()`] that delegates to the appropriate sub-module
+//! 4. Implement the domain logic in the relevant sub-module
+
 mod generate;
 mod launcher;
 mod mpv;
