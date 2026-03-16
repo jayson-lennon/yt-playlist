@@ -245,6 +245,7 @@ mod tests {
                     alias: None,
                     mime_type,
                     is_virtual: false,
+                    playlist_count: 0,
                 });
             }
 
@@ -258,6 +259,7 @@ mod tests {
                     alias: None,
                     mime_type,
                     is_virtual: false,
+                    playlist_count: 0,
                 });
             }
 
@@ -906,6 +908,7 @@ mod tests {
             alias: None,
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         });
         app.tui_state.focused_pane = Pane::Library;
 
@@ -937,6 +940,7 @@ mod tests {
             alias: None,
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         });
         app.tui_state.focused_pane = Pane::Playlist;
 
@@ -968,6 +972,7 @@ mod tests {
             alias: Some("My Video".to_string()),
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         });
         app.tui_state.focused_pane = Pane::Library;
 
@@ -994,6 +999,7 @@ mod tests {
             alias: None,
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         });
         app.tui_state.focused_pane = Pane::Playlist;
 
@@ -1022,6 +1028,7 @@ mod tests {
             alias: None,
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         });
 
         // When refreshing the library.
@@ -1058,6 +1065,7 @@ mod tests {
             alias: None,
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         });
 
         // When refreshing the library.
@@ -1078,6 +1086,7 @@ mod tests {
             alias: None,
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         });
         app.tui_state.focused_pane = Pane::Library;
 

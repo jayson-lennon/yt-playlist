@@ -73,6 +73,8 @@ pub struct PlaylistItem {
     pub mime_type: Option<String>,
     /// Whether this item exists only in memory (not on disk).
     pub is_virtual: bool,
+    /// How many times this path appears in the playlist.
+    pub playlist_count: usize,
 }
 
 pub fn get_mime_type(path: &ItemPath) -> Option<String> {
@@ -138,6 +140,7 @@ mod tests {
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         };
         assert_eq!(item.duration, Some(Duration::from_secs(120)));
         assert_eq!(item.alias, Some("My Video".to_string()));

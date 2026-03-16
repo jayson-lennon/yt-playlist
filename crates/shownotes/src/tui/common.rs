@@ -64,7 +64,12 @@ pub fn format_mime_type(mime: Option<&str>) -> String {
     }
 }
 
-pub fn format_item_line(item: &PlaylistItem, display_mode: ItemDisplayMode) -> String {
+pub fn format_item_line(
+    item: &PlaylistItem,
+    display_mode: ItemDisplayMode,
+    pane_width: u16,
+    playlist_count: usize,
+) -> String {
     let mime_str = format_mime_type(item.mime_type.as_deref());
     let duration_str = format_duration(item.duration);
 
@@ -82,12 +87,27 @@ pub fn format_item_line(item: &PlaylistItem, display_mode: ItemDisplayMode) -> S
         ItemDisplayMode::Path => filename,
     };
 
-    match display_mode {
+    let base_line = match display_mode {
         ItemDisplayMode::Alias => format!("[{mime_str}] {duration_str} {primary}"),
         ItemDisplayMode::Path => match &item.alias {
             Some(alias) => format!("[{mime_str}] {duration_str} {primary} / {alias}"),
             None => format!("[{mime_str}] {duration_str} {primary}"),
         },
+    };
+
+    if playlist_count > 1 && pane_width > 0 {
+        let count_str = format!("({playlist_count})");
+        let base_len = base_line.chars().count();
+        let count_len = count_str.chars().count();
+
+        if base_len + count_len < pane_width as usize {
+            let padding = pane_width as usize - base_len - count_len;
+            format!("{}{}{}", base_line, " ".repeat(padding), count_str)
+        } else {
+            base_line
+        }
+    } else {
+        base_line
     }
 }
 
@@ -143,6 +163,7 @@ mod tests {
             alias: None,
             mime_type: None,
             is_virtual: false,
+            playlist_count: 0,
         }
     }
 
@@ -158,6 +179,7 @@ mod tests {
             alias: Some(alias.to_string()),
             mime_type: None,
             is_virtual: false,
+            playlist_count: 0,
         }
     }
 
@@ -174,6 +196,7 @@ mod tests {
             alias: None,
             mime_type: None,
             is_virtual: false,
+            playlist_count: 0,
         }
     }
 
@@ -342,8 +365,9 @@ mod tests {
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(result, "[video/mp4] [00:01:05] video / My Video");
     }
 
@@ -355,8 +379,9 @@ mod tests {
             alias: None,
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(result, "[video/mp4] [00:01:05] video");
     }
 
@@ -368,8 +393,9 @@ mod tests {
             alias: Some("My Doc".to_string()),
             mime_type: Some("application/pdf".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(result, "[pdf] [--:--:--] doc / My Doc");
     }
 
@@ -381,8 +407,9 @@ mod tests {
             alias: None,
             mime_type: Some("application/pdf".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(result, "[pdf] [--:--:--] doc");
     }
 
@@ -394,8 +421,9 @@ mod tests {
             alias: None,
             mime_type: None,
             is_virtual: false,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(result, "[unknown] [--:--:--] file");
     }
 
@@ -407,8 +435,9 @@ mod tests {
             alias: None,
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(
             result,
             "[url] [--:--:--] https://youtube.com/watch?v=abc123"
@@ -423,8 +452,9 @@ mod tests {
             alias: Some("My Video".to_string()),
             mime_type: Some("url".to_string()),
             is_virtual: true,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(
             result,
             "[url] [--:--:--] https://youtube.com/watch?v=abc123 / My Video"
@@ -439,8 +469,9 @@ mod tests {
             alias: None,
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
+            playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
         assert_eq!(result, "[video/mp4] [--:--:--] video");
     }
 
@@ -456,5 +487,89 @@ mod tests {
         let mime = "deleted";
         let result = format_mime_type(Some(mime));
         assert_eq!(result, "deleted");
+    }
+
+    #[test]
+    fn format_item_line_no_count_shown_when_count_is_zero() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 0,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 0);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video");
+    }
+
+    #[test]
+    fn format_item_line_no_count_shown_when_count_is_one() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 1,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 1);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video");
+    }
+
+    #[test]
+    fn format_item_line_shows_count_when_count_is_two() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 2,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 2);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video                (2)");
+    }
+
+    #[test]
+    fn format_item_line_shows_count_when_count_is_three() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 3,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 3);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video                (3)");
+    }
+
+    #[test]
+    fn format_item_line_no_count_when_pane_width_is_zero() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 5,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 0, 5);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video");
+    }
+
+    #[test]
+    fn format_item_line_no_count_when_line_too_long() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 2,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 20, 2);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 }

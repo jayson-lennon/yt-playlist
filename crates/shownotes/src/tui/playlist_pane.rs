@@ -190,7 +190,8 @@ impl PlaylistPane {
                 } else {
                     Style::default()
                 };
-                let text = format_item_line(item, display_mode);
+                let text =
+                    format_item_line(item, display_mode, list_area.width, item.playlist_count);
                 ListItem::new(text).style(style)
             })
             .collect();
@@ -301,6 +302,7 @@ mod tests {
             alias: None,
             mime_type: None,
             is_virtual: false,
+            playlist_count: 0,
         }
     }
 
@@ -312,6 +314,7 @@ mod tests {
             alias: Some(alias.to_string()),
             mime_type: None,
             is_virtual: false,
+            playlist_count: 0,
         }
     }
 

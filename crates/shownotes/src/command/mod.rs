@@ -208,7 +208,7 @@ pub async fn execute(
             playlist::save_playlist(ctx, &playlist_items, &library_items).await
         }
         Command::LibraryRefresh => {
-            playlist::refresh_library(ctx).await
+            playlist::refresh_library(ctx, None).await
         }
         Command::UrlAdd { url } => {
             let item = playlist::add_url(&url);

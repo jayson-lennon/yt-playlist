@@ -21,6 +21,11 @@ pub async fn load_playlist(
 
     let playlist_paths: HashSet<_> = data.playlist.iter().cloned().collect();
 
+    let mut path_counts: HashMap<ItemPath, usize> = HashMap::new();
+    for path in &data.playlist {
+        *path_counts.entry(path.clone()).or_insert(0) += 1;
+    }
+
     let playlist_items: Vec<PlaylistItem> = data
         .playlist
         .into_iter()
@@ -31,12 +36,14 @@ pub async fn load_playlist(
             let mime_type = metadata
                 .and_then(|m| m.mime_type.clone())
                 .or_else(|| get_mime_type(&path));
+            let playlist_count = *path_counts.get(&path).unwrap_or(&1);
             PlaylistItem {
                 path,
                 duration,
                 alias: metadata.and_then(|m| m.alias.clone()),
                 mime_type,
                 is_virtual,
+                playlist_count,
             }
         })
         .collect();
@@ -54,6 +61,7 @@ pub async fn load_playlist(
                 alias: metadata.alias.clone(),
                 mime_type,
                 is_virtual: true,
+                playlist_count: 0,
             }
         })
         .collect();
@@ -107,7 +115,10 @@ pub async fn save_playlist(
     Ok(CommandResult::PlaylistSaved)
 }
 
-pub async fn refresh_library(ctx: &SystemCtx) -> Result<CommandResult, Report<CommandError>> {
+pub async fn refresh_library(
+    ctx: &SystemCtx,
+    _playlist_counts: Option<&HashMap<ItemPath, usize>>,
+) -> Result<CommandResult, Report<CommandError>> {
     let mut entries = Vec::new();
     if let Ok(read_dir) = std::fs::read_dir(ctx.library_path.as_path()) {
         let paths: Vec<_> = read_dir
@@ -145,6 +156,7 @@ pub async fn refresh_library(ctx: &SystemCtx) -> Result<CommandResult, Report<Co
                 alias,
                 mime_type,
                 is_virtual: false,
+                playlist_count: 0,
             });
         }
     }
@@ -159,6 +171,7 @@ pub fn add_url(url: &str) -> PlaylistItem {
         alias: None,
         mime_type: Some("url".to_string()),
         is_virtual: true,
+        playlist_count: 0,
     }
 }
 
