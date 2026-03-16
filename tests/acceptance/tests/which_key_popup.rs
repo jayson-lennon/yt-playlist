@@ -1,7 +1,6 @@
 #![allow(clippy::missing_panics_doc)]
 use crossterm::event::{KeyCode, KeyEvent};
 use cucumber::{World, given, then, when};
-use std::fmt;
 use std::sync::OnceLock;
 
 use shownotes::tui::{ComponentContext, TuiState};
@@ -21,7 +20,7 @@ pub struct WhichKeyWorld {
 }
 
 impl WhichKeyWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
             tui_state: TuiState::new(),
             last_result: None,

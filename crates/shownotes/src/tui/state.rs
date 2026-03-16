@@ -12,6 +12,7 @@ use crate::tui::{ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rena
 /// including both panes (playlist and library), the currently focused pane,
 /// input modes (filtering, renaming, URL input), error display, and the
 /// which-key help popup.
+#[derive(Debug)]
 pub struct TuiState {
     pub playlist_pane: PlaylistPane,
     pub library_pane: LibraryPane,

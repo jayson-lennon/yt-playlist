@@ -6,6 +6,7 @@ use super::render::{Render, RenderContext};
 use super::which_key::{WhichKey, WhichKeyConfig};
 use crate::feat::keymap::Key;
 
+#[derive(Debug)]
 pub struct GlobalKeyHandler {
     which_key: WhichKey,
 }
