@@ -182,7 +182,13 @@ Command → SystemCtx → Services → Backend Trait → Implementation
 3. Domain logic accesses services via `ctx.services`
 4. Services delegate to trait backends (real or fake)
 
-## 4. Test Structure
+## 4. Tests
+
+Important:
+
+- Tests should only verify _observable behavior_
+- Testing internal details is an _anti-pattern_.
+- Prefer testing observable behavior ONLY. If observable behavior cannot be tested, then an abstraction needs to be created. Ask the user how to proceed in this case.
 
 ### BDD-Style Tests (Given/When/Then)
 
