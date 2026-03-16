@@ -15,6 +15,8 @@ use super::event::HandleKeyResult;
 use super::filter::Filter;
 use super::render::{Render, RenderContext};
 
+const BORDER_COLUMNS: u16 = 2; // Left + right borders
+
 /// The playlist pane showing queued media files.
 ///
 /// Displays the current playlist with items in order, supporting reordering,
@@ -190,8 +192,12 @@ impl PlaylistPane {
                 } else {
                     Style::default()
                 };
-                let text =
-                    format_item_line(item, display_mode, list_area.width, item.playlist_count);
+                let text = format_item_line(
+                    item,
+                    display_mode,
+                    list_area.width.saturating_sub(BORDER_COLUMNS),
+                    item.playlist_count,
+                );
                 ListItem::new(text).style(style)
             })
             .collect();

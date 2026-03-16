@@ -39,6 +39,8 @@ struct StorageData {
     metadata: HashMap<PathBuf, FileMetadata>,
     virtual_files: HashSet<PathBuf>,
     aliases: HashMap<(PathBuf, PathBuf), (String, Timestamp)>,
+    next_file_path_id: i64,
+    file_paths: HashMap<PathBuf, i64>,
 }
 
 pub struct FakeStorageBackend {
@@ -65,6 +67,17 @@ impl FakeStorageBackend {
         let id = data.next_workspace_id;
         data.next_workspace_id += 1;
         data.workspaces.insert(path_buf, id);
+        id
+    }
+
+    fn get_or_create_file_path_id(&self, path: &PathBuf) -> i64 {
+        let mut data = self.data.write().unwrap();
+        if let Some(&id) = data.file_paths.get(path) {
+            return id;
+        }
+        let id = data.next_file_path_id;
+        data.next_file_path_id += 1;
+        data.file_paths.insert(path.clone(), id);
         id
     }
 
@@ -198,9 +211,13 @@ impl PlaylistStorage for FakeStorageBackend {
 
         let workspace_id = self.get_or_create_workspace(&data.working_directory);
 
+        let playlist_paths: Vec<PathBuf> = data.playlist.iter().map(item_path_to_pathbuf).collect();
+        for path in &playlist_paths {
+            self.get_or_create_file_path_id(path);
+        }
+
         let mut storage = self.data.write().unwrap();
 
-        let playlist_paths: Vec<PathBuf> = data.playlist.iter().map(item_path_to_pathbuf).collect();
         storage.playlists.insert(workspace_id, playlist_paths);
 
         for (item_path, metadata) in &data.files {
@@ -250,6 +267,35 @@ impl PlaylistStorage for FakeStorageBackend {
         workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>> {
         Ok(self.resolve_alias_internal(&file_path.as_path().to_path_buf(), workspace.as_path()))
+    }
+
+    async fn get_path_counts(&self) -> Result<HashMap<i64, usize>, Report<IoError>> {
+        let data = self.data.read().unwrap();
+        let mut path_workspace_counts: HashMap<PathBuf, HashSet<i64>> = HashMap::new();
+
+        for (&workspace_id, paths) in &data.playlists {
+            for path in paths {
+                path_workspace_counts
+                    .entry(path.clone())
+                    .or_default()
+                    .insert(workspace_id);
+            }
+        }
+
+        let mut result = HashMap::new();
+        for (path, workspace_set) in path_workspace_counts {
+            if let Some(&file_path_id) = data.file_paths.get(&path) {
+                result.insert(file_path_id, workspace_set.len());
+            }
+        }
+
+        Ok(result)
+    }
+
+    async fn resolve_file_path_id(&self, path: &ItemPath) -> Result<Option<i64>, Report<IoError>> {
+        let path_buf = item_path_to_pathbuf(path);
+        let data = self.data.read().unwrap();
+        Ok(data.file_paths.get(&path_buf).copied())
     }
 }
 
@@ -616,5 +662,81 @@ mod tests {
 
         let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
         assert!(alias.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_path_counts_returns_empty_when_no_playlists() {
+        let backend = FakeStorageBackend::new();
+
+        let counts = backend.get_path_counts().await.unwrap();
+        assert!(counts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_path_counts_returns_correct_counts_for_multiple_workspaces() {
+        let backend = FakeStorageBackend::new();
+
+        let temp1 = TempDir::new().unwrap();
+        let temp2 = TempDir::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
+        let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
+
+        let file1 = item_path("/shared/file1.mp3");
+        let file2 = item_path("/shared/file2.mp3");
+
+        let data1 = PlaylistData {
+            working_directory: workspace1.clone(),
+            playlist: vec![file1.clone()],
+            files: [(file1.clone(), create_test_metadata())]
+                .into_iter()
+                .collect(),
+        };
+
+        let data2 = PlaylistData {
+            working_directory: workspace2.clone(),
+            playlist: vec![file1.clone(), file2.clone()],
+            files: [
+                (file1.clone(), create_test_metadata()),
+                (file2.clone(), create_test_metadata()),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        backend.save(&data1).await.unwrap();
+        backend.save(&data2).await.unwrap();
+
+        let counts = backend.get_path_counts().await.unwrap();
+
+        let file1_id = backend.resolve_file_path_id(&file1).await.unwrap().unwrap();
+        let file2_id = backend.resolve_file_path_id(&file2).await.unwrap().unwrap();
+
+        assert_eq!(counts.get(&file1_id), Some(&2), "file1 should be in 2 workspaces");
+        assert_eq!(counts.get(&file2_id), Some(&1), "file2 should be in 1 workspace");
+    }
+
+    #[tokio::test]
+    async fn get_path_counts_file_in_single_workspace_has_count_one() {
+        let backend = FakeStorageBackend::new();
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+
+        let file = item_path("/unique/file.mp3");
+
+        let data = PlaylistData {
+            working_directory: workspace.clone(),
+            playlist: vec![file.clone()],
+            files: [(file.clone(), create_test_metadata())]
+                .into_iter()
+                .collect(),
+        };
+
+        backend.save(&data).await.unwrap();
+
+        let counts = backend.get_path_counts().await.unwrap();
+
+        let file_id = backend.resolve_file_path_id(&file).await.unwrap().unwrap();
+        assert_eq!(counts.get(&file_id), Some(&1));
     }
 }

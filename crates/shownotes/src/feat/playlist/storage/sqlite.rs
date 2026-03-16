@@ -463,6 +463,25 @@ impl PlaylistStorage for SqliteStorage {
 
         Ok(fallback)
     }
+
+    async fn get_path_counts(&self) -> Result<HashMap<i64, usize>, Report<IoError>> {
+        let rows = sqlx::query_as::<_, (i64, i64)>(
+            "SELECT file_path_id, COUNT(DISTINCT workspace_id) as count FROM playlist_items GROUP BY file_path_id",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .change_context(IoError)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(file_path_id, count)| (file_path_id, count as usize))
+            .collect())
+    }
+
+    async fn resolve_file_path_id(&self, path: &ItemPath) -> Result<Option<i64>, Report<IoError>> {
+        let path_buf = item_path_to_path(path);
+        self.get_file_path(&path_buf).await
+    }
 }
 
 #[cfg(test)]
@@ -1530,5 +1549,129 @@ mod tests {
         let loaded = storage.load(&workspace).await.unwrap();
         let meta = loaded.files.get(&file).unwrap();
         assert_eq!(meta.alias, Some("My Alias".to_string()));
+    }
+
+    #[tokio::test]
+    async fn get_path_counts_returns_empty_when_no_playlists() {
+        let storage = create_test_storage().await;
+
+        let counts = storage.get_path_counts().await.unwrap();
+        assert!(counts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_path_counts_returns_correct_counts_for_multiple_workspaces() {
+        let storage = create_test_storage().await;
+
+        let temp1 = TempDir::new().unwrap();
+        let temp2 = TempDir::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
+        let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
+
+        let file1 = item_path("/shared/file1.mp4");
+        let file2 = item_path("/shared/file2.mp4");
+
+        let data1 = PlaylistData {
+            working_directory: workspace1.clone(),
+            playlist: vec![file1.clone()],
+            files: [(
+                file1.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let data2 = PlaylistData {
+            working_directory: workspace2.clone(),
+            playlist: vec![file1.clone(), file2.clone()],
+            files: [
+                (
+                    file1.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    file2.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        storage.save(&data1).await.unwrap();
+        storage.save(&data2).await.unwrap();
+
+        let counts = storage.get_path_counts().await.unwrap();
+
+        let file1_id = storage
+            .resolve_file_path_id(&file1)
+            .await
+            .unwrap()
+            .unwrap();
+        let file2_id = storage
+            .resolve_file_path_id(&file2)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(counts.get(&file1_id), Some(&2), "file1 should be in 2 workspaces");
+        assert_eq!(counts.get(&file2_id), Some(&1), "file2 should be in 1 workspace");
+    }
+
+    #[tokio::test]
+    async fn get_path_counts_file_in_single_workspace_has_count_one() {
+        let storage = create_test_storage().await;
+
+        let temp = TempDir::new().unwrap();
+        let workspace = CanonicalPath::from_path(temp.path()).unwrap();
+
+        let file = item_path("/unique/file.mp4");
+
+        let data = PlaylistData {
+            working_directory: workspace.clone(),
+            playlist: vec![file.clone()],
+            files: [(
+                file.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        storage.save(&data).await.unwrap();
+
+        let counts = storage.get_path_counts().await.unwrap();
+
+        let file_id = storage.resolve_file_path_id(&file).await.unwrap().unwrap();
+        assert_eq!(counts.get(&file_id), Some(&1));
     }
 }

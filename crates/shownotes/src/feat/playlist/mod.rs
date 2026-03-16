@@ -134,6 +134,25 @@ pub trait PlaylistStorage: Send + Sync {
         file_path: &CanonicalPath,
         workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>>;
+
+    /// Returns a count of distinct workspaces for each file path in playlists.
+    ///
+    /// This queries all playlist items and returns a map from `file_path_id`
+    /// to the number of distinct workspaces that contain that file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails.
+    async fn get_path_counts(&self) -> Result<HashMap<i64, usize>, Report<IoError>>;
+
+    /// Resolves an ItemPath to its database file_path_id.
+    ///
+    /// Returns `None` if the path has never been saved to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails.
+    async fn resolve_file_path_id(&self, path: &ItemPath) -> Result<Option<i64>, Report<IoError>>;
 }
 
 /// Service wrapper for playlist storage operations.
@@ -209,6 +228,28 @@ impl PlaylistStorageService {
         workspace: &CanonicalPath,
     ) -> Result<Option<String>, Report<IoError>> {
         self.backend.resolve_alias(file_path, workspace).await
+    }
+
+    /// Returns a count of distinct workspaces for each file path in playlists.
+    ///
+    /// See [`PlaylistStorage::get_path_counts`] for details.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails.
+    pub async fn get_path_counts(&self) -> Result<HashMap<i64, usize>, Report<IoError>> {
+        self.backend.get_path_counts().await
+    }
+
+    /// Resolves an ItemPath to its database file_path_id.
+    ///
+    /// See [`PlaylistStorage::resolve_file_path_id`] for details.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails.
+    pub async fn resolve_file_path_id(&self, path: &ItemPath) -> Result<Option<i64>, Report<IoError>> {
+        self.backend.resolve_file_path_id(path).await
     }
 }
 

@@ -141,4 +141,12 @@ impl PlaylistStorage for FakeStorageBackend {
     ) -> Result<Option<String>, Report<IoError>> {
         Ok(None)
     }
+
+    async fn get_path_counts(&self) -> Result<std::collections::HashMap<i64, usize>, Report<IoError>> {
+        Ok(std::collections::HashMap::new())
+    }
+
+    async fn resolve_file_path_id(&self, _path: &crate::common::domain::ItemPath) -> Result<Option<i64>, Report<IoError>> {
+        Ok(None)
+    }
 }

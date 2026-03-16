@@ -21,9 +21,25 @@ pub async fn load_playlist(
 
     let playlist_paths: HashSet<_> = data.playlist.iter().cloned().collect();
 
-    let mut path_counts: HashMap<ItemPath, usize> = HashMap::new();
+    let path_counts = ctx
+        .services
+        .storage
+        .get_path_counts()
+        .await
+        .change_context(CommandError)?;
+
+    let mut path_to_count: HashMap<ItemPath, usize> = HashMap::new();
     for path in &data.playlist {
-        *path_counts.entry(path.clone()).or_insert(0) += 1;
+        let count = ctx
+            .services
+            .storage
+            .resolve_file_path_id(path)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|id| path_counts.get(&id).copied())
+            .unwrap_or(1);
+        path_to_count.insert(path.clone(), count);
     }
 
     let playlist_items: Vec<PlaylistItem> = data
@@ -36,7 +52,7 @@ pub async fn load_playlist(
             let mime_type = metadata
                 .and_then(|m| m.mime_type.clone())
                 .or_else(|| get_mime_type(&path));
-            let playlist_count = *path_counts.get(&path).unwrap_or(&1);
+            let playlist_count = path_to_count.get(&path).copied().unwrap_or(1);
             PlaylistItem {
                 path,
                 duration,

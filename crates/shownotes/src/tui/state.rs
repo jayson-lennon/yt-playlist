@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crossterm::event::KeyEvent;
 
 use super::common::{ItemDisplayMode, ItemPath};
@@ -84,21 +82,6 @@ impl TuiState {
         self.playlist_pane.reorder_down();
     }
 
-    fn recalculate_playlist_counts(&mut self) {
-        let mut path_counts: HashMap<ItemPath, usize> = HashMap::new();
-        for item in &self.playlist_pane.items {
-            *path_counts.entry(item.path.clone()).or_insert(0) += 1;
-        }
-
-        for item in &mut self.playlist_pane.items {
-            item.playlist_count = *path_counts.get(&item.path).unwrap_or(&1);
-        }
-
-        for item in &mut self.library_pane.items {
-            item.playlist_count = *path_counts.get(&item.path).unwrap_or(&0);
-        }
-    }
-
     pub fn add_to_playlist(
         &mut self,
         path: ItemPath,
@@ -115,12 +98,10 @@ impl TuiState {
             is_virtual,
             playlist_count: 1,
         });
-        self.recalculate_playlist_counts();
     }
 
     pub fn remove_from_playlist(&mut self) {
         self.playlist_pane.remove();
-        self.recalculate_playlist_counts();
     }
 
     pub fn remove_from_library(&mut self) {
@@ -130,7 +111,6 @@ impl TuiState {
     pub fn refresh_library(&mut self, entries: Vec<PlaylistItem>) {
         let playlist_paths: Vec<_> = self.playlist_pane.paths();
         self.library_pane.refresh(entries, &playlist_paths);
-        self.recalculate_playlist_counts();
     }
 
     pub fn switch_pane(&mut self) {
