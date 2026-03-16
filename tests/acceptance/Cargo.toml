@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 shownotes = { path = "../../crates/shownotes" }
 cucumber = { workspace = true }
+crossterm = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 marked-path = { version = "0.1.0", path = "../../crates/marked-path" }
@@ -39,4 +40,8 @@ harness = false
 
 [[test]]
 name = "generate_show_notes"
+harness = false
+
+[[test]]
+name = "which_key_popup"
 harness = false

@@ -28,6 +28,14 @@ impl GlobalKeyHandler {
     pub fn is_showing_help(&self) -> bool {
         self.which_key.active
     }
+
+    pub fn is_which_key_pending(&self) -> bool {
+        self.which_key.is_pending()
+    }
+
+    pub fn pending_keys(&self) -> &[Key] {
+        &self.which_key.pending_keys
+    }
 }
 
 impl Component for GlobalKeyHandler {
@@ -46,7 +54,6 @@ impl Component for GlobalKeyHandler {
 
         if self.which_key.active {
             self.which_key.dismiss();
-            return HandleKeyResult::consumed();
         }
 
         let Some(key) = Key::from_keycode(event.code) else {
