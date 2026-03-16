@@ -45,56 +45,6 @@ pub fn refresh_library(ctx: &SystemCtx, tui_state: &mut TuiState) {
     }
 }
 
-pub fn handle_rename_submit(ctx: &SystemCtx, tui_state: &mut TuiState, new_alias: String) {
-    if let Some(item) = tui_state.get_selected_item_mut() {
-        let old_alias = item.alias.clone();
-        item.alias = Some(new_alias.clone());
-
-        if old_alias.as_deref() != Some(&new_alias) {
-            let path = item.path.clone();
-
-            if let Some(file_path) = path.as_file() {
-                let _ = ctx.services.rt.block_on(command::execute(
-                    ctx,
-                    Command::AliasSet {
-                        path: file_path.clone(),
-                        workspace: ctx.library_path.clone(),
-                        alias: new_alias,
-                    },
-                ));
-            }
-        }
-    }
-}
-
-pub fn handle_url_submit(ctx: &SystemCtx, tui_state: &mut TuiState, url: String) {
-    match ctx
-        .services
-        .rt
-        .block_on(command::execute(ctx, Command::UrlAdd { url }))
-    {
-        Ok(CommandResult::UrlAdded { item }) => {
-            tui_state.library_pane.items.push(item);
-            tui_state
-                .library_pane
-                .items
-                .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-            let _ = ctx.services.rt.block_on(command::execute(
-                ctx,
-                Command::PlaylistSave {
-                    playlist_items: tui_state.playlist_pane.items.clone(),
-                    library_items: tui_state.library_pane.items.clone(),
-                },
-            ));
-            tui_state.status_bar.set("URL added to library");
-        }
-        Err(e) => {
-            tui_state.show_error(format!("Failed to add URL: {e:?}"));
-        }
-        _ => unreachable!(),
-    }
-}
-
 pub fn set_initial_focus(tui_state: &mut TuiState) {
     let playlist_empty = tui_state.playlist_pane.items.is_empty();
     let library_empty = tui_state.library_pane.items.is_empty();

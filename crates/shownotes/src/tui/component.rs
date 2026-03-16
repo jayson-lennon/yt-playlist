@@ -1,6 +1,6 @@
 use crossterm::event::KeyEvent;
 
-use super::event::EventResult;
+use super::event::HandleKeyResult;
 use super::Pane;
 use crate::feat::keymap::Keymap;
 
@@ -20,7 +20,7 @@ pub struct ComponentContext<'a> {
 ///
 /// Components implement this trait to handle their own input.
 /// Events bubble up through the component hierarchy - if a component
-/// returns `EventResult::Ignored`, the event passes to the next handler.
+/// returns `HandleKeyResult::ignored()`, the event passes to the next handler.
 pub trait Component {
     /// Returns true if this component is currently active and should receive events.
     ///
@@ -31,10 +31,10 @@ pub trait Component {
 
     /// Handle a key event.
     ///
-    /// Returns `Consumed` if the event was handled, or `Ignored` to let
-    /// it bubble to the next handler.
-    fn handle_key(&mut self, _key: KeyEvent) -> EventResult {
-        EventResult::Ignored
+    /// Returns `HandleKeyResult::consumed()` if the event was handled, or
+    /// `HandleKeyResult::ignored()` to let it bubble to the next handler.
+    fn handle_key(&mut self, _key: KeyEvent) -> HandleKeyResult {
+        HandleKeyResult::ignored()
     }
 
     /// Handle a key event with context.
@@ -45,7 +45,7 @@ pub trait Component {
         &mut self,
         key: KeyEvent,
         _ctx: &ComponentContext<'_>,
-    ) -> EventResult {
+    ) -> HandleKeyResult {
         self.handle_key(key)
     }
 }
@@ -57,8 +57,8 @@ mod tests {
     struct InactiveComponent;
 
     impl Component for InactiveComponent {
-        fn handle_key(&mut self, _key: KeyEvent) -> EventResult {
-            EventResult::Consumed
+        fn handle_key(&mut self, _key: KeyEvent) -> HandleKeyResult {
+            HandleKeyResult::consumed()
         }
     }
 
@@ -69,8 +69,8 @@ mod tests {
             true
         }
 
-        fn handle_key(&mut self, _key: KeyEvent) -> EventResult {
-            EventResult::Consumed
+        fn handle_key(&mut self, _key: KeyEvent) -> HandleKeyResult {
+            HandleKeyResult::consumed()
         }
     }
 
@@ -87,9 +87,9 @@ mod tests {
             &mut self,
             key: KeyEvent,
             _ctx: &ComponentContext<'_>,
-        ) -> EventResult {
+        ) -> HandleKeyResult {
             self.last_key = Some(key);
-            EventResult::Consumed
+            HandleKeyResult::consumed()
         }
     }
 
@@ -109,14 +109,20 @@ mod tests {
     fn default_handle_key_returns_ignored() {
         let mut component = IgnoringComponent;
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
-        assert_eq!(component.handle_key(key), EventResult::Ignored);
+
+        let result = component.handle_key(key);
+
+        assert!(!result.is_consumed());
     }
 
     #[test]
     fn overridden_handle_key_returns_consumed() {
         let mut component = ActiveComponent;
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
-        assert_eq!(component.handle_key(key), EventResult::Consumed);
+
+        let result = component.handle_key(key);
+
+        assert!(result.is_consumed());
     }
 
     #[test]
@@ -129,10 +135,9 @@ mod tests {
             focused_pane: Pane::Playlist,
         };
 
-        assert_eq!(
-            component.handle_key_with_context(key, &ctx),
-            EventResult::Ignored
-        );
+        let result = component.handle_key_with_context(key, &ctx);
+
+        assert!(!result.is_consumed());
     }
 
     #[test]
@@ -147,7 +152,7 @@ mod tests {
 
         let result = component.handle_key_with_context(key, &ctx);
 
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(component.last_key.is_some());
     }
 }

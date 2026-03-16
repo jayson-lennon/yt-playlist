@@ -1,4 +1,5 @@
 use super::TuiActionCtx;
+use crate::command::Command;
 use crate::tui::ShowNoteKind;
 use crate::tui::TuiActionResponse;
 
@@ -31,5 +32,25 @@ pub fn handle_generate_show_notes(
     kind: ShowNoteKind,
 ) -> TuiActionResponse {
     ctx.fork.generate_notes = Some(kind.as_str().to_string());
+    TuiActionResponse::Continue
+}
+
+pub fn handle_rename_submit(ctx: &mut TuiActionCtx<'_>, alias: String) -> TuiActionResponse {
+    if let Some(item) = ctx.tui_state.get_selected_item_mut() {
+        let old_alias = item.alias.clone();
+        item.alias = Some(alias.clone());
+
+        if old_alias.as_deref() != Some(&alias) {
+            let path = item.path.clone();
+
+            if let Some(file_path) = path.as_file() {
+                let _ = ctx.execute(Command::AliasSet {
+                    path: file_path.clone(),
+                    workspace: ctx.ctx.library_path.clone(),
+                    alias,
+                });
+            }
+        }
+    }
     TuiActionResponse::Continue
 }

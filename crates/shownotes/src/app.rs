@@ -106,9 +106,9 @@ impl App {
                 focused_pane: self.tui_state.focused_pane,
             };
 
-            self.tui_state.handle_key(key, &ctx);
+            let result = self.tui_state.handle_key(key, &ctx);
 
-            if let Some(action) = self.tui_state.global_handler.take_action() {
+            for action in result.actions {
                 let response = {
                     let mut tui_ctx = crate::tui::TuiActionCtx {
                         tui_state: &mut self.tui_state,
@@ -120,12 +120,6 @@ impl App {
                 if response == crate::tui::TuiActionResponse::ShouldQuit {
                     self.should_quit = true;
                 }
-            }
-            if let Some(new_alias) = self.tui_state.rename.take_submitted().flatten() {
-                crate::tui::handle_rename_submit(&self.ctx, &mut self.tui_state, new_alias);
-            }
-            if let Some(url) = self.tui_state.url_input.take_submitted().flatten() {
-                crate::tui::handle_url_submit(&self.ctx, &mut self.tui_state, url);
             }
         }
     }
@@ -283,7 +277,7 @@ mod tests {
                     fork: &mut app.fork,
                     ctx: &app.ctx,
                 };
-                crate::tui::execute_tui_action(&mut tui_ctx, *action)
+                crate::tui::execute_tui_action(&mut tui_ctx, action.clone())
             };
             if response == crate::tui::TuiActionResponse::ShouldQuit {
                 app.should_quit = true;

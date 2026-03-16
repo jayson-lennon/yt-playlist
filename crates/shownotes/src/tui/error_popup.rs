@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::component::Component;
-use super::event::EventResult;
+use super::event::HandleKeyResult;
 use super::render::{Render, RenderContext};
 
 /// Error popup display state.
@@ -69,12 +69,12 @@ impl Component for ErrorPopup {
         self.active
     }
 
-    fn handle_key(&mut self, _key: KeyEvent) -> EventResult {
+    fn handle_key(&mut self, _key: KeyEvent) -> HandleKeyResult {
         if !self.active {
-            return EventResult::Ignored;
+            return HandleKeyResult::ignored();
         }
         self.dismiss();
-        EventResult::Consumed
+        HandleKeyResult::consumed()
     }
 }
 
@@ -221,7 +221,7 @@ mod tests {
         let result = popup.handle_key(key);
 
         // Then the event is ignored.
-        assert_eq!(result, EventResult::Ignored);
+        assert!(!result.is_consumed());
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
             let mut popup = ErrorPopup::new();
             popup.show("Error".to_string());
             let result = popup.handle_key(key);
-            assert_eq!(result, EventResult::Consumed);
+            assert!(result.is_consumed());
         }
     }
 }

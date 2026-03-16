@@ -64,5 +64,7 @@ pub fn dispatch(ctx: &mut TuiActionCtx<'_>, action: TuiAction) -> TuiActionRespo
         TuiAction::FuzzyNotes => edit::handle_fuzzy_notes(ctx),
         TuiAction::EditSources => edit::handle_edit_sources(ctx),
         TuiAction::GenerateShowNotes(kind) => edit::handle_generate_show_notes(ctx, kind),
+        TuiAction::RenameSubmit(alias) => edit::handle_rename_submit(ctx, alias),
+        TuiAction::UrlSubmit(url) => general::handle_url_submit(ctx, url),
     }
 }

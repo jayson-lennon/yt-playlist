@@ -11,7 +11,7 @@ use super::common::{
     filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, Pane, PlaylistItem,
 };
 use super::component::Component;
-use super::event::EventResult;
+use super::event::HandleKeyResult;
 use super::filter::Filter;
 use super::render::{Render, RenderContext};
 
@@ -261,7 +261,7 @@ impl Component for PlaylistPane {
         true
     }
 
-    fn handle_key(&mut self, key: KeyEvent) -> EventResult {
+    fn handle_key(&mut self, key: KeyEvent) -> HandleKeyResult {
         if self.filter.is_active() {
             return self.filter.handle_key(key);
         }
@@ -269,21 +269,21 @@ impl Component for PlaylistPane {
         match key.code {
             KeyCode::Char('j') => {
                 self.move_down();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             KeyCode::Char('k') => {
                 self.move_up();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             KeyCode::Char('J') => {
                 self.reorder_down();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             KeyCode::Char('K') => {
                 self.reorder_up();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
-            _ => EventResult::Ignored,
+            _ => HandleKeyResult::ignored(),
         }
     }
 }
@@ -719,7 +719,7 @@ mod tests {
         let result = pane.handle_key(KeyEvent::from(KeyCode::Char('e')));
 
         // Then the filter handles it.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(pane.filter.input(), "te");
     }
 
@@ -734,7 +734,7 @@ mod tests {
         let result = pane.handle_key(KeyEvent::from(KeyCode::Char('j')));
 
         // Then selection moves down.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(pane.selected, 1);
     }
 
@@ -749,7 +749,7 @@ mod tests {
         let result = pane.handle_key(KeyEvent::from(KeyCode::Char('k')));
 
         // Then selection moves up.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(pane.selected, 0);
     }
 
@@ -764,7 +764,7 @@ mod tests {
         let result = pane.handle_key(KeyEvent::from(KeyCode::Char('J')));
 
         // Then item is reordered down.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(pane.selected, 1);
         assert_eq!(
             pane.items[0].path,
@@ -783,7 +783,7 @@ mod tests {
         let result = pane.handle_key(KeyEvent::from(KeyCode::Char('K')));
 
         // Then item is reordered up.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(pane.selected, 0);
         assert_eq!(
             pane.items[0].path,
@@ -801,6 +801,6 @@ mod tests {
         let result = pane.handle_key(KeyEvent::from(KeyCode::Char('x')));
 
         // Then the event is ignored.
-        assert_eq!(result, EventResult::Ignored);
+        assert!(!result.is_consumed());
     }
 }

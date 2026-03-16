@@ -8,11 +8,10 @@ use ratatui::{
 };
 
 use super::component::{Component, ComponentContext};
-use super::event::EventResult;
+use super::event::HandleKeyResult;
 use super::render::{Render, RenderContext};
 use crate::feat::keymap::{Key, KeyCategory, KeyNode, Keymap, LeafBinding};
 use crate::tui::Pane;
-use crate::tui::TuiAction;
 
 /// Position of the which-key popup on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -58,8 +57,6 @@ pub struct WhichKey {
     pub config: WhichKeyConfig,
     /// Keys pressed so far in a multi-key sequence.
     pub pending_keys: Vec<Key>,
-    /// Action to execute once a complete key sequence is resolved.
-    pub pending_action: Option<TuiAction>,
 }
 
 struct ColumnData<'a> {
@@ -102,7 +99,6 @@ impl WhichKey {
             active: false,
             config,
             pending_keys: Vec::new(),
-            pending_action: None,
         }
     }
 
@@ -113,7 +109,6 @@ impl WhichKey {
     pub fn dismiss(&mut self) {
         self.active = false;
         self.pending_keys.clear();
-        self.pending_action = None;
     }
 
     pub fn push_key(&mut self, key: Key) {
@@ -127,10 +122,6 @@ impl WhichKey {
 
     pub fn is_pending(&self) -> bool {
         !self.pending_keys.is_empty()
-    }
-
-    pub fn take_action(&mut self) -> Option<TuiAction> {
-        self.pending_action.take()
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -485,27 +476,27 @@ impl Component for WhichKey {
         &mut self,
         key: KeyEvent,
         ctx: &ComponentContext<'_>,
-    ) -> EventResult {
+    ) -> HandleKeyResult {
         if !self.is_pending() {
-            return EventResult::Ignored;
+            return HandleKeyResult::ignored();
         }
 
         let Some(key) = Key::from_keycode(key.code) else {
             self.dismiss();
-            return EventResult::Consumed;
+            return HandleKeyResult::consumed();
         };
 
         match key {
             Key::Esc => {
                 self.dismiss();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             Key::Backspace => {
                 self.pop_key();
                 if !self.is_pending() {
                     self.dismiss();
                 }
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             _ => {
                 let mut path = self.pending_keys.clone();
@@ -515,16 +506,17 @@ impl Component for WhichKey {
                     match node {
                         KeyNode::Leaf { action, .. } => {
                             self.dismiss();
-                            self.pending_action = Some(*action);
+                            HandleKeyResult::with_action(action.clone())
                         }
                         KeyNode::Branch { .. } => {
                             self.push_key(key);
+                            HandleKeyResult::consumed()
                         }
                     }
                 } else {
                     self.dismiss();
+                    HandleKeyResult::consumed()
                 }
-                EventResult::Consumed
             }
         }
     }
@@ -536,6 +528,7 @@ mod tests {
 
     use super::*;
     use crate::feat::keymap::{KeyCategory, KeyContext};
+    use crate::tui::TuiAction;
 
     fn make_keymap_with_sequence() -> Keymap {
         let mut keymap = Keymap::empty();
@@ -583,7 +576,7 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('a')), &ctx);
 
         // Then the event is ignored
-        assert_eq!(result, EventResult::Ignored);
+        assert!(!result.is_consumed());
     }
 
     #[test]
@@ -601,7 +594,7 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Esc), &ctx);
 
         // Then the event is consumed and which_key is dismissed
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!which_key.is_pending());
         assert!(!which_key.active);
     }
@@ -622,7 +615,7 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Backspace), &ctx);
 
         // Then the event is consumed and one key is removed
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(which_key.pending_keys, vec![Key::Char('g')]);
     }
 
@@ -641,7 +634,7 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Backspace), &ctx);
 
         // Then the event is consumed and which_key is dismissed
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!which_key.is_pending());
         assert!(!which_key.active);
     }
@@ -661,7 +654,7 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::F(1)), &ctx);
 
         // Then the event is consumed and which_key is dismissed
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!which_key.is_pending());
     }
 
@@ -680,13 +673,13 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('s')), &ctx);
 
         // Then the key is pushed and we're still pending
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(which_key.pending_keys, vec![Key::Char('g'), Key::Char('s')]);
         assert!(which_key.is_pending());
     }
 
     #[test]
-    fn handle_key_leaf_sets_pending_action() {
+    fn handle_key_leaf_returns_action() {
         // Given a WhichKey that is pending with a keymap that has a leaf at 'gm'
         let mut which_key = WhichKey::default();
         which_key.push_key(Key::Char('g'));
@@ -699,9 +692,9 @@ mod tests {
         // When pressing 'm' to complete the sequence "gm"
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('m')), &ctx);
 
-        // Then the event is consumed, action is set, and which_key is dismissed
-        assert_eq!(result, EventResult::Consumed);
-        assert_eq!(which_key.pending_action, Some(TuiAction::LaunchMpv));
+        // Then the event is consumed, action is returned, and which_key is dismissed
+        assert!(result.is_consumed());
+        assert_eq!(result.actions, vec![TuiAction::LaunchMpv]);
         assert!(!which_key.is_pending());
     }
 
@@ -720,25 +713,9 @@ mod tests {
         let result = which_key.handle_key_with_context(KeyEvent::from(KeyCode::Char('z')), &ctx);
 
         // Then the event is consumed and which_key is dismissed
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!which_key.is_pending());
-        assert!(which_key.pending_action.is_none());
-    }
-
-    #[test]
-    fn take_action_returns_and_clears_action() {
-        // Given a WhichKey with a pending action
-        let mut which_key = WhichKey {
-            pending_action: Some(TuiAction::Quit),
-            ..Default::default()
-        };
-
-        // When taking the action
-        let action = which_key.take_action();
-
-        // Then the action is returned and cleared
-        assert_eq!(action, Some(TuiAction::Quit));
-        assert!(which_key.pending_action.is_none());
+        assert!(result.actions.is_empty());
     }
 
     #[test]

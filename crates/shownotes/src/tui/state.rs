@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 
 use super::common::{ItemDisplayMode, ItemPath};
 use super::component::{Component, ComponentContext};
-use super::event::EventResult;
+use super::event::HandleKeyResult;
 use super::{GlobalKeyHandler, StatusBar, WhichKeyConfig};
 use crate::tui::{ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput};
 
@@ -138,18 +138,6 @@ impl TuiState {
         self.rename.cancel();
     }
 
-    pub fn submit_rename(&mut self) -> Option<(ItemPath, Option<String>, Option<String>)> {
-        self.rename.submit();
-        let new_alias = self.rename.take_submitted().flatten();
-        if let Some(item) = self.get_selected_item_mut() {
-            let old_alias = item.alias.clone();
-            item.alias.clone_from(&new_alias);
-            Some((item.path.clone(), old_alias, new_alias))
-        } else {
-            None
-        }
-    }
-
     pub fn push_rename_char(&mut self, c: char) {
         self.rename.push_char(c);
     }
@@ -168,11 +156,6 @@ impl TuiState {
 
     pub fn cancel_url_input(&mut self) {
         self.url_input.cancel();
-    }
-
-    pub fn submit_url_input(&mut self) -> Option<String> {
-        self.url_input.submit();
-        self.url_input.take_submitted().flatten()
     }
 
     pub fn push_url_char(&mut self, c: char) {
@@ -278,7 +261,7 @@ impl TuiState {
         self.error_popup.is_active()
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent, ctx: &ComponentContext<'_>) -> EventResult {
+    pub fn handle_key(&mut self, key: KeyEvent, ctx: &ComponentContext<'_>) -> HandleKeyResult {
         if self.error_popup.is_active() {
             return self.error_popup.handle_key(key);
         }
@@ -296,7 +279,7 @@ impl TuiState {
             Pane::Library => self.library_pane.handle_key(key),
         };
 
-        if result == EventResult::Consumed {
+        if result.is_consumed() {
             return result;
         }
 
@@ -550,7 +533,7 @@ mod tests {
         let result = state.handle_key(key, &ctx);
 
         // Then the error popup consumes it and dismisses.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!state.error_popup.is_active());
     }
 
@@ -566,7 +549,7 @@ mod tests {
         let result = state.handle_key(key, &ctx);
 
         // Then rename consumes it.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(state.rename.input().contains('x'));
     }
 
@@ -582,7 +565,7 @@ mod tests {
         let result = state.handle_key(key, &ctx);
 
         // Then url input consumes it.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(state.url_input.input().contains('h'));
     }
 
@@ -597,7 +580,7 @@ mod tests {
         let result = state.handle_key(key, &ctx);
 
         // Then global handler consumes it (starts which-key sequence).
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
     }
 
     #[test]
@@ -613,7 +596,7 @@ mod tests {
         let result = state.handle_key(key, &ctx);
 
         // Then playlist pane handles it.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(state.playlist_pane.selected, 1);
     }
 
@@ -628,6 +611,6 @@ mod tests {
         let result = state.handle_key(key, &ctx);
 
         // Then the event is ignored.
-        assert_eq!(result, EventResult::Ignored);
+        assert!(!result.is_consumed());
     }
 }

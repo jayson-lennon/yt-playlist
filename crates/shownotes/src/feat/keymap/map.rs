@@ -462,7 +462,7 @@ impl Keymap {
                     KeyContext::Library => pane == Pane::Library,
                 };
                 if context_matches {
-                    Some(*action)
+                    Some(action.clone())
                 } else {
                     None
                 }
@@ -494,7 +494,7 @@ impl Keymap {
                     if context_matches {
                         Some(LeafBinding {
                             key: child.key,
-                            action: *action,
+                            action: action.clone(),
                             description,
                             category: *category,
                             context: *context,

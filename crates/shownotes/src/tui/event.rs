@@ -1,14 +1,42 @@
-/// Result of a component handling a key event.
-///
-/// Used to implement event bubbling - when a component returns `Consumed`,
-/// the event stops propagating. When it returns `Ignored`, the event
-/// continues to the next handler in the chain.
+use crate::tui::TuiAction;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EventResult {
-    /// The event was consumed and should not propagate further.
+pub enum KeyStatus {
     Consumed,
-    /// The event was ignored and should bubble to the next handler.
     Ignored,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HandleKeyResult {
+    pub status: KeyStatus,
+    pub actions: Vec<TuiAction>,
+}
+
+impl HandleKeyResult {
+    pub fn ignored() -> Self {
+        Self {
+            status: KeyStatus::Ignored,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn consumed() -> Self {
+        Self {
+            status: KeyStatus::Consumed,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn with_action(action: TuiAction) -> Self {
+        Self {
+            status: KeyStatus::Consumed,
+            actions: vec![action],
+        }
+    }
+
+    pub fn is_consumed(&self) -> bool {
+        self.status == KeyStatus::Consumed
+    }
 }
 
 #[cfg(test)]
@@ -16,32 +44,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn event_result_consumed_is_distinct() {
-        let consumed = EventResult::Consumed;
-        let ignored = EventResult::Ignored;
+    fn ignored_returns_ignored_status() {
+        let result = HandleKeyResult::ignored();
 
-        assert_ne!(consumed, ignored);
+        assert!(!result.is_consumed());
+        assert!(result.actions.is_empty());
     }
 
     #[test]
-    fn event_result_can_be_copied() {
-        let result = EventResult::Consumed;
-        let copied = result;
+    fn consumed_returns_consumed_status() {
+        let result = HandleKeyResult::consumed();
 
-        assert_eq!(result, copied);
+        assert!(result.is_consumed());
+        assert!(result.actions.is_empty());
     }
 
     #[test]
-    fn event_result_debug_formats_correctly() {
-        assert_eq!(format!("{:?}", EventResult::Consumed), "Consumed");
-        assert_eq!(format!("{:?}", EventResult::Ignored), "Ignored");
+    fn with_action_returns_consumed_status_with_action() {
+        let action = TuiAction::Quit;
+
+        let result = HandleKeyResult::with_action(action.clone());
+
+        assert!(result.is_consumed());
+        assert_eq!(result.actions, vec![action]);
     }
 
     #[test]
-    fn event_result_clone_works() {
-        let result = EventResult::Consumed;
-        let cloned = result;
+    fn is_consumed_returns_true_for_consumed() {
+        let result = HandleKeyResult::consumed();
 
-        assert_eq!(result, cloned);
+        assert!(result.is_consumed());
+    }
+
+    #[test]
+    fn is_consumed_returns_false_for_ignored() {
+        let result = HandleKeyResult::ignored();
+
+        assert!(!result.is_consumed());
+    }
+
+    #[test]
+    fn key_status_equality_works() {
+        assert_eq!(KeyStatus::Consumed, KeyStatus::Consumed);
+        assert_eq!(KeyStatus::Ignored, KeyStatus::Ignored);
+        assert_ne!(KeyStatus::Consumed, KeyStatus::Ignored);
     }
 }

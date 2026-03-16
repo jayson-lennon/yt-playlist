@@ -75,7 +75,7 @@ pub enum TuiActionResponse {
 ///
 /// Represents every user action that can be triggered by keybindings,
 /// from navigation and pane switching to launching mpv and editing notes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TuiAction {
     Quit,
     Save,
@@ -102,4 +102,23 @@ pub enum TuiAction {
     FuzzyNotes,
     EditSources,
     GenerateShowNotes(ShowNoteKind),
+    RenameSubmit(String),
+    UrlSubmit(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rename_submit_variant_exists() {
+        let action = TuiAction::RenameSubmit("new_name".to_string());
+        assert!(matches!(action, TuiAction::RenameSubmit(_)));
+    }
+
+    #[test]
+    fn url_submit_variant_exists() {
+        let action = TuiAction::UrlSubmit("https://example.com".to_string());
+        assert!(matches!(action, TuiAction::UrlSubmit(_)));
+    }
 }

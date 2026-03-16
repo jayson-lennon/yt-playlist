@@ -59,6 +59,29 @@ pub fn handle_add_url(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     TuiActionResponse::Continue
 }
 
+pub fn handle_url_submit(ctx: &mut TuiActionCtx<'_>, url: String) -> TuiActionResponse {
+    match ctx.execute(Command::UrlAdd { url }) {
+        Ok(CommandResult::UrlAdded { item }) => {
+            ctx.tui_state.library_pane.items.push(item);
+            ctx.tui_state
+                .library_pane
+                .items
+                .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
+            let _ = ctx.execute(Command::PlaylistSave {
+                playlist_items: ctx.tui_state.playlist_pane.items.clone(),
+                library_items: ctx.tui_state.library_pane.items.clone(),
+            });
+            ctx.tui_state.status_bar.set("URL added to library");
+        }
+        Err(e) => {
+            ctx.tui_state
+                .show_error(format!("Failed to add URL: {e:?}"));
+        }
+        _ => unreachable!(),
+    }
+    TuiActionResponse::Continue
+}
+
 pub fn handle_delete(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if let Some(item) = ctx.tui_state.selected_library_item() {
         if item.is_virtual {

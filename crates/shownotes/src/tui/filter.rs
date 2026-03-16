@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::component::Component;
-use super::event::EventResult;
+use super::event::HandleKeyResult;
 use super::render::{Render, RenderContext};
 
 /// Filter state for searching/filtering items in a pane.
@@ -109,29 +109,29 @@ impl Component for Filter {
         self.active
     }
 
-    fn handle_key(&mut self, key: KeyEvent) -> EventResult {
+    fn handle_key(&mut self, key: KeyEvent) -> HandleKeyResult {
         if !self.active {
-            return EventResult::Ignored;
+            return HandleKeyResult::ignored();
         }
 
         match key.code {
             KeyCode::Esc => {
                 self.cancel();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             KeyCode::Enter => {
                 self.submit();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             KeyCode::Backspace => {
                 self.pop_char();
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
             KeyCode::Char(c) => {
                 self.push_char(c);
-                EventResult::Consumed
+                HandleKeyResult::consumed()
             }
-            _ => EventResult::Consumed,
+            _ => HandleKeyResult::consumed(),
         }
     }
 }
@@ -364,7 +364,7 @@ mod tests {
         let result = filter.handle_key(key);
 
         // Then the event is ignored.
-        assert_eq!(result, EventResult::Ignored);
+        assert!(!result.is_consumed());
     }
 
     #[test]
@@ -381,7 +381,7 @@ mod tests {
         let result = filter.handle_key(KeyEvent::from(KeyCode::Esc));
 
         // Then the filter is canceled.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!filter.is_active());
         assert!(filter.input.is_empty());
     }
@@ -400,7 +400,7 @@ mod tests {
         let result = filter.handle_key(KeyEvent::from(KeyCode::Enter));
 
         // Then the filter is submitted.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert!(!filter.is_active());
         assert_eq!(filter.applied, Some("test".to_string()));
     }
@@ -418,7 +418,7 @@ mod tests {
         let result = filter.handle_key(KeyEvent::from(KeyCode::Backspace));
 
         // Then the last character is removed.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(filter.input, "ab");
     }
 
@@ -432,7 +432,7 @@ mod tests {
         let result = filter.handle_key(KeyEvent::from(KeyCode::Char('x')));
 
         // Then the character is added to input.
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
         assert_eq!(filter.input, "x");
     }
 
@@ -446,6 +446,6 @@ mod tests {
         let result = filter.handle_key(KeyEvent::from(KeyCode::Up));
 
         // Then the event is consumed (not ignored).
-        assert_eq!(result, EventResult::Consumed);
+        assert!(result.is_consumed());
     }
 }
