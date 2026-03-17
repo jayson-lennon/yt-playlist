@@ -35,3 +35,11 @@ pub fn spawn(ctx: &SystemCtx, socket_path: &str) -> Result<bool, Report<CommandE
         .attach("failed to spawn mpv")?;
     Ok(false)
 }
+
+pub fn toggle_play(ctx: &SystemCtx) -> Result<(), Report<CommandError>> {
+    ctx.services
+        .mpv
+        .toggle_play()
+        .change_context(CommandError)
+        .attach("failed to toggle play/pause in mpv")
+}

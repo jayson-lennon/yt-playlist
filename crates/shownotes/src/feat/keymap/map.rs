@@ -85,6 +85,7 @@ impl Keymap {
             .bind("J", TuiAction::ReorderDown, "move down", Cat::PlaylistActions, Ctx::Playlist)
             .bind("K", TuiAction::ReorderUp, "move up", Cat::PlaylistActions, Ctx::Playlist)
             .bind("o", TuiAction::LaunchFile, "open file", Cat::ItemActions, Ctx::Global)
+            .bind("p", TuiAction::TogglePlay, "play/pause", Cat::General, Ctx::Global)
             .bind("L", TuiAction::MoveToLibrary, "to library", Cat::ItemActions, Ctx::Playlist)
             .bind("H", TuiAction::MoveToPlaylist, "to playlist", Cat::ItemActions, Ctx::Library)
             .bind("x", TuiAction::Delete, "delete", Cat::ItemActions, Ctx::Library)

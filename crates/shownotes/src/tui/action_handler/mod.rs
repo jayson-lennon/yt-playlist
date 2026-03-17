@@ -66,5 +66,6 @@ pub fn dispatch(ctx: &mut TuiActionCtx<'_>, action: TuiAction) -> TuiActionRespo
         TuiAction::GenerateShowNotes(kind) => edit::handle_generate_show_notes(ctx, kind),
         TuiAction::RenameSubmit(alias) => edit::handle_rename_submit(ctx, alias),
         TuiAction::UrlSubmit(url) => general::handle_url_submit(ctx, url),
+        TuiAction::TogglePlay => external::handle_toggle_play(ctx),
     }
 }

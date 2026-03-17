@@ -97,3 +97,18 @@ pub fn handle_launch_mpv(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     }
     TuiActionResponse::Continue
 }
+
+pub fn handle_toggle_play(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+    let command = Command::MpvTogglePlay;
+    match ctx.execute(command) {
+        Ok(CommandResult::MpvToggledPlay) => {
+            ctx.tui_state.status_bar.set("Toggled playback");
+        }
+        Err(e) => {
+            ctx.tui_state
+                .show_error(format!("Failed to toggle playback: {e:?}"));
+        }
+        _ => unreachable!(),
+    }
+    TuiActionResponse::Continue
+}

@@ -23,6 +23,10 @@ pub trait MpvClient: Send + Sync {
     /// # Errors
     /// Returns an error if the playlist cannot be loaded in mpv.
     fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>>;
+
+    /// # Errors
+    /// Returns an error if the toggle command fails.
+    fn toggle_play(&self) -> Result<(), Report<MpvError>>;
 }
 
 /// Service for communicating with mpv via IPC.
@@ -50,6 +54,12 @@ impl MpvClientService {
     /// Returns an error if the playlist cannot be loaded in mpv.
     pub fn load_playlist(&self, paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
         self.backend.load_playlist(paths)
+    }
+
+    /// # Errors
+    /// Returns an error if the toggle command fails.
+    pub fn toggle_play(&self) -> Result<(), Report<MpvError>> {
+        self.backend.toggle_play()
     }
 }
 

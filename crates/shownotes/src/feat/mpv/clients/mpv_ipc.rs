@@ -62,4 +62,12 @@ impl MpvClient for MpvIpc {
         .change_context(MpvError)?;
         Ok(())
     }
+
+    fn toggle_play(&self) -> Result<(), Report<MpvError>> {
+        let mpv = Mpv::connect(&self.socket_path)
+            .change_context(MpvError)
+            .attach("failed to connect to mpv")?;
+        mpv.toggle().change_context(MpvError)?;
+        Ok(())
+    }
 }

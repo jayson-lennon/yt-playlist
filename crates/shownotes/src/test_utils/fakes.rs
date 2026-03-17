@@ -23,6 +23,10 @@ impl MpvClient for FakeMpvBackend {
     fn load_playlist(&self, _paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
         Ok(())
     }
+
+    fn toggle_play(&self) -> Result<(), Report<MpvError>> {
+        Ok(())
+    }
 }
 
 pub struct FakeMpvLauncher {

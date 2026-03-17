@@ -66,5 +66,6 @@ pub fn format_output(result: &CommandResult) -> String {
         CommandResult::AliasRenamed { path, alias } => {
             format!("Renamed to '{}': {}", alias, path.to_string_lossy())
         }
+        CommandResult::MpvToggledPlay => "Toggled playback".to_string(),
     }
 }

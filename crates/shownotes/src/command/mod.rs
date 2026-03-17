@@ -91,6 +91,7 @@ pub enum Command {
     LaunchFile { path: CanonicalPath, command: Option<String>, socket_path: String },
     MpvLoadPlaylist { paths: Vec<CanonicalPath> },
     MpvSpawn { socket_path: String },
+    MpvTogglePlay,
 
     AliasSet { path: CanonicalPath, workspace: CanonicalPath, alias: String },
     AliasRemove { path: CanonicalPath, workspace: CanonicalPath },
@@ -125,6 +126,7 @@ pub enum CommandResult {
     FileLaunched { path: CanonicalPath, used_default_opener: bool },
     MpvPlaylistLoaded { count: usize },
     MpvSpawned { was_already_running: bool },
+    MpvToggledPlay,
 
     AliasSet { path: CanonicalPath, alias: String },
     AliasRemoved { path: CanonicalPath },
@@ -190,6 +192,10 @@ pub async fn execute(
         Command::MpvSpawn { socket_path } => {
             let was_already_running = mpv::spawn(ctx, &socket_path)?;
             Ok(CommandResult::MpvSpawned { was_already_running })
+        }
+        Command::MpvTogglePlay => {
+            mpv::toggle_play(ctx)?;
+            Ok(CommandResult::MpvToggledPlay)
         }
         Command::AliasSet { path, workspace, alias } => {
             let alias_clone = alias.clone();

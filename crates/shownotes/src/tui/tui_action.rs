@@ -86,6 +86,7 @@ pub enum TuiAction {
     MoveUp,
     MoveDown,
     SwitchPane,
+    TogglePlay,
     FocusPlaylist,
     FocusLibrary,
     Rename,
