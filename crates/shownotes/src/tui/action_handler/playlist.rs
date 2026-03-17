@@ -1,6 +1,10 @@
+use std::collections::HashMap;
+
 use super::TuiActionCtx;
 use super::TuiActionError;
+use crate::command::playlist::get_item_counts;
 use crate::command::Command;
+use crate::common::domain::ItemPath;
 use crate::tui::Pane;
 use crate::tui::TuiActionResponse;
 use error_stack::{Report, ResultExt};
@@ -48,6 +52,8 @@ pub fn handle_move_to_library(
             library_items: ctx.tui_state.library_pane.items.clone(),
         })
         .change_context(TuiActionError)?;
+
+        recalculate_counts(ctx);
     }
     Ok(TuiActionResponse::Continue)
 }
@@ -62,6 +68,7 @@ pub fn handle_move_to_playlist(
             item.alias,
             item.mime_type,
             item.is_virtual,
+            item.playlist_count.saturating_add(1),
         );
         ctx.tui_state.remove_from_library();
         if ctx.tui_state.library_pane.items.is_empty() {
@@ -73,6 +80,27 @@ pub fn handle_move_to_playlist(
             library_items: ctx.tui_state.library_pane.items.clone(),
         })
         .change_context(TuiActionError)?;
+
+        recalculate_counts(ctx);
     }
     Ok(TuiActionResponse::Continue)
+}
+
+fn recalculate_counts(ctx: &mut TuiActionCtx<'_>) {
+    let all_paths: Vec<ItemPath> = ctx
+        .tui_state
+        .playlist_pane
+        .items
+        .iter()
+        .chain(ctx.tui_state.library_pane.items.iter())
+        .map(|i| i.path.clone())
+        .collect();
+
+    let counts: HashMap<ItemPath, usize> = ctx
+        .ctx
+        .services
+        .rt
+        .block_on(get_item_counts(ctx.ctx, &all_paths));
+
+    ctx.tui_state.update_counts(&counts);
 }

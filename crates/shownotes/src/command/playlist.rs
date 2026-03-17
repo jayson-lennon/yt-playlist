@@ -133,7 +133,6 @@ pub async fn save_playlist(
 
 pub async fn refresh_library(
     ctx: &SystemCtx,
-    _playlist_counts: Option<&HashMap<ItemPath, usize>>,
 ) -> Result<CommandResult, Report<CommandError>> {
     let mut entries = Vec::new();
     if let Ok(read_dir) = std::fs::read_dir(ctx.library_path.as_path()) {
@@ -176,6 +175,14 @@ pub async fn refresh_library(
             });
         }
     }
+
+    let item_paths: Vec<ItemPath> = entries.iter().map(|e| e.path.clone()).collect();
+    let counts = get_item_counts(ctx, &item_paths).await;
+
+    for entry in &mut entries {
+        entry.playlist_count = counts.get(&entry.path).copied().unwrap_or(0);
+    }
+
     entries.sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
     Ok(CommandResult::LibraryRefreshed { items: entries })
 }
@@ -207,4 +214,23 @@ pub async fn rename_alias(
         path: path.clone(),
         alias: alias.to_string(),
     })
+}
+
+pub async fn get_item_counts(
+    ctx: &SystemCtx,
+    items: &[ItemPath],
+) -> HashMap<ItemPath, usize> {
+    let Ok(path_counts) = ctx.services.storage.get_path_counts().await else {
+        return HashMap::new();
+    };
+
+    let mut result = HashMap::new();
+    for path in items {
+        let count = ctx.services.storage.resolve_file_path_id(path).await
+            .ok().flatten()
+            .and_then(|id| path_counts.get(&id).copied())
+            .unwrap_or(0);
+        result.insert(path.clone(), count);
+    }
+    result
 }

@@ -69,6 +69,7 @@ pub fn format_item_line(
     display_mode: ItemDisplayMode,
     pane_width: u16,
     playlist_count: usize,
+    min_count: usize,
 ) -> String {
     let mime_str = format_mime_type(item.mime_type.as_deref());
     let duration_str = format_duration(item.duration);
@@ -95,7 +96,7 @@ pub fn format_item_line(
         },
     };
 
-    if playlist_count > 1 && pane_width > 0 {
+    if playlist_count >= min_count && pane_width > 0 {
         let count_str = format!("({playlist_count})");
         let base_len = base_line.chars().count();
         let count_len = count_str.chars().count();
@@ -367,7 +368,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] video / My Video");
     }
 
@@ -381,7 +382,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] video");
     }
 
@@ -395,7 +396,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[pdf] [--:--:--] doc / My Doc");
     }
 
@@ -409,7 +410,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[pdf] [--:--:--] doc");
     }
 
@@ -423,7 +424,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[unknown] [--:--:--] file");
     }
 
@@ -437,7 +438,7 @@ mod tests {
             is_virtual: true,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(
             result,
             "[url] [--:--:--] https://youtube.com/watch?v=abc123"
@@ -454,7 +455,7 @@ mod tests {
             is_virtual: true,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(
             result,
             "[url] [--:--:--] https://youtube.com/watch?v=abc123 / My Video"
@@ -471,7 +472,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[video/mp4] [--:--:--] video");
     }
 
@@ -499,7 +500,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 0,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 0);
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 0, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
@@ -513,7 +514,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 1,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 1);
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 1, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
@@ -527,7 +528,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 2,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 2);
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 2, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (2)");
     }
 
@@ -541,7 +542,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 3,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 3);
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 3, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (3)");
     }
 
@@ -555,7 +556,7 @@ mod tests {
             is_virtual: false,
             playlist_count: 5,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Alias, 0, 5);
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 0, 5, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
@@ -569,7 +570,21 @@ mod tests {
             is_virtual: false,
             playlist_count: 2,
         };
-        let result = format_item_line(&item, ItemDisplayMode::Alias, 20, 2);
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 20, 2, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
+    }
+
+    #[test]
+    fn format_item_line_shows_count_when_min_count_is_one_and_count_is_one() {
+        let item = PlaylistItem {
+            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            duration: Some(Duration::from_secs(65)),
+            alias: Some("My Video".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            is_virtual: false,
+            playlist_count: 1,
+        };
+        let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 1, 1);
+        assert_eq!(result, "[video/mp4] [00:01:05] My Video                (1)");
     }
 }

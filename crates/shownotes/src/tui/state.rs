@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crossterm::event::KeyEvent;
 
 use super::common::{ItemDisplayMode, ItemPath};
@@ -89,6 +91,7 @@ impl TuiState {
         alias: Option<String>,
         mime_type: Option<String>,
         is_virtual: bool,
+        playlist_count: usize,
     ) {
         self.playlist_pane.add(PlaylistItem {
             path,
@@ -96,7 +99,7 @@ impl TuiState {
             alias,
             mime_type,
             is_virtual,
-            playlist_count: 1,
+            playlist_count,
         });
     }
 
@@ -111,6 +114,19 @@ impl TuiState {
     pub fn refresh_library(&mut self, entries: Vec<PlaylistItem>) {
         let playlist_paths: Vec<_> = self.playlist_pane.paths();
         self.library_pane.refresh(entries, &playlist_paths);
+    }
+
+    /// Updates playlist occurrence counts for all items in both panes.
+    ///
+    /// This should be called after database operations that change playlist
+    /// membership to ensure counts reflect the current state.
+    pub fn update_counts(&mut self, counts: &HashMap<ItemPath, usize>) {
+        for item in &mut self.playlist_pane.items {
+            item.playlist_count = counts.get(&item.path).copied().unwrap_or(1);
+        }
+        for item in &mut self.library_pane.items {
+            item.playlist_count = counts.get(&item.path).copied().unwrap_or(0);
+        }
     }
 
     pub fn switch_pane(&mut self) {
@@ -463,6 +479,7 @@ mod tests {
             Some("alias".to_string()),
             Some("video/mp4".to_string()),
             false,
+            1,
         );
 
         // Then item is added.

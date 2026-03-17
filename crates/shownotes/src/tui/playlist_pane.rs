@@ -197,6 +197,7 @@ impl PlaylistPane {
                     display_mode,
                     list_area.width.saturating_sub(BORDER_COLUMNS),
                     item.playlist_count,
+                    2,
                 );
                 ListItem::new(text).style(style)
             })

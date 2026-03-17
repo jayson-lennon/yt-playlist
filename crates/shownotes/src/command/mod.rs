@@ -56,7 +56,7 @@ mod mpv;
 pub mod notes;
 mod output;
 mod sources;
-mod playlist;
+pub mod playlist;
 
 use std::path::PathBuf;
 
@@ -214,7 +214,7 @@ pub async fn execute(
             playlist::save_playlist(ctx, &playlist_items, &library_items).await
         }
         Command::LibraryRefresh => {
-            playlist::refresh_library(ctx, None).await
+            playlist::refresh_library(ctx).await
         }
         Command::UrlAdd { url } => {
             let item = playlist::add_url(&url);

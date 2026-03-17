@@ -197,6 +197,7 @@ impl LibraryPane {
                     display_mode,
                     list_area.width.saturating_sub(BORDER_COLUMNS),
                     item.playlist_count,
+                    1, // Show count when >= 1 for library pane
                 );
                 ListItem::new(text).style(style)
             })
