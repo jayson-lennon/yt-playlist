@@ -3,7 +3,8 @@ use cucumber::{World, given, then, when};
 
 use acceptance::ShownotesWorld;
 use marked_path::CanonicalPath;
-use shownotes::command::{Command, execute};
+use shownotes::common::ItemPath;
+use shownotes::command::{Command, CommandResult};
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
@@ -12,9 +13,9 @@ pub struct AliasDeletionWorld {
 }
 
 impl AliasDeletionWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
-            inner: ShownotesWorld::new().await,
+            inner: ShownotesWorld::new(),
         }
     }
 }
@@ -25,62 +26,47 @@ fn given_real_file(world: &mut AliasDeletionWorld, filename: String) {
 }
 
 #[given(expr = r#"the file {string} has alias {string}"#)]
-async fn given_file_has_alias(world: &mut AliasDeletionWorld, path: String, alias: String) {
+fn given_file_has_alias(world: &mut AliasDeletionWorld, path: String, alias: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
     let workspace = CanonicalPath::from_path(world.inner.temp_dir.path())
         .expect("failed to canonicalize workspace");
 
-    execute(
-        &world.inner.ctx,
-        Command::AliasSet {
-            path: canonical,
-            workspace,
-            alias,
-        },
-    )
-    .await
-    .expect("failed to set alias");
+    world.inner.execute(Command::AliasSet {
+        path: canonical,
+        workspace,
+        alias,
+    });
 }
 
 #[when(expr = r#"I remove the alias from {string}"#)]
-async fn when_remove_alias(world: &mut AliasDeletionWorld, path: String) {
+fn when_remove_alias(world: &mut AliasDeletionWorld, path: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
     let workspace = CanonicalPath::from_path(world.inner.temp_dir.path())
         .expect("failed to canonicalize workspace");
 
-    execute(
-        &world.inner.ctx,
-        Command::AliasRemove {
-            path: canonical,
-            workspace,
-        },
-    )
-    .await
-    .expect("failed to remove alias");
+    world.inner.execute(Command::AliasRemove {
+        path: canonical,
+        workspace,
+    });
 }
 
 #[then(expr = r#"the file {string} has no alias"#)]
-async fn then_file_has_no_alias(world: &mut AliasDeletionWorld, path: String) {
+fn then_file_has_no_alias(world: &mut AliasDeletionWorld, path: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let workspace = CanonicalPath::from_path(world.inner.temp_dir.path())
-        .expect("failed to canonicalize workspace");
 
-    let alias = world
-        .inner
-        .ctx
-        .services
-        .storage
-        .resolve_alias(&canonical, &workspace)
-        .await
-        .expect("failed to resolve alias");
-
-    assert!(
-        alias.is_none(),
-        "expected file '{path}' to have no alias, but found: '{alias:?}'"
-    );
+    let result = world.inner.execute(Command::PlaylistLoad);
+    if let CommandResult::PlaylistLoaded { playlist_items, .. } = result {
+        let item = playlist_items.iter().find(|i| {
+            matches!(&i.path, ItemPath::File(p) if p == &canonical)
+        });
+        assert!(
+            item.map_or(true, |i| i.alias.is_none()),
+            "expected file '{path}' to have no alias"
+        );
+    }
 }
 
 #[tokio::main]

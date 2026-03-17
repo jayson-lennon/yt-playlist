@@ -10,7 +10,7 @@ use crate::tui::{ComponentContext, TuiState};
 /// When the TUI needs to fork a process (e.g., launching an external editor),
 /// it sets flags here to track what action should be taken after resuming.
 /// The main loop checks [`Fork::take_action`] to determine what to do next.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Fork {
     /// Path to the item whose notes file should be opened in an editor.
     pub notes_path: Option<crate::common::domain::ItemPath>,
@@ -59,7 +59,7 @@ impl Fork {
 /// Main application state container.
 ///
 /// Holds all state needed to run the TUI application, including the system
-/// context with services and configuration, the current TUI state, and
+/// context with services, configuration, the current TUI state, and
 /// runtime for async operations.
 pub struct App {
     /// System context containing services, configuration, and paths.
@@ -72,6 +72,18 @@ pub struct App {
     pub fork: Fork,
     /// Tokio runtime for executing async operations synchronously.
     pub tokio_runtime: tokio::runtime::Runtime,
+}
+
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App")
+            .field("ctx", &self.ctx)
+            .field("tui_state", &self.tui_state)
+            .field("should_quit", &self.should_quit)
+            .field("fork", &self.fork)
+            .field("tokio_runtime", &"<Runtime>")
+            .finish()
+    }
 }
 
 impl App {

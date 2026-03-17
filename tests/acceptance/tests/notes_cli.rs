@@ -5,8 +5,7 @@ use cucumber::{World, given, then, when};
 use tempfile::TempDir;
 
 use marked_path::CanonicalPath;
-use shownotes::command::{Command, execute, format_output};
-use shownotes::feat::note_db::NoteDb;
+use shownotes::{format_output, Command, CommandResult};
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
@@ -17,8 +16,8 @@ pub struct NotesWorld {
 }
 
 impl NotesWorld {
-    async fn new_world() -> Self {
-        let inner = ShownotesWorld::new().await;
+    fn new_world() -> Self {
+        let inner = ShownotesWorld::new();
         let symlink_dir = tempfile::tempdir().expect("failed to create symlink dir");
         Self {
             inner,
@@ -34,137 +33,71 @@ fn given_file(world: &mut NotesWorld, filename: String) {
 }
 
 #[given(expr = r#"a file {string} with note {string}"#)]
-async fn given_file_with_note(world: &mut NotesWorld, filename: String, note: String) {
+fn given_file_with_note(world: &mut NotesWorld, filename: String, note: String) {
     let full_path = world.inner.create_file(&filename);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let path_str = canonical.as_path().to_string_lossy().to_string();
 
-    let file_path_id = world
-        .inner
-        .ctx
-        .services
-        .db
-        .get_or_create_file_path(&path_str)
-        .await
-        .expect("failed to get file path id");
-
-    world
-        .inner
-        .ctx
-        .services
-        .db
-        .upsert_note(file_path_id, &note)
-        .await
-        .expect("failed to upsert note");
+    world.inner.fake_editor.set_content(note);
+    world.inner.execute(Command::NotesAdd {
+        paths: vec![canonical],
+    });
 }
 
 #[when(expr = r#"I add note {string} to {string}"#)]
-async fn when_add_note(world: &mut NotesWorld, note: String, filename: String) {
+fn when_add_note(world: &mut NotesWorld, note: String, filename: String) {
     let full_path = world.inner.resolve_path(&filename);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let path_str = canonical.as_path().to_string_lossy().to_string();
 
-    let file_path_id = world
-        .inner
-        .ctx
-        .services
-        .db
-        .get_or_create_file_path(&path_str)
-        .await
-        .expect("failed to get file path id");
+    world.inner.fake_editor.set_append_mode(true);
+    world.inner.fake_editor.set_content(note);
 
-    let existing_note = world
-        .inner
-        .ctx
-        .services
-        .db
-        .get_note(file_path_id)
-        .await
-        .expect("failed to get existing note");
-
-    let combined_content = match existing_note {
-        Some(existing) => format!("{existing}\n\n{note}"),
-        None => note,
-    };
-
-    world.inner.fake_editor.set_content(combined_content);
-
-    let result = execute(
-        &world.inner.ctx,
-        Command::NotesAdd {
-            paths: vec![canonical],
-        },
-    )
-    .await
-    .expect("add note command failed");
+    let result = world.inner.execute(Command::NotesAdd {
+        paths: vec![canonical],
+    });
 
     world.output = format_output(&result);
 }
 
 #[when(expr = r#"I search notes for {string}"#)]
-async fn when_search_notes(world: &mut NotesWorld, query: String) {
-    let result = execute(
-        &world.inner.ctx,
-        Command::NotesSearch {
-            query,
-            create_symlinks: false,
-        },
-    )
-    .await
-    .expect("search notes command failed");
+fn when_search_notes(world: &mut NotesWorld, query: String) {
+    let result = world.inner.execute(Command::NotesSearch {
+        query,
+        create_symlinks: false,
+    });
 
     world.output = format_output(&result);
 }
 
 #[when(expr = r#"I search notes for {string} with symlinks"#)]
-async fn when_search_notes_with_symlinks(world: &mut NotesWorld, query: String) {
+fn when_search_notes_with_symlinks(world: &mut NotesWorld, query: String) {
     std::env::set_current_dir(world.symlink_dir.path()).expect("failed to change directory");
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::NotesSearch {
-            query,
-            create_symlinks: true,
-        },
-    )
-    .await
-    .expect("search notes command failed");
+    let result = world.inner.execute(Command::NotesSearch {
+        query,
+        create_symlinks: true,
+    });
 
     world.output = format_output(&result);
 }
 
 #[then(expr = r#"the file {string} has note {string}"#)]
-async fn then_file_has_note(world: &mut NotesWorld, filename: String, expected_note: String) {
-    let full_path = world.inner.resolve_path(&filename);
-    let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    let path_str = canonical.as_path().to_string_lossy().to_string();
+fn then_file_has_note(world: &mut NotesWorld, filename: String, expected_note: String) {
+    let result = world.inner.execute(Command::NotesSearch {
+        query: expected_note.clone(),
+        create_symlinks: false,
+    });
 
-    let file_path_id = world
-        .inner
-        .ctx
-        .services
-        .db
-        .get_or_create_file_path(&path_str)
-        .await
-        .expect("failed to get file path id");
-
-    let note = world
-        .inner
-        .ctx
-        .services
-        .db
-        .get_note(file_path_id)
-        .await
-        .expect("failed to get note");
-
-    match note {
-        Some(content) => {
-            assert!(
-                content.contains(&expected_note),
-                "expected file '{filename}' to have note '{expected_note}', but got: '{content}'"
-            );
-        }
-        None => panic!("expected file '{filename}' to have note '{expected_note}', but no note found"),
+    if let CommandResult::NotesSearch { paths, .. } = result {
+        let full_path = world.inner.resolve_path(&filename);
+        let path_str = full_path.to_string_lossy();
+        assert!(
+            paths.iter().any(|p| p.contains(&*path_str)),
+            "expected file '{}' to have note '{}'",
+            filename,
+            expected_note
+        );
+    } else {
+        panic!("expected NotesSearch result");
     }
 }
 

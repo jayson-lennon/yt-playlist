@@ -4,7 +4,7 @@ use acceptance::ShownotesWorld;
 use cucumber::{World, given, then, when};
 
 use marked_path::CanonicalPath;
-use shownotes::command::{Command, CommandResult, execute, format_output};
+use shownotes::command::{Command, CommandResult, format_output};
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
@@ -15,9 +15,9 @@ pub struct SourcesBasicWorld {
 }
 
 impl SourcesBasicWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
-            inner: ShownotesWorld::new().await,
+            inner: ShownotesWorld::new(),
             output: String::new(),
             last_urls: Vec::new(),
         }
@@ -34,59 +34,39 @@ async fn given_file_with_source(world: &mut SourcesBasicWorld, filename: String,
     world.inner.create_file(&filename);
     let full_path = world.inner.resolve_path(&filename);
 
-    execute(
-        &world.inner.ctx,
-        Command::SourcesAdd {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-            url,
-        },
-    )
-    .await
-    .expect("add command failed");
+    world.inner.execute(Command::SourcesAdd {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+        url,
+    });
 }
 
 #[given(expr = r#"the file {string} has source {string}"#)]
-async fn given_file_has_source(world: &mut SourcesBasicWorld, path: String, url: String) {
+fn given_file_has_source(world: &mut SourcesBasicWorld, path: String, url: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    execute(
-        &world.inner.ctx,
-        Command::SourcesAdd {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-            url,
-        },
-    )
-    .await
-    .expect("add command failed");
+    world.inner.execute(Command::SourcesAdd {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+        url,
+    });
 }
 
 #[when(expr = r#"I add source {string} to {string}"#)]
-async fn when_add_source(world: &mut SourcesBasicWorld, url: String, path: String) {
+fn when_add_source(world: &mut SourcesBasicWorld, url: String, path: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    execute(
-        &world.inner.ctx,
-        Command::SourcesAdd {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-            url,
-        },
-    )
-    .await
-    .expect("add command failed");
+    world.inner.execute(Command::SourcesAdd {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+        url,
+    });
 }
 
 #[when(expr = r#"I list sources for {string}"#)]
-async fn when_list_sources(world: &mut SourcesBasicWorld, path: String) {
+fn when_list_sources(world: &mut SourcesBasicWorld, path: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::SourcesList {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("list command failed");
+    let result = world.inner.execute(Command::SourcesList {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 
     if let CommandResult::SourcesList { urls, .. } = &result {
         world.last_urls.clone_from(urls);
@@ -95,33 +75,23 @@ async fn when_list_sources(world: &mut SourcesBasicWorld, path: String) {
 }
 
 #[when(expr = r#"I edit sources for {string} with {string}"#)]
-async fn when_edit_sources(world: &mut SourcesBasicWorld, path: String, content: String) {
+fn when_edit_sources(world: &mut SourcesBasicWorld, path: String, content: String) {
     let content = content.replace("\\n", "\n");
     world.inner.fake_editor.set_content(content);
     let full_path = world.inner.resolve_path(&path);
 
-    execute(
-        &world.inner.ctx,
-        Command::SourcesEdit {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("edit command failed");
+    world.inner.execute(Command::SourcesEdit {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 }
 
 #[then(expr = r#"the file {string} has source {string}"#)]
-async fn then_file_has_source(world: &mut SourcesBasicWorld, path: String, expected_url: String) {
+fn then_file_has_source(world: &mut SourcesBasicWorld, path: String, expected_url: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::SourcesList {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("list command failed");
+    let result = world.inner.execute(Command::SourcesList {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 
     match result {
         CommandResult::SourcesList { urls, .. } => {
@@ -135,21 +105,16 @@ async fn then_file_has_source(world: &mut SourcesBasicWorld, path: String, expec
 }
 
 #[then(expr = r#"the file {string} does not have source {string}"#)]
-async fn then_file_does_not_have_source(
+fn then_file_does_not_have_source(
     world: &mut SourcesBasicWorld,
     path: String,
     expected_url: String,
 ) {
     let full_path = world.inner.resolve_path(&path);
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::SourcesList {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("list command failed");
+    let result = world.inner.execute(Command::SourcesList {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 
     match result {
         CommandResult::SourcesList { urls, .. } => {

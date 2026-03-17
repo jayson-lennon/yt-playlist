@@ -3,7 +3,7 @@
 use acceptance::ShownotesWorld;
 use cucumber::{World, given, then, when};
 use marked_path::CanonicalPath;
-use shownotes::command::{Command, CommandResult, execute};
+use shownotes::command::{Command, CommandResult};
 use shownotes::common::domain::{ItemPath, PlaylistItem};
 
 #[derive(Debug, World)]
@@ -15,9 +15,9 @@ pub struct PlaylistWorld {
 }
 
 impl PlaylistWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
-            inner: ShownotesWorld::new().await,
+            inner: ShownotesWorld::new(),
             playlist_items: Vec::new(),
             library_items: Vec::new(),
         }
@@ -40,6 +40,7 @@ fn create_playlist_item(world: &mut PlaylistWorld, filename: &str) -> PlaylistIt
         alias: None,
         mime_type: None,
         is_virtual: false,
+        playlist_count: 0,
     }
 }
 
@@ -53,7 +54,7 @@ fn given_playlist_with_files(world: &mut PlaylistWorld, files: String) {
 }
 
 #[given(expr = r#"a file {string} in playlist with alias {string}"#)]
-async fn given_file_with_alias(world: &mut PlaylistWorld, filename: String, alias: String) {
+fn given_file_with_alias(world: &mut PlaylistWorld, filename: String, alias: String) {
     let item = create_playlist_item(world, &filename);
     let path = match &item.path {
         ItemPath::File(canonical) => canonical.clone(),
@@ -61,17 +62,12 @@ async fn given_file_with_alias(world: &mut PlaylistWorld, filename: String, alia
     };
     world.playlist_items.push(item);
 
-    let workspace = world.inner.ctx.library_path.clone();
-    let result = execute(
-        &world.inner.ctx,
-        Command::AliasSet {
-            path,
-            workspace,
-            alias,
-        },
-    )
-    .await
-    .expect("set alias failed");
+    let workspace = world.inner.app.as_ref().unwrap().ctx.library_path.clone();
+    let result = world.inner.execute(Command::AliasSet {
+        path,
+        workspace,
+        alias,
+    });
 
     match result {
         CommandResult::AliasSet { .. } => {}
@@ -86,16 +82,11 @@ fn given_empty_playlist(world: &mut PlaylistWorld) {
 }
 
 #[when(expr = r#"I save the playlist"#)]
-async fn when_save_playlist(world: &mut PlaylistWorld) {
-    let result = execute(
-        &world.inner.ctx,
-        Command::PlaylistSave {
-            playlist_items: world.playlist_items.clone(),
-            library_items: world.library_items.clone(),
-        },
-    )
-    .await
-    .expect("save playlist failed");
+fn when_save_playlist(world: &mut PlaylistWorld) {
+    let result = world.inner.execute(Command::PlaylistSave {
+        playlist_items: world.playlist_items.clone(),
+        library_items: world.library_items.clone(),
+    });
 
     match result {
         CommandResult::PlaylistSaved => {}
@@ -104,10 +95,8 @@ async fn when_save_playlist(world: &mut PlaylistWorld) {
 }
 
 #[when(expr = r#"I load the playlist"#)]
-async fn when_load_playlist(world: &mut PlaylistWorld) {
-    let result = execute(&world.inner.ctx, Command::PlaylistLoad)
-        .await
-        .expect("load playlist failed");
+fn when_load_playlist(world: &mut PlaylistWorld) {
+    let result = world.inner.execute(Command::PlaylistLoad);
 
     match result {
         CommandResult::PlaylistLoaded {

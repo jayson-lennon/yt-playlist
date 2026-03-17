@@ -3,7 +3,7 @@
 use acceptance::ShownotesWorld;
 use cucumber::{World, given, then, when};
 use marked_path::CanonicalPath;
-use shownotes::command::{Command, CommandResult, execute, format_output};
+use shownotes::command::{Command, CommandResult, format_output};
 use shownotes::common::domain::{ItemPath, PlaylistItem};
 
 #[derive(Debug, World)]
@@ -15,9 +15,9 @@ pub struct GenerateWorld {
 }
 
 impl GenerateWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
-            inner: ShownotesWorld::new().await,
+            inner: ShownotesWorld::new(),
             output: String::new(),
             last_result: None,
         }
@@ -25,19 +25,14 @@ impl GenerateWorld {
 }
 
 #[given(expr = r#"a file {string} with source {string}"#)]
-async fn given_file_with_source(world: &mut GenerateWorld, filename: String, url: String) {
+fn given_file_with_source(world: &mut GenerateWorld, filename: String, url: String) {
     let full_path = world.inner.create_file(&filename);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
 
-    execute(
-        &world.inner.ctx,
-        Command::SourcesAdd {
-            path: canonical.clone(),
-            url,
-        },
-    )
-    .await
-    .expect("add source command failed");
+    world.inner.execute(Command::SourcesAdd {
+        path: canonical.clone(),
+        url,
+    });
 
     let item = PlaylistItem {
         path: ItemPath::File(canonical),
@@ -45,39 +40,25 @@ async fn given_file_with_source(world: &mut GenerateWorld, filename: String, url
         alias: None,
         mime_type: None,
         is_virtual: false,
+        playlist_count: 0,
     };
 
-    let existing_playlist = world.inner.ctx.services.storage.load(&world.inner.ctx.library_path).await.ok();
-    let mut playlist_items = existing_playlist
-        .map(|data| {
-            data.playlist
-                .into_iter()
-                .map(|path| PlaylistItem {
-                    path,
-                    duration: None,
-                    alias: None,
-                    mime_type: None,
-                    is_virtual: false,
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let existing = world.inner.execute(Command::PlaylistLoad);
+    let mut playlist_items = match existing {
+        CommandResult::PlaylistLoaded { playlist_items, .. } => playlist_items,
+        _ => vec![],
+    };
 
     playlist_items.push(item);
 
-    execute(
-        &world.inner.ctx,
-        Command::PlaylistSave {
-            playlist_items,
-            library_items: vec![],
-        },
-    )
-    .await
-    .expect("save playlist command failed");
+    world.inner.execute(Command::PlaylistSave {
+        playlist_items,
+        library_items: vec![],
+    });
 }
 
 #[given(expr = r#"a file {string} exists"#)]
-async fn given_file_exists(world: &mut GenerateWorld, filename: String) {
+fn given_file_exists(world: &mut GenerateWorld, filename: String) {
     let full_path = world.inner.create_file(&filename);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
 
@@ -87,61 +68,38 @@ async fn given_file_exists(world: &mut GenerateWorld, filename: String) {
         alias: None,
         mime_type: None,
         is_virtual: false,
+        playlist_count: 0,
     };
 
-    let existing_playlist = world.inner.ctx.services.storage.load(&world.inner.ctx.library_path).await.ok();
-    let mut playlist_items = existing_playlist
-        .map(|data| {
-            data.playlist
-                .into_iter()
-                .map(|path| PlaylistItem {
-                    path,
-                    duration: None,
-                    alias: None,
-                    mime_type: None,
-                    is_virtual: false,
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let existing = world.inner.execute(Command::PlaylistLoad);
+    let mut playlist_items = match existing {
+        CommandResult::PlaylistLoaded { playlist_items, .. } => playlist_items,
+        _ => vec![],
+    };
 
     playlist_items.push(item);
 
-    execute(
-        &world.inner.ctx,
-        Command::PlaylistSave {
-            playlist_items,
-            library_items: vec![],
-        },
-    )
-    .await
-    .expect("save playlist command failed");
+    world.inner.execute(Command::PlaylistSave {
+        playlist_items,
+        library_items: vec![],
+    });
 }
 
 #[given(expr = r#"no files in playlist"#)]
-async fn given_no_files_in_playlist(world: &mut GenerateWorld) {
-    execute(
-        &world.inner.ctx,
-        Command::PlaylistSave {
-            playlist_items: vec![],
-            library_items: vec![],
-        },
-    )
-    .await
-    .expect("save empty playlist command failed");
+fn given_no_files_in_playlist(world: &mut GenerateWorld) {
+    world.inner.execute(Command::PlaylistSave {
+        playlist_items: vec![],
+        library_items: vec![],
+    });
 }
 
 #[when(expr = r#"I generate show notes in {string} format"#)]
-async fn when_generate_show_notes(world: &mut GenerateWorld, format: String) {
-    let result = execute(
-        &world.inner.ctx,
-        Command::GenerateNotes {
-            format,
-            working_directory: world.inner.ctx.library_path.clone(),
-        },
-    )
-    .await
-    .expect("generate notes command failed");
+fn when_generate_show_notes(world: &mut GenerateWorld, format: String) {
+    let library_path = world.inner.app.as_ref().unwrap().ctx.library_path.clone();
+    let result = world.inner.execute(Command::GenerateNotes {
+        format,
+        working_directory: library_path,
+    });
 
     world.output = format_output(&result);
     world.last_result = Some(result);
@@ -176,7 +134,7 @@ fn then_output_is_empty(world: &mut GenerateWorld) {
     );
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
     GenerateWorld::run("tests/features/generate_show_notes.feature").await;
 }

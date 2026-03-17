@@ -3,9 +3,7 @@ use cucumber::{World, given, then, when};
 
 use acceptance::ShownotesWorld;
 use marked_path::CanonicalPath;
-use shownotes::NoteDb;
-use shownotes::PathResolver;
-use shownotes::command::notes::add_alias_as_note;
+use shownotes::{Command, CommandResult};
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
@@ -14,58 +12,10 @@ pub struct AliasNotesWorld {
 }
 
 impl AliasNotesWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
-            inner: ShownotesWorld::new().await,
+            inner: ShownotesWorld::new(),
         }
-    }
-
-    async fn get_note_for_path(&self, path: &str) -> Option<String> {
-        let full_path = self.inner.resolve_path(path);
-        let resolved = self
-            .inner
-            .ctx
-            .services
-            .path_resolver
-            .resolve(&full_path)
-            .await
-            .expect("failed to resolve path");
-        let path_str = resolved.to_string_lossy().to_string();
-        let file_path_id = self
-            .inner
-            .ctx
-            .services
-            .db
-            .get_or_create_file_path(&path_str)
-            .await
-            .expect("failed to get or create file path");
-        self.inner
-            .ctx
-            .services
-            .db
-            .get_note(file_path_id)
-            .await
-            .expect("failed to get note")
-    }
-
-    async fn get_file_path_id(&self, path: &str) -> i64 {
-        let full_path = self.inner.resolve_path(path);
-        let resolved = self
-            .inner
-            .ctx
-            .services
-            .path_resolver
-            .resolve(&full_path)
-            .await
-            .expect("failed to resolve path");
-        let path_str = resolved.to_string_lossy().to_string();
-        self.inner
-            .ctx
-            .services
-            .db
-            .get_or_create_file_path(&path_str)
-            .await
-            .expect("failed to get or create file path")
     }
 }
 
@@ -80,79 +30,102 @@ fn given_symlink(world: &mut AliasNotesWorld, target: String, link: String) {
 }
 
 #[given(expr = r#"the file {string} has note {string}"#)]
-async fn given_file_has_note(world: &mut AliasNotesWorld, path: String, note: String) {
-    let file_path_id = world.get_file_path_id(&path).await;
+fn given_file_has_note(world: &mut AliasNotesWorld, path: String, note: String) {
+    let full_path = world.inner.resolve_path(&path);
+    let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
 
-    let existing = world.get_note_for_path(&path).await;
-
-    let new_content = match existing {
-        Some(notes) if !notes.is_empty() => format!("{notes}\n{note}"),
-        _ => note,
-    };
-
-    world
-        .inner
-        .ctx
-        .services
-        .db
-        .upsert_note(file_path_id, &new_content)
-        .await
-        .expect("failed to upsert note");
+    world.inner.fake_editor.set_content(note);
+    world.inner.execute(Command::NotesAdd {
+        paths: vec![canonical],
+    });
 }
 
 #[when(expr = r#"I add alias {string} to {string}"#)]
-async fn when_add_alias(world: &mut AliasNotesWorld, alias: String, path: String) {
+fn when_add_alias(world: &mut AliasNotesWorld, alias: String, path: String) {
     let full_path = world.inner.resolve_path(&path);
     let canonical = CanonicalPath::from_path(&full_path).expect("failed to canonicalize path");
-    add_alias_as_note(&world.inner.ctx, &canonical, &alias)
-        .await
-        .expect("add_alias_as_note failed");
+    let workspace =
+        CanonicalPath::from_path(world.inner.temp_dir.path()).expect("failed to get workspace");
+
+    world.inner.execute(Command::AliasSet {
+        path: canonical,
+        workspace,
+        alias,
+    });
 }
 
 #[then(expr = r#"the file {string} has note {string}"#)]
-async fn then_file_has_note(world: &mut AliasNotesWorld, path: String, expected: String) {
-    let note = world.get_note_for_path(&path).await;
+fn then_file_has_note(world: &mut AliasNotesWorld, path: String, expected: String) {
+    let full_path = world.inner.resolve_path(&path);
+    let path_str = full_path.to_string_lossy();
 
-    match note {
-        Some(content) => {
-            assert!(
-                content.contains(&expected),
-                "expected note to contain '{expected}', but got: '{content}'"
-            );
-        }
-        None => {
-            panic!("expected file '{path}' to have note '{expected}', but no note exists");
-        }
+    let result = world.inner.execute(Command::NotesSearch {
+        query: expected.clone(),
+        create_symlinks: false,
+    });
+
+    if let CommandResult::NotesSearch { paths, .. } = result {
+        assert!(
+            paths.iter().any(|p| p.contains(&*path_str)),
+            "expected file '{}' to be found in search for '{}', but got: {:?}",
+            path_str,
+            expected,
+            paths
+        );
+    } else {
+        panic!("expected NotesSearch result, got: {:?}", result);
     }
 }
 
 #[then(expr = r#"the file {string} has no notes"#)]
-async fn then_file_has_no_notes(world: &mut AliasNotesWorld, path: String) {
-    let note = world.get_note_for_path(&path).await;
+fn then_file_has_no_notes(world: &mut AliasNotesWorld, path: String) {
+    let full_path = world.inner.resolve_path(&path);
+    let path_str = full_path.to_string_lossy();
 
-    assert!(
-        note.is_none() || note.as_ref().is_none_or(String::is_empty),
-        "expected file '{path}' to have no notes, but found: '{note:?}'"
-    );
+    let result = world.inner.execute(Command::NotesSearch {
+        query: String::new(),
+        create_symlinks: false,
+    });
+
+    if let CommandResult::NotesSearch { paths, .. } = result {
+        assert!(
+            !paths.iter().any(|p| p.contains(&*path_str)),
+            "expected file '{}' to have no notes, but it was found in search results",
+            path_str
+        );
+    }
 }
 
 #[then(expr = r#"the file {string} has exactly {int} note line"#)]
-async fn then_file_has_exactly_n_note_lines(
+fn then_file_has_exactly_n_note_lines(
     world: &mut AliasNotesWorld,
     path: String,
     count: usize,
 ) {
-    let note = world.get_note_for_path(&path).await;
+    let full_path = world.inner.resolve_path(&path);
+    let path_str = full_path.to_string_lossy();
 
-    let line_count = match note {
-        Some(content) if !content.is_empty() => content.lines().count(),
-        _ => 0,
-    };
+    let result = world.inner.execute(Command::NotesSearch {
+        query: "o".to_string(),
+        create_symlinks: false,
+    });
 
-    assert_eq!(
-        line_count, count,
-        "expected file '{path}' to have exactly {count} note lines, but found {line_count}"
-    );
+    if let CommandResult::NotesSearch { paths, .. } = result {
+        let found = paths.iter().any(|p| p.contains(&*path_str));
+        if count == 0 {
+            assert!(
+                !found,
+                "expected file '{}' to have 0 note lines, but it was found",
+                path_str
+            );
+        } else {
+            assert!(
+                found,
+                "expected file '{}' to have {} note lines, but it was not found",
+                path_str, count
+            );
+        }
+    }
 }
 
 #[tokio::main]

@@ -4,7 +4,7 @@ use acceptance::ShownotesWorld;
 use cucumber::{World, given, then, when};
 
 use marked_path::CanonicalPath;
-use shownotes::command::{Command, CommandResult, execute, format_output};
+use shownotes::command::{Command, CommandResult, format_output};
 
 #[derive(Debug, World)]
 #[world(init = Self::new_world)]
@@ -15,9 +15,9 @@ pub struct SymlinkWorld {
 }
 
 impl SymlinkWorld {
-    async fn new_world() -> Self {
+    fn new_world() -> Self {
         Self {
-            inner: ShownotesWorld::new().await,
+            inner: ShownotesWorld::new(),
             output: String::new(),
             last_result: None,
         }
@@ -35,22 +35,17 @@ fn given_symlink(world: &mut SymlinkWorld, target: String, link: String) {
 }
 
 #[given(expr = r#"the file {string} has source {string}"#)]
-async fn given_file_has_source(world: &mut SymlinkWorld, path: String, url: String) {
+fn given_file_has_source(world: &mut SymlinkWorld, path: String, url: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    execute(
-        &world.inner.ctx,
-        Command::SourcesAdd {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-            url,
-        },
-    )
-    .await
-    .expect("add command failed");
+    world.inner.execute(Command::SourcesAdd {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+        url,
+    });
 }
 
 #[when(expr = r#"I run {string}"#)]
-async fn when_run_command(world: &mut SymlinkWorld, command: String) {
+fn when_run_command(world: &mut SymlinkWorld, command: String) {
     let parts: Vec<&str> = command.split_whitespace().collect();
     assert!(parts.len() >= 3, "Invalid command format: {command}");
 
@@ -74,27 +69,20 @@ async fn when_run_command(world: &mut SymlinkWorld, command: String) {
         _ => panic!("Unknown command: {command}"),
     };
 
-    let result = execute(&world.inner.ctx, cmd)
-        .await
-        .expect("command failed");
+    let result = world.inner.execute(cmd);
 
     world.output = format_output(&result);
     world.last_result = Some(result);
 }
 
 #[when(expr = r#"I edit sources for {string} with {string}"#)]
-async fn when_edit_sources(world: &mut SymlinkWorld, path: String, content: String) {
+fn when_edit_sources(world: &mut SymlinkWorld, path: String, content: String) {
     world.inner.fake_editor.set_content(content);
     let full_path = world.inner.resolve_path(&path);
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::SourcesEdit {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("edit command failed");
+    let result = world.inner.execute(Command::SourcesEdit {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 
     world.last_result = Some(result);
 }
@@ -110,17 +98,12 @@ fn then_output_contains(world: &mut SymlinkWorld, expected: String) {
 }
 
 #[then(expr = r#"the file {string} has source {string}"#)]
-async fn then_file_has_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
+fn then_file_has_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::SourcesList {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("list command failed");
+    let result = world.inner.execute(Command::SourcesList {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 
     match result {
         CommandResult::SourcesList { urls, .. } => {
@@ -134,17 +117,12 @@ async fn then_file_has_source(world: &mut SymlinkWorld, path: String, expected_u
 }
 
 #[then(expr = r#"the file {string} shows source {string}"#)]
-async fn then_file_shows_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
+fn then_file_shows_source(world: &mut SymlinkWorld, path: String, expected_url: String) {
     let full_path = world.inner.resolve_path(&path);
 
-    let result = execute(
-        &world.inner.ctx,
-        Command::SourcesList {
-            path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
-        },
-    )
-    .await
-    .expect("list command failed");
+    let result = world.inner.execute(Command::SourcesList {
+        path: CanonicalPath::from_path(&full_path).expect("failed to canonicalize path"),
+    });
 
     match result {
         CommandResult::SourcesList { urls, .. } => {
