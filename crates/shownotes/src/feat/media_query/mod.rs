@@ -145,9 +145,9 @@ mod tests {
         cache.insert(canonical, Duration::from_secs(60));
         let cached = CachedMedia::new(cache, fake.clone());
 
-        let _ = cached.get_duration(temp_file.path());
-        let _ = cached.get_duration(temp_file.path());
-        let _ = cached.get_duration(temp_file.path());
+        cached.get_duration(temp_file.path()).unwrap();
+        cached.get_duration(temp_file.path()).unwrap();
+        cached.get_duration(temp_file.path()).unwrap();
 
         assert_eq!(fake.call_count.load(Ordering::SeqCst), 0);
     }
@@ -161,9 +161,9 @@ mod tests {
         cache.insert(canonical, Duration::from_secs(60));
         let cached = CachedMedia::new(cache, fake.clone());
 
-        let _ = cached.get_duration(temp_file.path());
-        let _ = cached.get_duration(&path("other1.mp4"));
-        let _ = cached.get_duration(&path("other2.mp4"));
+        cached.get_duration(temp_file.path()).unwrap();
+        cached.get_duration(&path("other1.mp4")).unwrap();
+        cached.get_duration(&path("other2.mp4")).unwrap();
 
         assert_eq!(fake.call_count.load(Ordering::SeqCst), 2);
     }

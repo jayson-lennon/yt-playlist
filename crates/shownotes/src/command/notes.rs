@@ -193,7 +193,7 @@ pub async fn set_alias(
     workspace: &CanonicalPath,
     alias: &str,
 ) -> Result<CanonicalPath, Report<CommandError>> {
-    let _ = add_alias_as_note(ctx, path, alias).await;
+    add_alias_as_note(ctx, path, alias).await?;
     ctx
         .services
         .storage

@@ -232,7 +232,7 @@ mod tests {
 
         // When handling a key.
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
-        let _ = popup.handle_key(key);
+        popup.handle_key(key);
 
         // Then the popup is dismissed.
         assert!(!popup.is_active());

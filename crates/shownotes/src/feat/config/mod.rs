@@ -150,7 +150,9 @@ pub fn load() -> Result<Config, Report<ConfigError>> {
             .attach("failed to serialize default config")?;
 
         if let Some(dir) = config_dir() {
-            let _ = std::fs::create_dir_all(&dir);
+            std::fs::create_dir_all(&dir)
+                .change_context(ConfigError)
+                .attach("failed to create config directory")?;
         }
 
         std::fs::write(&path, content)

@@ -181,29 +181,35 @@ mod tests {
     #[test]
     fn fake_launcher_records_command() {
         let launcher = FakeLauncher::new();
-        let _ = launcher.launch(
-            &PathBuf::from("test.mp4"),
-            Some("mpv {{path}}"),
-            "/tmp/socket",
-        );
+        launcher
+            .launch(
+                &PathBuf::from("test.mp4"),
+                Some("mpv {{path}}"),
+                "/tmp/socket",
+            )
+            .unwrap();
         assert_eq!(launcher.last_command(), Some("mpv {{path}}".to_string()));
     }
 
     #[test]
     fn fake_launcher_records_path() {
         let launcher = FakeLauncher::new();
-        let _ = launcher.launch(
-            &PathBuf::from("/video/test.mp4"),
-            Some("mpv"),
-            "/tmp/socket",
-        );
+        launcher
+            .launch(
+                &PathBuf::from("/video/test.mp4"),
+                Some("mpv"),
+                "/tmp/socket",
+            )
+            .unwrap();
         assert_eq!(launcher.last_path(), Some(PathBuf::from("/video/test.mp4")));
     }
 
     #[test]
     fn fake_launcher_records_none_when_no_command() {
         let launcher = FakeLauncher::new();
-        let _ = launcher.launch(&PathBuf::from("test.txt"), None, "/tmp/socket");
+        launcher
+            .launch(&PathBuf::from("test.txt"), None, "/tmp/socket")
+            .unwrap();
         assert!(launcher.last_command().is_none());
     }
 
