@@ -1,8 +1,12 @@
 use super::TuiActionCtx;
+use super::TuiActionError;
 use crate::command::{Command, CommandResult};
 use crate::tui::TuiActionResponse;
+use error_stack::Report;
 
-pub fn handle_launch_file(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_launch_file(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     if let Some(item) = ctx.tui_state.get_selected_item().cloned() {
         if let Some(file_path) = item.path.as_file() {
             let cmd = ctx.ctx.config.get_cmd(file_path.as_path());
@@ -35,10 +39,12 @@ pub fn handle_launch_file(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
             }
         }
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_load_playlist(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_load_playlist(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     let paths: Vec<marked_path::CanonicalPath> = ctx
         .tui_state
         .playlist_pane
@@ -55,7 +61,7 @@ pub fn handle_load_playlist(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if paths.is_empty() {
         ctx.tui_state
             .show_error("No video or audio files in playlist".to_string());
-        return TuiActionResponse::Continue;
+        return Ok(TuiActionResponse::Continue);
     }
 
     let command = Command::MpvLoadPlaylist { paths };
@@ -71,10 +77,12 @@ pub fn handle_load_playlist(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
         }
         _ => unreachable!(),
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_launch_mpv(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_launch_mpv(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     let command = Command::MpvSpawn {
         socket_path: ctx.ctx.socket_path.clone(),
     };
@@ -95,10 +103,12 @@ pub fn handle_launch_mpv(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
         }
         _ => unreachable!(),
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_toggle_play(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_toggle_play(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     let command = Command::MpvTogglePlay;
     match ctx.execute(command) {
         Ok(CommandResult::MpvToggledPlay) => {
@@ -110,5 +120,5 @@ pub fn handle_toggle_play(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
         }
         _ => unreachable!(),
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }

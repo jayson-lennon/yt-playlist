@@ -129,7 +129,7 @@ impl App {
                     };
                     crate::tui::execute_tui_action(&mut tui_ctx, action)
                 };
-                if response == crate::tui::TuiActionResponse::ShouldQuit {
+                if matches!(response, Ok(crate::tui::TuiActionResponse::ShouldQuit)) {
                     self.should_quit = true;
                 }
             }
@@ -293,8 +293,10 @@ mod tests {
                 };
                 crate::tui::execute_tui_action(&mut tui_ctx, action.clone())
             };
-            if response == crate::tui::TuiActionResponse::ShouldQuit {
-                app.should_quit = true;
+            match response {
+                Ok(crate::tui::TuiActionResponse::ShouldQuit) => app.should_quit = true,
+                Ok(crate::tui::TuiActionResponse::Continue) => {}
+                Err(e) => panic!("Action failed in test: {e:?}"),
             }
         }
     }
@@ -308,8 +310,10 @@ mod tests {
             };
             crate::tui::execute_tui_action(&mut tui_ctx, action)
         };
-        if response == crate::tui::TuiActionResponse::ShouldQuit {
-            app.should_quit = true;
+        match response {
+            Ok(crate::tui::TuiActionResponse::ShouldQuit) => app.should_quit = true,
+            Ok(crate::tui::TuiActionResponse::Continue) => {}
+            Err(e) => panic!("Action failed in test: {e:?}"),
         }
     }
 

@@ -5,12 +5,18 @@ mod navigation;
 mod playlist;
 
 use error_stack::Report;
+use wherror::Error;
 
 use crate::tui::TuiAction;
 use crate::tui::TuiActionResponse;
 use crate::Command;
 use crate::CommandError;
 use crate::CommandResult;
+
+/// Error type for TUI action handlers.
+#[derive(Debug, Error)]
+#[error("TUI action failed")]
+pub struct TuiActionError;
 
 /// Context passed to action handlers.
 ///
@@ -37,7 +43,10 @@ impl TuiActionCtx<'_> {
     }
 }
 
-pub fn dispatch(ctx: &mut TuiActionCtx<'_>, action: TuiAction) -> TuiActionResponse {
+pub fn dispatch(
+    ctx: &mut TuiActionCtx<'_>,
+    action: TuiAction,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     match action {
         TuiAction::ShowHelp => general::handle_show_help(ctx),
         TuiAction::Quit => general::handle_quit(ctx),

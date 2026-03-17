@@ -1,8 +1,12 @@
 use super::TuiActionCtx;
+use super::TuiActionError;
 use crate::command::{Command, CommandResult};
 use crate::tui::{ItemDisplayMode, TuiActionResponse};
+use error_stack::{Report, ResultExt};
 
-pub fn handle_quit(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_quit(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     match ctx.execute(Command::PlaylistSave {
         playlist_items: ctx.tui_state.playlist_pane.items.clone(),
         library_items: ctx.tui_state.library_pane.items.clone(),
@@ -15,10 +19,12 @@ pub fn handle_quit(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
         }
         _ => unreachable!(),
     }
-    TuiActionResponse::ShouldQuit
+    Ok(TuiActionResponse::ShouldQuit)
 }
 
-pub fn handle_save(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_save(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     match ctx.execute(Command::PlaylistSave {
         playlist_items: ctx.tui_state.playlist_pane.items.clone(),
         library_items: ctx.tui_state.library_pane.items.clone(),
@@ -31,35 +37,48 @@ pub fn handle_save(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
         }
         _ => unreachable!(),
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_show_help(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_show_help(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     ctx.tui_state.global_handler.toggle_help();
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_start_filter(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_start_filter(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     ctx.tui_state.start_filter();
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_show_alias(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_show_alias(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     ctx.tui_state.display_mode = ItemDisplayMode::Alias;
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_show_path(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_show_path(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     ctx.tui_state.display_mode = ItemDisplayMode::Path;
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_add_url(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_add_url(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     ctx.tui_state.start_url_input();
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_url_submit(ctx: &mut TuiActionCtx<'_>, url: String) -> TuiActionResponse {
+pub fn handle_url_submit(
+    ctx: &mut TuiActionCtx<'_>,
+    url: String,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     match ctx.execute(Command::UrlAdd { url }) {
         Ok(CommandResult::UrlAdded { item }) => {
             ctx.tui_state.library_pane.items.push(item);
@@ -67,10 +86,11 @@ pub fn handle_url_submit(ctx: &mut TuiActionCtx<'_>, url: String) -> TuiActionRe
                 .library_pane
                 .items
                 .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
-            let _ = ctx.execute(Command::PlaylistSave {
+            ctx.execute(Command::PlaylistSave {
                 playlist_items: ctx.tui_state.playlist_pane.items.clone(),
                 library_items: ctx.tui_state.library_pane.items.clone(),
-            });
+            })
+            .change_context(TuiActionError)?;
             ctx.tui_state.status_bar.set("URL added to library");
         }
         Err(e) => {
@@ -79,10 +99,12 @@ pub fn handle_url_submit(ctx: &mut TuiActionCtx<'_>, url: String) -> TuiActionRe
         }
         _ => unreachable!(),
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_delete(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
+pub fn handle_delete(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
     if let Some(item) = ctx.tui_state.selected_library_item() {
         if item.is_virtual {
             ctx.tui_state.library_pane.remove();
@@ -104,5 +126,5 @@ pub fn handle_delete(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
                 .set("Only virtual entries (URLs) can be deleted.");
         }
     }
-    TuiActionResponse::Continue
+    Ok(TuiActionResponse::Continue)
 }
