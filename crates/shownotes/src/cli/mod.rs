@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use error_stack::{Report, ResultExt, fmt::ColorMode};
 use marked_path::CanonicalPath;
 
 use crate::app::App;
+use crate::feat::tracing;
 use crate::cli::{
     action::{ActionCommands, run_action_mpv},
     generate::run_generate,
@@ -32,6 +34,17 @@ pub mod tui;
 pub struct Args {
     #[arg(long, env = "SHOWNOTES_DB_PATH", default_value = "/mnt/zed/work/youtube/notes.db")]
     pub db_path: PathBuf,
+
+    #[command(flatten)]
+    pub verbosity: Verbosity<WarnLevel>,
+
+    /// Path to the tracing log file
+    #[arg(long, default_value = "/mnt/zed/work/youtube/shownotes.log")]
+    pub tracing_log: PathBuf,
+
+    /// Also output traces to terminal
+    #[arg(long)]
+    pub tracing_terminal: bool,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -118,6 +131,9 @@ pub fn run() -> Result<(), Report<RunError>> {
     Report::set_color_mode(ColorMode::None);
 
     let args = Args::parse();
+    tracing::init(args.verbosity, Some(&args.tracing_log), args.tracing_terminal)
+        .change_context(RunError)?;
+
     let rt = tokio::runtime::Runtime::new().change_context(RunError)?;
 
     match args.command.unwrap_or(Commands::Tui {

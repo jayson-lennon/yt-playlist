@@ -13,6 +13,7 @@ pub mod playlist;
 pub mod sources;
 pub mod symlink;
 pub mod terminal;
+pub mod tracing;
 
 pub use config::{Config, ConfigError, load};
 

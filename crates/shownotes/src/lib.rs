@@ -24,6 +24,7 @@ pub use feat::playlist::{
 };
 pub use feat::sources::{Source, SourceDb, SourceDbService};
 pub use feat::terminal::{TerminalGuard, TerminalSuspendError, suspend_and_run};
+pub use feat::tracing::{TracingInitError, init as init_tracing};
 pub use feat::{ExternalEditor, ExternalEditorError};
 pub use feat::{NoteDb, NoteDbError, PathResolutionError, PathResolver};
 pub use services::Services;
