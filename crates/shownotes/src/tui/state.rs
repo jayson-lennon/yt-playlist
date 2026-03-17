@@ -587,7 +587,9 @@ mod tests {
     }
 
     #[test]
-    fn handle_key_delegates_to_focused_pane() {
+    fn handle_key_returns_move_down_action_for_j() {
+        use crate::tui::TuiAction;
+
         // Given a state focused on playlist with items.
         let mut state = TuiState::new();
         state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
@@ -598,9 +600,10 @@ mod tests {
         let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char('j'));
         let result = state.handle_key(key, &ctx);
 
-        // Then playlist pane handles it.
+        // Then the result contains MoveDown action.
         assert!(result.is_consumed());
-        assert_eq!(state.playlist_pane.selected, 1);
+        assert_eq!(result.actions.len(), 1);
+        assert_eq!(result.actions[0], TuiAction::MoveDown);
     }
 
     #[test]

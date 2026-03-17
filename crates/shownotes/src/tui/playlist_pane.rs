@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -272,32 +272,14 @@ impl Component for PlaylistPane {
         if self.filter.is_active() {
             return self.filter.handle_key(key);
         }
-
-        match key.code {
-            KeyCode::Char('j') => {
-                self.move_down();
-                HandleKeyResult::consumed()
-            }
-            KeyCode::Char('k') => {
-                self.move_up();
-                HandleKeyResult::consumed()
-            }
-            KeyCode::Char('J') => {
-                self.reorder_down();
-                HandleKeyResult::consumed()
-            }
-            KeyCode::Char('K') => {
-                self.reorder_up();
-                HandleKeyResult::consumed()
-            }
-            _ => HandleKeyResult::ignored(),
-        }
+        HandleKeyResult::ignored()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::KeyCode;
     use marked_path::CanonicalPath;
     use std::path::PathBuf;
 
@@ -730,74 +712,6 @@ mod tests {
         // Then the filter handles it.
         assert!(result.is_consumed());
         assert_eq!(pane.filter.input(), "te");
-    }
-
-    #[test]
-    fn handle_key_j_moves_down() {
-        // Given a pane with 3 items, selection at index 0.
-        let mut pane = PlaylistPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
-        pane.selected = 0;
-
-        // When pressing 'j'.
-        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('j')));
-
-        // Then selection moves down.
-        assert!(result.is_consumed());
-        assert_eq!(pane.selected, 1);
-    }
-
-    #[test]
-    fn handle_key_k_moves_up() {
-        // Given a pane with 3 items, selection at index 1.
-        let mut pane = PlaylistPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
-        pane.selected = 1;
-
-        // When pressing 'k'.
-        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('k')));
-
-        // Then selection moves up.
-        assert!(result.is_consumed());
-        assert_eq!(pane.selected, 0);
-    }
-
-    #[test]
-    fn handle_key_j_reorder_down() {
-        // Given a pane with 3 items, first selected.
-        let mut pane = PlaylistPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
-        pane.selected = 0;
-
-        // When pressing 'J' (shift+j).
-        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('J')));
-
-        // Then item is reordered down.
-        assert!(result.is_consumed());
-        assert_eq!(pane.selected, 1);
-        assert_eq!(
-            pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
-        );
-    }
-
-    #[test]
-    fn handle_key_shift_k_reorder_up() {
-        // Given a pane with 3 items, middle selected.
-        let mut pane = PlaylistPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
-        pane.selected = 1;
-
-        // When pressing 'K' (shift+k).
-        let result = pane.handle_key(KeyEvent::from(KeyCode::Char('K')));
-
-        // Then item is reordered up.
-        assert!(result.is_consumed());
-        assert_eq!(pane.selected, 0);
-        assert_eq!(
-            pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
-        );
     }
 
     #[test]
