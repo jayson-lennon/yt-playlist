@@ -40,3 +40,4 @@ arboard = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 temptree = { workspace = true }
+serial_test = { workspace = true }

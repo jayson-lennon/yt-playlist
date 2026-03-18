@@ -172,3 +172,146 @@ pub fn load() -> Result<Config, Report<ConfigError>> {
 
     Ok(config)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+    use serial_test::serial;
+
+    fn with_temp_home<F, R>(f: F) -> R
+    where
+        F: FnOnce(&PathBuf) -> R,
+    {
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let original_home = std::env::var("HOME").ok();
+        let original_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+            std::env::remove_var("XDG_CONFIG_HOME");
+        }
+
+        let expected_config_path = temp_dir.path().join(".config").join("shownotes");
+        let result = f(&expected_config_path);
+
+        unsafe {
+            if let Some(home) = original_home {
+                std::env::set_var("HOME", home);
+            } else {
+                std::env::remove_var("HOME");
+            }
+            if let Some(xdg) = original_xdg {
+                std::env::set_var("XDG_CONFIG_HOME", xdg);
+            } else {
+                std::env::remove_var("XDG_CONFIG_HOME");
+            }
+        }
+
+        result
+    }
+
+    #[test]
+    #[serial]
+    fn load_creates_default_config_when_not_exists() {
+        with_temp_home(|expected_config_path| {
+            // Given no config file exists.
+            assert!(!expected_config_path.join("shownotes.toml").exists());
+
+            // When loading config.
+            let result = load();
+
+            // Then a default config is returned and file is created.
+            assert!(result.is_ok());
+            let config = result.unwrap();
+            assert!(config.video.mime_types.contains(&"video/mp4".to_string()));
+            assert!(config.audio.mime_types.contains(&"audio/mpeg".to_string()));
+            assert!(
+                expected_config_path.join("shownotes.toml").exists(),
+                "config file should be created at {:?}",
+                expected_config_path
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn load_parses_existing_config_file() {
+        with_temp_home(|expected_config_path| {
+            // Given an existing config file with custom values.
+            std::fs::create_dir_all(expected_config_path).expect("failed to create config dir");
+            let config_file = expected_config_path.join("shownotes.toml");
+
+            let custom_config = r#"
+[video]
+mime_types = ["video/custom"]
+extensions = ["custom"]
+cmd = "custom-video-cmd"
+
+[audio]
+mime_types = ["audio/custom"]
+extensions = ["cust"]
+cmd = "custom-audio-cmd"
+"#;
+            let mut file =
+                std::fs::File::create(&config_file).expect("failed to create config file");
+            file.write_all(custom_config.as_bytes())
+                .expect("failed to write config");
+
+            // When loading config.
+            let result = load();
+
+            // Then the custom config values are parsed.
+            assert!(result.is_ok());
+            let config = result.unwrap();
+            assert_eq!(config.video.mime_types, vec!["video/custom"]);
+            assert_eq!(config.video.extensions, vec!["custom"]);
+            assert_eq!(config.video.cmd, Some("custom-video-cmd".to_string()));
+            assert_eq!(config.audio.mime_types, vec!["audio/custom"]);
+            assert_eq!(config.audio.extensions, vec!["cust"]);
+            assert_eq!(config.audio.cmd, Some("custom-audio-cmd".to_string()));
+        });
+    }
+
+    #[test]
+    #[serial]
+    #[ignore = "dirs::config_dir() uses system password database as fallback, making this unreliable on Linux"]
+    fn load_returns_error_when_config_dir_unavailable() {
+        let original_home = std::env::var("HOME").ok();
+        let original_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+        let original_user = std::env::var("USER").ok();
+        let original_logname = std::env::var("LOGNAME").ok();
+
+        unsafe {
+            std::env::remove_var("HOME");
+            std::env::remove_var("XDG_CONFIG_HOME");
+            std::env::remove_var("USER");
+            std::env::remove_var("LOGNAME");
+        }
+
+        // When loading config with no home directory set.
+        let result = load();
+
+        // Then an error is returned (config_dir returns None).
+        assert!(
+            result.is_err(),
+            "expected error when config_dir is unavailable"
+        );
+
+        unsafe {
+            if let Some(home) = original_home {
+                std::env::set_var("HOME", home);
+            }
+            if let Some(xdg) = original_xdg {
+                std::env::set_var("XDG_CONFIG_HOME", xdg);
+            }
+            if let Some(user) = original_user {
+                std::env::set_var("USER", user);
+            }
+            if let Some(logname) = original_logname {
+                std::env::set_var("LOGNAME", logname);
+            }
+        }
+    }
+}

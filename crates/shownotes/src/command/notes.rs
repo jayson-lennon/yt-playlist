@@ -273,11 +273,185 @@ pub async fn fuzzy(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use marked_path::CanonicalPath;
+    use tempfile::TempDir;
 
+    use crate::feat::external_editor::FakeEditor;
     use crate::feat::note_db::NoteDb;
-    use crate::test_utils::{create_temp_file, NoteTestContext};
+    use crate::test_utils::{create_temp_file, FakeFuzzySearch, NoteTestContext, NoteTestContextBuilder};
+
+    #[tokio::test]
+    async fn add_single_path_saves_note_to_database() {
+        let fake_editor = Arc::new(FakeEditor::new());
+        fake_editor.set_content("my new note".to_string());
+        let ctx = NoteTestContextBuilder::new()
+            .editor(fake_editor)
+            .build()
+            .await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
+
+        let result = super::add(&ctx.ctx, vec![canonical]).await;
+
+        assert!(result.is_ok());
+        let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
+        assert_eq!(note, Some("my new note".to_string()));
+    }
+
+    #[tokio::test]
+    async fn add_multiple_paths_prepends_to_existing_notes() {
+        let fake_editor = Arc::new(FakeEditor::new());
+        fake_editor.set_content("new content".to_string());
+        let ctx = NoteTestContextBuilder::new()
+            .editor(fake_editor.clone())
+            .build()
+            .await;
+        let temp1 = create_temp_file();
+        let temp2 = create_temp_file();
+        let canonical1 = CanonicalPath::from_path(temp1.path()).unwrap();
+        let canonical2 = CanonicalPath::from_path(temp2.path()).unwrap();
+
+        // Set up existing note on canonical1
+        let path_str1 = temp1.path().to_string_lossy();
+        let file_path_id1 = ctx.ctx.services.db.get_or_create_file_path(&path_str1).await.unwrap();
+        ctx.ctx.services
+            .db
+            .upsert_note(file_path_id1, "existing note")
+            .await
+            .unwrap();
+
+        let result = super::add(&ctx.ctx, vec![canonical1, canonical2]).await;
+
+        assert!(result.is_ok());
+        let note1 = ctx.ctx.services.db.get_note(file_path_id1).await.unwrap();
+        assert_eq!(note1, Some("existing note\n\nnew content".to_string()));
+    }
+
+    #[tokio::test]
+    async fn add_returns_error_for_empty_paths() {
+        let ctx = NoteTestContext::new().await;
+
+        let result = super::add(&ctx.ctx, vec![]).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn search_returns_matching_paths_from_database() {
+        let ctx = NoteTestContext::new().await;
+        ctx.ctx.services
+            .db
+            .upsert_note(ctx.file_path_id, "test note with keyword")
+            .await
+            .unwrap();
+
+        let result = super::search(&ctx.ctx, "keyword", false).await;
+
+        assert!(result.is_ok());
+        let (paths, _) = result.unwrap();
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].contains(&ctx.temp_file.path().to_string_lossy().to_string()));
+    }
+
+    #[tokio::test]
+    async fn search_creates_symlinks_when_requested() {
+        let ctx = NoteTestContext::new().await;
+        let temp_dir = TempDir::new().unwrap();
+        let video_file = temp_dir.path().join("video.mp4");
+        std::fs::write(&video_file, "content").unwrap();
+        let video_path = video_file.to_string_lossy().to_string();
+        let file_path_id = ctx.ctx.services.db.get_or_create_file_path(&video_path).await.unwrap();
+        ctx.ctx.services
+            .db
+            .upsert_note(file_path_id, "test note")
+            .await
+            .unwrap();
+
+        let dest_dir = TempDir::new().unwrap();
+        let original_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dest_dir.path()).unwrap();
+
+        let result = super::search(&ctx.ctx, "test", true).await;
+
+        std::env::set_current_dir(&original_cwd).unwrap();
+
+        assert!(result.is_ok());
+        let (_, symlinks_created) = result.unwrap();
+        assert_eq!(symlinks_created, 1);
+    }
+
+    #[tokio::test]
+    async fn fuzzy_returns_selected_paths() {
+        let fake_fuzzy = Arc::new(FakeFuzzySearch::new());
+        let expected_path = "/test/path.mp4".to_string();
+        fake_fuzzy.set_selected_paths(vec![expected_path.clone()]);
+        let ctx = NoteTestContextBuilder::new()
+            .fuzzy_search(fake_fuzzy)
+            .build()
+            .await;
+        ctx.ctx.services
+            .db
+            .upsert_note(ctx.file_path_id, "some note")
+            .await
+            .unwrap();
+
+        let result = super::fuzzy(&ctx.ctx, false).await;
+
+        assert!(result.is_ok());
+        let (paths, _) = result.unwrap();
+        assert_eq!(paths, vec![expected_path]);
+    }
+
+    #[tokio::test]
+    async fn fuzzy_creates_symlinks_when_requested() {
+        let fake_fuzzy = Arc::new(FakeFuzzySearch::new());
+        let temp_dir = TempDir::new().unwrap();
+        let video_file = temp_dir.path().join("video.mp4");
+        std::fs::write(&video_file, "content").unwrap();
+        let video_path = video_file.to_string_lossy().to_string();
+        fake_fuzzy.set_selected_paths(vec![video_path.clone()]);
+        let ctx = NoteTestContextBuilder::new()
+            .fuzzy_search(fake_fuzzy)
+            .build()
+            .await;
+        ctx.ctx.services
+            .db
+            .upsert_note(ctx.file_path_id, "some note")
+            .await
+            .unwrap();
+
+        let dest_dir = TempDir::new().unwrap();
+        let original_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dest_dir.path()).unwrap();
+
+        let result = super::fuzzy(&ctx.ctx, true).await;
+
+        std::env::set_current_dir(&original_cwd).unwrap();
+
+        assert!(result.is_ok());
+        let (_, symlinks_created) = result.unwrap();
+        assert_eq!(symlinks_created, 1);
+    }
+
+    #[tokio::test]
+    async fn add_alias_as_note_appends_to_empty_notes() {
+        let ctx = NoteTestContext::new().await;
+        let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
+        ctx.ctx.services
+            .db
+            .upsert_note(ctx.file_path_id, "")
+            .await
+            .unwrap();
+
+        let result = super::add_alias_as_note(&ctx.ctx, &canonical, "my-alias")
+            .await
+            .unwrap();
+
+        assert!(result);
+        let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
+        assert_eq!(note, Some("my-alias".to_string()));
+    }
 
     #[tokio::test]
     async fn add_alias_as_note_skips_blank_alias() {

@@ -138,3 +138,169 @@ pub fn spawn_mpv(socket_path: &str) -> Result<(), Report<MpvError>> {
 mod clients;
 
 pub use clients::{MpvIpc, RealMpvLauncher};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct FakeMpvClient {
+        load_file_calls: AtomicUsize,
+        load_playlist_calls: AtomicUsize,
+        toggle_play_calls: AtomicUsize,
+    }
+
+    impl FakeMpvClient {
+        fn new() -> Self {
+            Self {
+                load_file_calls: AtomicUsize::new(0),
+                load_playlist_calls: AtomicUsize::new(0),
+                toggle_play_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl MpvClient for FakeMpvClient {
+        fn name(&self) -> &'static str {
+            "fake_client"
+        }
+
+        fn load_file(&self, _path: &Path) -> Result<(), Report<MpvError>> {
+            self.load_file_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn load_playlist(&self, _paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
+            self.load_playlist_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn toggle_play(&self) -> Result<(), Report<MpvError>> {
+            self.toggle_play_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    struct FakeLauncher {
+        is_running_calls: AtomicUsize,
+        spawn_calls: AtomicUsize,
+        running: bool,
+    }
+
+    impl FakeLauncher {
+        fn new() -> Self {
+            Self {
+                is_running_calls: AtomicUsize::new(0),
+                spawn_calls: AtomicUsize::new(0),
+                running: false,
+            }
+        }
+
+        fn with_running(mut self, value: bool) -> Self {
+            self.running = value;
+            self
+        }
+    }
+
+    impl MpvLauncher for FakeLauncher {
+        fn name(&self) -> &'static str {
+            "fake_launcher"
+        }
+
+        fn is_running(&self, _socket_path: &str) -> bool {
+            self.is_running_calls.fetch_add(1, Ordering::SeqCst);
+            self.running
+        }
+
+        fn spawn(&self, _socket_path: &str) -> Result<(), Report<MpvError>> {
+            self.spawn_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn mpv_client_service_delegates_to_backend() {
+        let fake = Arc::new(FakeMpvClient::new());
+        let service = MpvClientService::new(fake.clone());
+
+        let _ = service.load_file(Path::new("test.mp4"));
+        let _ = service.load_playlist(&[PathBuf::from("a.mp4")]);
+        let _ = service.toggle_play();
+
+        assert_eq!(fake.load_file_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(fake.load_playlist_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(fake.toggle_play_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn mpv_launcher_service_delegates_is_running_to_backend() {
+        let fake = Arc::new(FakeLauncher::new().with_running(true));
+        let service = MpvLauncherService::new(fake.clone());
+
+        let result = service.is_running("/tmp/mpv.sock");
+
+        assert!(result);
+        assert_eq!(fake.is_running_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn mpv_launcher_service_delegates_spawn_to_backend() {
+        let fake = Arc::new(FakeLauncher::new());
+        let service = MpvLauncherService::new(fake.clone());
+
+        let _ = service.spawn("/tmp/mpv.sock");
+
+        assert_eq!(fake.spawn_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn mpv_launcher_service_returns_false_when_backend_reports_not_running() {
+        let fake = Arc::new(FakeLauncher::new().with_running(false));
+        let service = MpvLauncherService::new(fake.clone());
+
+        let result = service.is_running("/tmp/mpv.sock");
+
+        assert!(!result);
+        assert_eq!(fake.is_running_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[ignore = "requires real mpv process with --input-ipc-server=/tmp/test-mpv.sock"]
+    fn is_mpv_running_returns_true_when_mpv_has_matching_socket() {
+        let socket_path = "/tmp/test-mpv.sock";
+
+        let result = is_mpv_running_with_socket(socket_path);
+
+        assert!(result);
+    }
+
+    #[test]
+    #[ignore = "requires no mpv process running with test socket path"]
+    fn is_mpv_running_returns_false_when_no_matching_process() {
+        let socket_path = "/tmp/nonexistent-mpv-socket-12345.sock";
+
+        let result = is_mpv_running_with_socket(socket_path);
+
+        assert!(!result);
+    }
+
+    #[test]
+    #[ignore = "integration test: verifies process name comparison is 'mpv' (not !=)"]
+    fn is_mpv_running_checks_process_name_equals_mpv() {
+        let socket_path = "/tmp/test-mpv.sock";
+
+        let result = is_mpv_running_with_socket(socket_path);
+
+        assert!(!result);
+    }
+
+    #[test]
+    #[ignore = "integration test: verifies socket path check uses && (not ||)"]
+    fn is_mpv_running_checks_both_ipc_flag_and_socket_path() {
+        let socket_path = "/tmp/specific-socket.sock";
+
+        let result = is_mpv_running_with_socket(socket_path);
+
+        assert!(!result);
+    }
+}

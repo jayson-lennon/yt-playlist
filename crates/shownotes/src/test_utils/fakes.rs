@@ -1,9 +1,11 @@
+use std::sync::{Arc, Mutex};
 use std::{path::{Path, PathBuf}, time::Duration};
 
 use async_trait::async_trait;
 use error_stack::Report;
 use marked_path::CanonicalPath;
 
+use crate::feat::fuzzy_search::{FuzzySearch, FuzzySearchError, FuzzySearchResult};
 use crate::feat::launcher::{FileLauncher, LaunchResult};
 use crate::feat::media_query::{MediaError, MediaQuery};
 use crate::feat::mpv::{MpvClient, MpvError, MpvLauncher};
@@ -152,5 +154,44 @@ impl PlaylistStorage for FakeStorageBackend {
 
     async fn resolve_file_path_id(&self, _path: &crate::common::domain::ItemPath) -> Result<Option<i64>, Report<IoError>> {
         Ok(None)
+    }
+}
+
+pub struct FakeFuzzySearch {
+    selected_paths: Arc<Mutex<Vec<String>>>,
+}
+
+impl FakeFuzzySearch {
+    pub fn new() -> Self {
+        Self {
+            selected_paths: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub fn set_selected_paths(&self, paths: Vec<String>) {
+        let mut guard = self.selected_paths.lock().unwrap();
+        *guard = paths;
+    }
+}
+
+impl Default for FakeFuzzySearch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FuzzySearch for FakeFuzzySearch {
+    fn name(&self) -> &'static str {
+        "fake"
+    }
+
+    fn search(
+        &self,
+        _items: &[(String, String)],
+    ) -> Result<FuzzySearchResult, Report<FuzzySearchError>> {
+        let guard = self.selected_paths.lock().unwrap();
+        Ok(FuzzySearchResult {
+            selected_paths: guard.clone(),
+        })
     }
 }

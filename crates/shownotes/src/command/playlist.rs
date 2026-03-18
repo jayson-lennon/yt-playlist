@@ -306,9 +306,265 @@ pub async fn analyze_library(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::command::CommandResult;
+    use crate::feat::config::Config;
+    use crate::feat::keymap::Keymap;
+    use crate::feat::playlist::{FakeStorageBackend, FileMetadata, PlaylistData, PlaylistStorage};
+    use crate::services::Services;
     use crate::test_utils::NoteTestContext;
+
+    async fn create_ctx_with_storage(storage: Arc<FakeStorageBackend>, library_path: CanonicalPath) -> SystemCtx {
+        let rt = tokio::runtime::Handle::current();
+        let db = Arc::new(crate::feat::note_db::SqliteNoteDb::new("sqlite::memory:").await.unwrap());
+        SystemCtx {
+            services: Services {
+                storage: crate::feat::playlist::PlaylistStorageService::new(storage),
+                media: crate::feat::media_query::MediaQueryService::new(Arc::new(
+                    crate::test_utils::FakeMediaBackend,
+                )),
+                mpv: crate::feat::mpv::MpvClientService::new(Arc::new(crate::test_utils::FakeMpvBackend)),
+                mpv_launcher: crate::feat::mpv::MpvLauncherService::new(Arc::new(
+                    crate::test_utils::FakeMpvLauncher::new(),
+                )),
+                file_launcher: crate::feat::launcher::FileLauncherService::new(Arc::new(
+                    crate::test_utils::FakeLauncher,
+                )),
+                db: crate::feat::note_db::NoteDbService::new(db.clone()),
+                editor: crate::feat::external_editor::ExternalEditorService::new(Arc::new(
+                    crate::feat::external_editor::SystemEditor,
+                )),
+                path_resolver: crate::feat::path_resolver::PathResolverService::new(Arc::new(
+                    crate::feat::path_resolver::SystemPathResolver,
+                )),
+                sources: crate::feat::sources::SourceDbService::new(Arc::new(
+                    crate::feat::sources::SqliteSourceDb::new(db.pool().clone()),
+                )),
+                fuzzy_search: crate::feat::fuzzy_search::FuzzySearchService::new(Arc::new(
+                    crate::feat::fuzzy_search::SkimBackend,
+                )),
+                rt,
+            },
+            config: Config::default(),
+            library_path,
+            socket_path: String::new(),
+            keymap: Keymap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn load_playlist_filters_virtual_items_not_in_playlist() {
+        // Given storage with virtual items in files, some in playlist and some not.
+        let temp = tempfile::TempDir::new().unwrap();
+        let library_path = CanonicalPath::from_path(temp.path()).unwrap();
+        let storage = Arc::new(FakeStorageBackend::new());
+
+        let virtual_in_playlist = ItemPath::Url("https://example.com/in-playlist.mp3".to_string());
+        let virtual_not_in_playlist = ItemPath::Url("https://example.com/not-in-playlist.mp3".to_string());
+        let regular_file = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/regular/file.mp3")));
+
+        let data = PlaylistData {
+            working_directory: library_path.clone(),
+            playlist: vec![virtual_in_playlist.clone()],
+            files: [
+                (
+                    virtual_in_playlist.clone(),
+                    FileMetadata {
+                        duration: Some(std::time::Duration::from_secs(100)),
+                        is_virtual: true,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    virtual_not_in_playlist.clone(),
+                    FileMetadata {
+                        duration: Some(std::time::Duration::from_secs(200)),
+                        is_virtual: true,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    regular_file.clone(),
+                    FileMetadata {
+                        duration: Some(std::time::Duration::from_secs(300)),
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        storage.save(&data).await.unwrap();
+
+        let ctx = create_ctx_with_storage(storage, library_path).await;
+
+        // When loading the playlist.
+        let result = load_playlist(&ctx).await.unwrap();
+
+        // Then virtual items in playlist go to playlist_items, virtual items not in playlist go to virtual_library_items.
+        if let CommandResult::PlaylistLoaded {
+            playlist_items,
+            virtual_library_items,
+        } = result
+        {
+            assert_eq!(playlist_items.len(), 1);
+            assert_eq!(playlist_items[0].path, virtual_in_playlist);
+            assert!(playlist_items[0].is_virtual);
+
+            assert_eq!(virtual_library_items.len(), 1);
+            assert_eq!(virtual_library_items[0].path, virtual_not_in_playlist);
+            assert!(virtual_library_items[0].is_virtual);
+        } else {
+            panic!("Expected PlaylistLoaded result");
+        }
+    }
+
+    #[tokio::test]
+    async fn analyze_library_only_processes_uncached_files() {
+        // Given a temp directory with media files, some with cached durations.
+        let temp = tempfile::TempDir::new().unwrap();
+        let library_path = CanonicalPath::from_path(temp.path()).unwrap();
+        let storage = Arc::new(FakeStorageBackend::new());
+
+        let cached_file = temp.path().join("cached.mp3");
+        let uncached_file = temp.path().join("uncached.mp3");
+        std::fs::write(&cached_file, "audio data").unwrap();
+        std::fs::write(&uncached_file, "audio data").unwrap();
+
+        let cached_path = ItemPath::File(CanonicalPath::from_path(&cached_file).unwrap());
+        let data = PlaylistData {
+            working_directory: library_path.clone(),
+            playlist: vec![],
+            files: [(
+                cached_path.clone(),
+                FileMetadata {
+                    duration: Some(std::time::Duration::from_secs(120)),
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        storage.save(&data).await.unwrap();
+
+        let ctx = create_ctx_with_storage(storage, library_path).await;
+
+        // When analyzing the library.
+        let result = analyze_library(&ctx).await.unwrap();
+
+        // Then only uncached files are processed (1 new file).
+        if let CommandResult::LibraryAnalyzed { new_files_count } = result {
+            assert_eq!(new_files_count, 1);
+        } else {
+            panic!("Expected LibraryAnalyzed result");
+        }
+    }
+
+    #[tokio::test]
+    async fn get_item_counts_returns_correct_counts() {
+        // Given storage with path counts for items.
+        let temp = tempfile::TempDir::new().unwrap();
+        let library_path = CanonicalPath::from_path(temp.path()).unwrap();
+        let storage = Arc::new(FakeStorageBackend::new());
+
+        let file1 = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/file1.mp3")));
+        let file2 = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/file2.mp3")));
+
+        let data = PlaylistData {
+            working_directory: library_path.clone(),
+            playlist: vec![file1.clone(), file2.clone()],
+            files: [
+                (
+                    file1.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+                (
+                    file2.clone(),
+                    FileMetadata {
+                        duration: None,
+                        is_virtual: false,
+                        deleted: false,
+                        mime_type: None,
+                        time_added: None,
+                        alias: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        storage.save(&data).await.unwrap();
+
+        let ctx = create_ctx_with_storage(storage, library_path).await;
+
+        // When getting item counts.
+        let counts = get_item_counts(&ctx, &[file1.clone(), file2.clone()]).await;
+
+        // Then correct counts are returned.
+        assert_eq!(counts.get(&file1), Some(&1));
+        assert_eq!(counts.get(&file2), Some(&1));
+    }
+
+    #[tokio::test]
+    async fn get_item_counts_returns_zero_for_unknown_paths() {
+        // Given storage with some path counts.
+        let temp = tempfile::TempDir::new().unwrap();
+        let library_path = CanonicalPath::from_path(temp.path()).unwrap();
+        let storage = Arc::new(FakeStorageBackend::new());
+
+        let known_file = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/known.mp3")));
+        let unknown_file = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/unknown.mp3")));
+
+        let data = PlaylistData {
+            working_directory: library_path.clone(),
+            playlist: vec![known_file.clone()],
+            files: [(
+                known_file.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: false,
+                    deleted: false,
+                    mime_type: None,
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        storage.save(&data).await.unwrap();
+
+        let ctx = create_ctx_with_storage(storage, library_path).await;
+
+        // When getting item counts for unknown paths.
+        let counts = get_item_counts(&ctx, &[unknown_file.clone()]).await;
+
+        // Then zero is returned for unknown paths.
+        assert_eq!(counts.get(&unknown_file), Some(&0));
+    }
 
     #[tokio::test]
     async fn analyze_library_returns_zero_for_empty_directory() {

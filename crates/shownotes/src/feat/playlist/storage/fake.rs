@@ -174,6 +174,7 @@ impl PlaylistStorage for FakeStorageBackend {
             .iter()
             .map(|p| pathbuf_to_item_path(p.clone()))
             .collect();
+        let playlist_path_set: HashSet<PathBuf> = playlist_paths.iter().cloned().collect();
 
         let workspace_path_buf = working_directory.as_path().to_path_buf();
         let mut files = HashMap::new();
@@ -197,6 +198,17 @@ impl PlaylistStorage for FakeStorageBackend {
                     },
                 );
             }
+        }
+
+        for (path_buf, metadata) in &data.metadata {
+            if playlist_path_set.contains(path_buf) {
+                continue;
+            }
+            let alias = self.resolve_alias_internal(path_buf, &workspace_path_buf);
+            let item_path = pathbuf_to_item_path(path_buf.clone());
+            let mut metadata = metadata.clone();
+            metadata.alias = alias;
+            files.insert(item_path, metadata);
         }
 
         Ok(PlaylistData {

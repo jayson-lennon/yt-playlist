@@ -44,6 +44,7 @@ arboard = { version = "3", default-features = false, features = [
 rstest = "0.24"
 tempfile = "3.26.0"
 temptree = "0.2"
+serial_test = "3"
 cucumber = "0.21"
 marked-path = { path = "crates/marked-path" }
 

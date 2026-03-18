@@ -122,4 +122,46 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn creates_symlink_when_symlink_exists_at_destination() {
+        // Given a target file and a destination with an existing symlink.
+        let temp = TempDir::new().unwrap();
+        let target = temp.path().join("video.mp4");
+        std::fs::write(&target, "content").unwrap();
+
+        let other_target = temp.path().join("other.mp4");
+        std::fs::write(&other_target, "other").unwrap();
+
+        let dest_dir = TempDir::new().unwrap();
+        unix_fs::symlink(&other_target, dest_dir.path().join("video.mp4")).unwrap();
+
+        // When creating a symlink with the same name.
+        let result = create_symlink_with_suffix(&target, dest_dir.path());
+
+        // Then a suffixed name is used.
+        assert!(result.is_ok());
+        let link = result.unwrap();
+        assert_eq!(link.file_name().unwrap().to_str().unwrap(), "video_1.mp4");
+    }
+
+    #[test]
+    fn handles_broken_symlink_at_destination() {
+        // Given a target file and a destination with a broken symlink.
+        let temp = TempDir::new().unwrap();
+        let target = temp.path().join("video.mp4");
+        std::fs::write(&target, "content").unwrap();
+
+        let dest_dir = TempDir::new().unwrap();
+        let nonexistent = temp.path().join("nonexistent.mp4");
+        unix_fs::symlink(&nonexistent, dest_dir.path().join("video.mp4")).unwrap();
+
+        // When creating a symlink with the same name.
+        let result = create_symlink_with_suffix(&target, dest_dir.path());
+
+        // Then a suffixed name is used (broken symlink is detected).
+        assert!(result.is_ok());
+        let link = result.unwrap();
+        assert_eq!(link.file_name().unwrap().to_str().unwrap(), "video_1.mp4");
+    }
 }

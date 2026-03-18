@@ -281,4 +281,75 @@ mod tests {
         let meta_b = result.files.get(&files[1]).unwrap();
         assert_eq!(meta_b.duration, Some(Duration::from_secs(60)));
     }
+
+    #[test]
+    fn analyze_files_skips_files_with_cached_duration() {
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4"]);
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            files[0].clone(),
+            FileMetadata {
+                duration: Some(Duration::from_secs(100)),
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            },
+        );
+        let backend =
+            FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(999));
+
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
+
+        assert_eq!(
+            result.files.get(&files[0]).unwrap().duration,
+            Some(Duration::from_secs(100))
+        );
+    }
+
+    #[test]
+    fn analyze_files_handles_single_file() {
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4"]);
+        let metadata = HashMap::new();
+        let backend =
+            FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
+
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
+
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(
+            result.files.get(&files[0]).unwrap().duration,
+            Some(Duration::from_secs(120))
+        );
+    }
+
+    #[test]
+    fn analyze_files_no_output_when_all_cached() {
+        let temp = TempDir::new().unwrap();
+        let files = create_temp_files(&temp, &["a.mp4"]);
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            files[0].clone(),
+            FileMetadata {
+                duration: Some(Duration::from_secs(100)),
+                is_virtual: false,
+                deleted: false,
+                mime_type: None,
+                time_added: None,
+                alias: None,
+            },
+        );
+        let backend = FakeMediaBackend::new();
+
+        let result = analyze_files(&files, metadata, &backend, false).unwrap();
+
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(
+            result.files.get(&files[0]).unwrap().duration,
+            Some(Duration::from_secs(100))
+        );
+    }
 }
