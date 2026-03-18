@@ -67,5 +67,8 @@ pub fn format_output(result: &CommandResult) -> String {
             format!("Renamed to '{}': {}", alias, path.to_string_lossy())
         }
         CommandResult::MpvToggledPlay => "Toggled playback".to_string(),
+        CommandResult::LibraryAnalyzed { new_files_count } => {
+            format!("Library analyzed: {new_files_count} new files")
+        }
     }
 }

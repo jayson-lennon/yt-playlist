@@ -314,6 +314,22 @@ fn run_app(
             process_fork(terminal, app, action)?;
         }
 
+        if let Some(result) = app.tui_state.take_refresh_result(&app.tokio_runtime) {
+            match result {
+                Ok(count) => {
+                    crate::tui::refresh_library(&app.ctx, &mut app.tui_state);
+                    app.tui_state.set_status(if count > 0 {
+                        format!("Refreshed ({count} new files)")
+                    } else {
+                        "Refreshed (no new files)".to_string()
+                    });
+                }
+                Err(e) => {
+                    app.tui_state.show_error(format!("Refresh failed: {e:?}"));
+                }
+            }
+        }
+
         if app.should_quit {
             return Ok(());
         }

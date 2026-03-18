@@ -102,6 +102,7 @@ pub enum Command {
         library_items: Vec<PlaylistItem>,
     },
     LibraryRefresh,
+    LibraryAnalyze,
     UrlAdd { url: String },
     AliasRename { path: ItemPath, alias: String },
 }
@@ -137,6 +138,7 @@ pub enum CommandResult {
     },
     PlaylistSaved,
     LibraryRefreshed { items: Vec<PlaylistItem> },
+    LibraryAnalyzed { new_files_count: usize },
     UrlAdded { item: PlaylistItem },
     AliasRenamed { path: ItemPath, alias: String },
 }
@@ -215,6 +217,9 @@ pub async fn execute(
         }
         Command::LibraryRefresh => {
             playlist::refresh_library(ctx).await
+        }
+        Command::LibraryAnalyze => {
+            playlist::analyze_library(ctx).await
         }
         Command::UrlAdd { url } => {
             let item = playlist::add_url(&url);

@@ -105,6 +105,7 @@ pub enum TuiAction {
     GenerateShowNotes(ShowNoteKind),
     RenameSubmit(String),
     UrlSubmit(String),
+    Refresh,
 }
 
 #[cfg(test)]

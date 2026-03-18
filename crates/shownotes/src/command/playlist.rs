@@ -234,3 +234,110 @@ pub async fn get_item_counts(
     }
     result
 }
+
+pub async fn analyze_library(
+    ctx: &SystemCtx,
+) -> Result<CommandResult, Report<CommandError>> {
+    use crate::feat::media_duration_analysis::analyze_files;
+    use crate::feat::media_query::Ffprobe;
+
+    let data = ctx
+        .services
+        .storage
+        .load(&ctx.library_path)
+        .await
+        .change_context(CommandError)?;
+
+    let mut files: HashSet<CanonicalPath> = HashSet::new();
+    if let Ok(read_dir) = std::fs::read_dir(ctx.library_path.as_path()) {
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            if path.is_file() && ctx.config.is_video_or_audio(&path) {
+                if let Ok(canonical) = CanonicalPath::from_path(&path) {
+                    files.insert(canonical);
+                }
+            }
+        }
+    }
+
+    let metadata: HashMap<CanonicalPath, FileMetadata> = data
+        .files
+        .iter()
+        .filter_map(|(k, v)| k.as_file().map(|cp| (cp.clone(), v.clone())))
+        .collect();
+
+    let uncached: Vec<_> = files
+        .iter()
+        .filter(|p| {
+            !metadata.contains_key(*p)
+                || metadata.get(*p).and_then(|m| m.duration).is_none()
+        })
+        .cloned()
+        .collect();
+
+    let new_files_count = uncached.len();
+
+    let ffprobe = Ffprobe;
+    let result = analyze_files(&uncached, metadata, &ffprobe).change_context(CommandError)?;
+
+    let mut updated_files = data.files.clone();
+    for (path, meta) in result.files {
+        updated_files.insert(ItemPath::File(path), meta);
+    }
+
+    let updated_data = PlaylistData {
+        working_directory: ctx.library_path.clone(),
+        playlist: data.playlist,
+        files: updated_files,
+    };
+    ctx.services
+        .storage
+        .save(&updated_data)
+        .await
+        .change_context(CommandError)?;
+
+    Ok(CommandResult::LibraryAnalyzed { new_files_count })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::CommandResult;
+    use crate::test_utils::NoteTestContext;
+
+    #[tokio::test]
+    async fn analyze_library_returns_zero_for_empty_directory() {
+        // Given a temp directory with no media files.
+        let temp = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp.path().join("readme.txt"), "not a media file").unwrap();
+
+        let ctx = NoteTestContext::new().await;
+        let mut ctx = ctx.ctx;
+        ctx.library_path = marked_path::CanonicalPath::from_path(temp.path()).unwrap();
+
+        // When analyzing the library.
+        let result = analyze_library(&ctx).await.unwrap();
+
+        // Then no new files are analyzed.
+        assert!(matches!(result, CommandResult::LibraryAnalyzed { new_files_count: 0 }));
+    }
+
+    #[tokio::test]
+    async fn analyze_library_returns_zero_for_directory_with_non_media_files() {
+        // Given a temp directory with files that are not video/audio.
+        let temp = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp.path().join("document.pdf"), "pdf content").unwrap();
+        std::fs::write(temp.path().join("image.png"), "png content").unwrap();
+        std::fs::write(temp.path().join("data.json"), "{}").unwrap();
+
+        let ctx = NoteTestContext::new().await;
+        let mut ctx = ctx.ctx;
+        ctx.library_path = marked_path::CanonicalPath::from_path(temp.path()).unwrap();
+
+        // When analyzing the library.
+        let result = analyze_library(&ctx).await.unwrap();
+
+        // Then no new files are analyzed (non-media files are skipped).
+        assert!(matches!(result, CommandResult::LibraryAnalyzed { new_files_count: 0 }));
+    }
+}

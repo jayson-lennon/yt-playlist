@@ -1,12 +1,20 @@
 use std::collections::HashMap;
 
 use crossterm::event::KeyEvent;
+use derive_more::Debug;
+use error_stack::Report;
+use tokio::task::JoinHandle;
+use wherror::Error;
 
 use super::common::{ItemDisplayMode, ItemPath};
 use super::component::{Component, ComponentContext};
 use super::event::HandleKeyResult;
 use super::{GlobalKeyHandler, StatusBar, WhichKeyConfig};
 use crate::tui::{ErrorPopup, LibraryPane, Pane, PlaylistItem, PlaylistPane, Rename, UrlInput};
+
+#[derive(Debug, Error)]
+#[error("refresh failed")]
+pub struct RefreshError;
 
 /// Complete terminal UI state for the application.
 ///
@@ -26,6 +34,8 @@ pub struct TuiState {
     pub needs_clear: bool,
     pub error_popup: ErrorPopup,
     pub display_mode: ItemDisplayMode,
+    #[debug(skip)]
+    refresh_task: Option<JoinHandle<Result<usize, Report<RefreshError>>>>,
 }
 
 impl TuiState {
@@ -41,11 +51,36 @@ impl TuiState {
             needs_clear: false,
             error_popup: ErrorPopup::new(),
             display_mode: ItemDisplayMode::default(),
+            refresh_task: None,
         }
     }
 
     pub fn set_status(&mut self, message: impl Into<String>) {
         self.status_bar.set(message);
+    }
+
+    pub fn is_refreshing(&self) -> bool {
+        self.refresh_task.as_ref().is_some_and(|h| !h.is_finished())
+    }
+
+    pub fn start_refresh(&mut self, handle: JoinHandle<Result<usize, Report<RefreshError>>>) {
+        self.refresh_task = Some(handle);
+    }
+
+    pub fn take_refresh_result(
+        &mut self,
+        rt: &tokio::runtime::Runtime,
+    ) -> Option<Result<usize, Report<RefreshError>>> {
+        let handle = self.refresh_task.take()?;
+        if handle.is_finished() {
+            Some(
+                rt.block_on(handle)
+                    .unwrap_or_else(|e| Err(Report::new(RefreshError).attach(e))),
+            )
+        } else {
+            self.refresh_task = Some(handle);
+            None
+        }
     }
 
     pub fn selected_playlist_item(&self) -> Option<&PlaylistItem> {
@@ -635,5 +670,68 @@ mod tests {
 
         // Then the event is ignored.
         assert!(!result.is_consumed());
+    }
+
+    #[test]
+    fn is_refreshing_returns_false_initially() {
+        // Given a new state.
+        let state = TuiState::new();
+
+        // Then is_refreshing returns false.
+        assert!(!state.is_refreshing());
+    }
+
+    #[test]
+    fn start_refresh_stores_handle() {
+        // Given a state.
+        let mut state = TuiState::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handle = rt.spawn(async {
+            std::future::pending::<Result<usize, Report<RefreshError>>>().await
+        });
+
+        // When starting refresh.
+        state.start_refresh(handle);
+
+        // Then is_refreshing returns true.
+        assert!(state.is_refreshing());
+    }
+
+    #[test]
+    fn take_refresh_result_returns_none_while_running() {
+        // Given a state with a running task.
+        let mut state = TuiState::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handle = rt.spawn(async {
+            std::future::pending::<Result<usize, Report<RefreshError>>>().await
+        });
+        state.start_refresh(handle);
+
+        // When taking refresh result.
+        let result = state.take_refresh_result(&rt);
+
+        // Then none is returned (task still running).
+        assert!(result.is_none());
+        assert!(state.is_refreshing());
+    }
+
+    #[test]
+    fn take_refresh_result_returns_result_when_done() {
+        // Given a state with a completed task.
+        let mut state = TuiState::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handle = rt.spawn(async { Ok::<_, Report<RefreshError>>(42) });
+        state.start_refresh(handle);
+
+        // Wait for task to complete.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // When taking refresh result.
+        let result = state.take_refresh_result(&rt);
+
+        // Then the result is returned.
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().unwrap(), 42);
+        assert!(!state.is_refreshing());
     }
 }

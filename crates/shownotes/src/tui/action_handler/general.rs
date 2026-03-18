@@ -1,6 +1,7 @@
 use super::TuiActionCtx;
 use super::TuiActionError;
-use crate::command::{Command, CommandResult};
+use crate::command::{self, Command, CommandResult};
+use crate::tui::state::RefreshError;
 use crate::tui::{ItemDisplayMode, TuiActionResponse};
 use error_stack::{Report, ResultExt};
 
@@ -126,5 +127,29 @@ pub fn handle_delete(
                 .set("Only virtual entries (URLs) can be deleted.");
         }
     }
+    Ok(TuiActionResponse::Continue)
+}
+
+pub fn handle_refresh(
+    ctx: &mut TuiActionCtx<'_>,
+) -> Result<TuiActionResponse, Report<TuiActionError>> {
+    if ctx.tui_state.is_refreshing() {
+        ctx.tui_state.status_bar.set("Refresh already in progress...");
+        return Ok(TuiActionResponse::Continue);
+    }
+
+    let system_ctx = ctx.ctx.clone();
+    let handle = ctx.ctx.services.rt.spawn(async move {
+        command::execute(&system_ctx, Command::LibraryAnalyze)
+            .await
+            .map(|result| match result {
+                CommandResult::LibraryAnalyzed { new_files_count } => new_files_count,
+                _ => unreachable!(),
+            })
+            .change_context(RefreshError)
+    });
+
+    ctx.tui_state.start_refresh(handle);
+    ctx.tui_state.status_bar.set("Refreshing library...");
     Ok(TuiActionResponse::Continue)
 }

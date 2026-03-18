@@ -105,7 +105,9 @@ impl Keymap {
             .bind("<leader>ua", TuiAction::ShowAlias, "show alias", Cat::General, Ctx::Global)
             .bind("<leader>up", TuiAction::ShowPath, "show path", Cat::General, Ctx::Global)
             .describe_prefix("<leader>s", "search")
-            .bind("<leader>sf", TuiAction::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global);
+            .bind("<leader>sf", TuiAction::FuzzyNotes, "fuzzy search notes", Cat::General, Ctx::Global)
+            .describe_prefix("<leader>r", "refresh")
+            .bind("<leader>r", TuiAction::Refresh, "refresh library", Cat::General, Ctx::Global);
 
         keymap.finalize().expect("keymap has missing descriptions");
         keymap

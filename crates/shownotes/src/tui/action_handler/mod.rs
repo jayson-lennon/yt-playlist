@@ -76,5 +76,6 @@ pub fn dispatch(
         TuiAction::RenameSubmit(alias) => edit::handle_rename_submit(ctx, alias),
         TuiAction::UrlSubmit(url) => general::handle_url_submit(ctx, url),
         TuiAction::TogglePlay => external::handle_toggle_play(ctx),
+        TuiAction::Refresh => general::handle_refresh(ctx),
     }
 }
