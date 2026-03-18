@@ -165,6 +165,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         }
     }
 
@@ -181,6 +182,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         }
     }
 
@@ -198,6 +200,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         }
     }
 
@@ -367,6 +370,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] video / My Video");
@@ -381,6 +385,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] video");
@@ -395,6 +400,7 @@ mod tests {
             mime_type: Some("application/pdf".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[pdf] [--:--:--] doc / My Doc");
@@ -409,6 +415,7 @@ mod tests {
             mime_type: Some("application/pdf".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[pdf] [--:--:--] doc");
@@ -423,6 +430,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[unknown] [--:--:--] file");
@@ -437,6 +445,7 @@ mod tests {
             mime_type: Some("url".to_string()),
             is_virtual: true,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(
@@ -454,6 +463,7 @@ mod tests {
             mime_type: Some("url".to_string()),
             is_virtual: true,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(
@@ -471,6 +481,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
         assert_eq!(result, "[video/mp4] [--:--:--] video");
@@ -499,6 +510,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 0, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
@@ -513,6 +525,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 1,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 1, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
@@ -527,6 +540,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 2,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 2, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (2)");
@@ -541,6 +555,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 3,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 3, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (3)");
@@ -555,6 +570,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 5,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 0, 5, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
@@ -569,6 +585,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 2,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 20, 2, 2);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
@@ -583,6 +600,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 1,
+            has_sources: true,
         };
         let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 1, 1);
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (1)");

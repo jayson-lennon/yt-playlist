@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crossterm::event::KeyEvent;
 use derive_more::Debug;
@@ -135,6 +135,7 @@ impl TuiState {
             mime_type,
             is_virtual,
             playlist_count,
+            has_sources: true,
         });
     }
 
@@ -161,6 +162,20 @@ impl TuiState {
         }
         for item in &mut self.library_pane.items {
             item.playlist_count = counts.get(&item.path).copied().unwrap_or(0);
+        }
+    }
+
+    /// Updates the source availability status for all items in both panes.
+    ///
+    /// This should be called after scanning for source files to indicate which
+    /// items have corresponding source files available. URLs and virtual items
+    /// are always considered to have sources available.
+    pub fn update_sources_status(&mut self, paths_with_sources: &HashSet<ItemPath>) {
+        for item in &mut self.playlist_pane.items {
+            item.has_sources = item.path.is_url() || item.is_virtual || paths_with_sources.contains(&item.path);
+        }
+        for item in &mut self.library_pane.items {
+            item.has_sources = item.path.is_url() || item.is_virtual || paths_with_sources.contains(&item.path);
         }
     }
 
@@ -361,6 +376,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         }
     }
 

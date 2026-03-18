@@ -41,6 +41,7 @@ fn create_playlist_item(world: &mut PlaylistWorld, filename: &str) -> PlaylistIt
         mime_type: None,
         is_virtual: false,
         playlist_count: 0,
+        has_sources: true,
     }
 }
 

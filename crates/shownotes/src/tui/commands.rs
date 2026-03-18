@@ -1,5 +1,9 @@
+use std::collections::HashSet;
+
 use crate::command::{self, Command, CommandResult};
+use crate::feat::sources::SourceDb;
 use crate::system_ctx::SystemCtx;
+use crate::tui::common::ItemPath;
 use crate::tui::{Pane, TuiState};
 
 pub fn load_playlist(ctx: &SystemCtx, tui_state: &mut TuiState) {
@@ -21,6 +25,7 @@ pub fn load_playlist(ctx: &SystemCtx, tui_state: &mut TuiState) {
                 .library_pane
                 .items
                 .sort_by(|a, b| a.path.to_string_lossy().cmp(&b.path.to_string_lossy()));
+            update_sources_status(ctx, tui_state);
         }
         Err(e) => {
             tui_state.show_error(format!("Failed to load playlist: {e:?}"));
@@ -53,4 +58,44 @@ pub fn set_initial_focus(tui_state: &mut TuiState) {
     } else if library_empty && !playlist_empty {
         tui_state.focused_pane = Pane::Playlist;
     }
+}
+
+pub fn update_sources_status(ctx: &SystemCtx, tui_state: &mut TuiState) {
+    let paths: Vec<String> = tui_state
+        .playlist_pane
+        .items
+        .iter()
+        .chain(tui_state.library_pane.items.iter())
+        .filter_map(|item| match &item.path {
+            ItemPath::File(path) => Some(path.as_path().to_string_lossy().into_owned()),
+            ItemPath::Url(_) => None,
+        })
+        .collect();
+
+    let paths_with_sources: HashSet<ItemPath> = match ctx
+        .services
+        .rt
+        .block_on(ctx.services.sources.get_sources_for_paths(&paths))
+    {
+        Ok(sources_map) => tui_state
+            .playlist_pane
+            .items
+            .iter()
+            .chain(tui_state.library_pane.items.iter())
+            .filter(|item| matches!(item.path, ItemPath::File(_)))
+            .filter(|item| {
+                let path_str = item.path.to_string_lossy();
+                sources_map
+                    .get(path_str.as_ref())
+                    .is_some_and(|sources| !sources.is_empty())
+            })
+            .map(|item| item.path.clone())
+            .collect(),
+        Err(e) => {
+            tracing::error!("Failed to get sources for paths: {e:?}");
+            HashSet::new()
+        }
+    };
+
+    tui_state.update_sources_status(&paths_with_sources);
 }

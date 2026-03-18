@@ -80,6 +80,7 @@ fn process_fork(
     action: ForkAction,
 ) -> Result<(), Report<RunError>> {
     let needs_suspend = requires_suspend(&action);
+    let is_edit_sources = matches!(action, ForkAction::EditSources { .. });
 
     let result: Result<ForkResult, std::convert::Infallible> = if needs_suspend {
         suspend_and_run(terminal, || Ok(execute_fork_action(app, action)))
@@ -93,11 +94,16 @@ fn process_fork(
         .draw(|f| tui::render(f, &app.tui_state, &keymap, &app.ctx.services))
         .change_context(RunError)?;
 
+    let is_success = matches!(&result, Ok(ForkResult::Success(_)));
     let message = match result {
         Ok(ForkResult::Success(msg) | ForkResult::Failed(msg)) => msg,
         Ok(ForkResult::SuspendFailed) => "Failed to suspend terminal".to_string(),
     };
     app.tui_state.set_status(message);
+
+    if is_edit_sources && is_success {
+        tui::update_sources_status(&app.ctx, &mut app.tui_state);
+    }
 
     Ok(())
 }

@@ -75,6 +75,8 @@ pub struct PlaylistItem {
     pub is_virtual: bool,
     /// How many times this path appears in the playlist.
     pub playlist_count: usize,
+    /// Whether this item has source URLs associated with it.
+    pub has_sources: bool,
 }
 
 pub fn get_mime_type(path: &ItemPath) -> Option<String> {
@@ -141,6 +143,7 @@ mod tests {
             mime_type: Some("video/mp4".to_string()),
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         };
         assert_eq!(item.duration, Some(Duration::from_secs(120)));
         assert_eq!(item.alias, Some("My Video".to_string()));

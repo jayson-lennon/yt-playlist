@@ -60,6 +60,7 @@ pub async fn load_playlist(
                 mime_type,
                 is_virtual,
                 playlist_count,
+                has_sources: true,
             }
         })
         .collect();
@@ -78,6 +79,7 @@ pub async fn load_playlist(
                 mime_type,
                 is_virtual: true,
                 playlist_count: 0,
+                has_sources: true,
             }
         })
         .collect();
@@ -172,6 +174,7 @@ pub async fn refresh_library(
                 mime_type,
                 is_virtual: false,
                 playlist_count: 0,
+                has_sources: true,
             });
         }
     }
@@ -195,6 +198,7 @@ pub fn add_url(url: &str) -> PlaylistItem {
         mime_type: Some("url".to_string()),
         is_virtual: true,
         playlist_count: 0,
+        has_sources: true,
     }
 }
 

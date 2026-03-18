@@ -189,6 +189,8 @@ impl PlaylistPane {
                             .bg(Color::Yellow)
                             .add_modifier(Modifier::BOLD)
                     }
+                } else if !item.has_sources {
+                    Style::default().fg(Color::Yellow)
                 } else {
                     Style::default()
                 };
@@ -292,6 +294,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         }
     }
 
@@ -304,6 +307,7 @@ mod tests {
             mime_type: None,
             is_virtual: false,
             playlist_count: 0,
+            has_sources: true,
         }
     }
 

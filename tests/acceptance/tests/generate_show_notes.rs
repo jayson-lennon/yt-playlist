@@ -41,6 +41,7 @@ fn given_file_with_source(world: &mut GenerateWorld, filename: String, url: Stri
         mime_type: None,
         is_virtual: false,
         playlist_count: 0,
+        has_sources: true,
     };
 
     let existing = world.inner.execute(Command::PlaylistLoad);
@@ -69,6 +70,7 @@ fn given_file_exists(world: &mut GenerateWorld, filename: String) {
         mime_type: None,
         is_virtual: false,
         playlist_count: 0,
+        has_sources: true,
     };
 
     let existing = world.inner.execute(Command::PlaylistLoad);

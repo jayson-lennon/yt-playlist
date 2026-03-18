@@ -24,7 +24,7 @@ use ratatui::{
     Frame,
 };
 
-pub use commands::{load_playlist, refresh_library, set_initial_focus};
+pub use commands::{load_playlist, refresh_library, set_initial_focus, update_sources_status};
 pub use common::{get_mime_type, ItemDisplayMode, Pane, PlaylistItem};
 pub use component::{Component, ComponentContext};
 pub use error_popup::ErrorPopup;
