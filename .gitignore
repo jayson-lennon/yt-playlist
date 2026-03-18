@@ -17,3 +17,4 @@ shownotes.toml
 # Code analysis
 coverage.lcov
 debt.json
+mutants.out/
