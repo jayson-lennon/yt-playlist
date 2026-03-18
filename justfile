@@ -7,6 +7,7 @@ test:
 
 package:
   rm -rfv .build/
+  cargo generate-lockfile && git add Cargo.lock && git commit --amend --no-edit
   makepkg -fi
 
 clean:
