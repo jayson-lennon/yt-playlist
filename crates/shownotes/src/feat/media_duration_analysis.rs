@@ -20,6 +20,7 @@ pub fn analyze_files(
     files: &[CanonicalPath],
     mut metadata: HashMap<CanonicalPath, FileMetadata>,
     backend: &dyn MediaQuery,
+    silent: bool,
 ) -> Result<AnalysisResult, Report<MediaError>> {
     let uncached: Vec<_> = files
         .iter()
@@ -30,8 +31,10 @@ pub fn analyze_files(
 
     let total = uncached.len();
     if total > 0 {
-        eprint!("Analyzing durations: 0/{total}");
-        std::io::stderr().flush().ok();
+        if !silent {
+            eprint!("Analyzing durations: 0/{total}");
+            std::io::stderr().flush().ok();
+        }
 
         for (i, path) in uncached.iter().enumerate() {
             if let Ok(duration) = backend.get_duration(path.as_path()) {
@@ -50,10 +53,14 @@ pub fn analyze_files(
                     },
                 );
             }
-            eprint!("\rAnalyzing durations: {}/{}", i + 1, total);
-            std::io::stderr().flush().ok();
+            if !silent {
+                eprint!("\rAnalyzing durations: {}/{}", i + 1, total);
+                std::io::stderr().flush().ok();
+            }
         }
-        eprintln!();
+        if !silent {
+            eprintln!();
+        }
     }
 
     Ok(AnalysisResult { files: metadata })
@@ -117,7 +124,7 @@ mod tests {
             .with_duration(files[0].as_path(), Duration::from_secs(120))
             .with_duration(files[1].as_path(), Duration::from_secs(60));
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         assert_eq!(result.files.len(), 2);
         assert_eq!(
@@ -149,7 +156,7 @@ mod tests {
         let backend =
             FakeMediaBackend::new().with_duration(files[1].as_path(), Duration::from_secs(60));
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         assert_eq!(
             result.files.get(&files[0]).unwrap().duration,
@@ -176,7 +183,7 @@ mod tests {
         let backend =
             FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         let meta = result.files.get(&files[0]).unwrap();
         assert_eq!(meta.duration, Some(Duration::from_secs(120)));
@@ -202,7 +209,7 @@ mod tests {
         let backend =
             FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         assert_eq!(
             result.files.get(&files[0]).unwrap().time_added,
@@ -216,7 +223,7 @@ mod tests {
         let metadata = HashMap::new();
         let backend = FakeMediaBackend::new();
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         assert!(result.files.is_empty());
     }
@@ -229,7 +236,7 @@ mod tests {
         let backend =
             FakeMediaBackend::new().with_duration(files[0].as_path(), Duration::from_secs(120));
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         assert_eq!(result.files.len(), 1);
         assert!(result.files.contains_key(&files[0]));
@@ -266,7 +273,7 @@ mod tests {
         let backend =
             FakeMediaBackend::new().with_duration(files[1].as_path(), Duration::from_secs(60));
 
-        let result = analyze_files(&files, metadata, &backend).unwrap();
+        let result = analyze_files(&files, metadata, &backend, true).unwrap();
 
         let meta_a = result.files.get(&files[0]).unwrap();
         assert_eq!(meta_a.duration, Some(Duration::from_secs(100)));

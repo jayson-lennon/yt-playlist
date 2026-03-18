@@ -278,7 +278,8 @@ pub async fn analyze_library(
     let new_files_count = uncached.len();
 
     let ffprobe = Ffprobe;
-    let result = analyze_files(&uncached, metadata, &ffprobe).change_context(CommandError)?;
+    let result = analyze_files(&uncached, metadata, &ffprobe, true)
+        .change_context(CommandError)?;
 
     let mut updated_files = data.files.clone();
     for (path, meta) in result.files {

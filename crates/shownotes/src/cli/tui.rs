@@ -149,6 +149,7 @@ pub fn run_tui(
         &all_files,
         metadata,
         ffprobe_backend.as_ref(),
+        false,
     )
     .change_context(RunError)?;
 
