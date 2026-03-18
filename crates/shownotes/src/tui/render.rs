@@ -111,6 +111,7 @@ mod tests {
 
     #[test]
     fn render_context_has_required_fields() {
+        // Given a terminal and required dependencies.
         let keymap = KEYMAP.get_or_init(Keymap::new);
         let tui_state = TUI_STATE.get_or_init(TuiState::new);
         let services = get_services();
@@ -119,6 +120,7 @@ mod tests {
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         let area = Rect::new(0, 0, 80, 24);
 
+        // When creating a RenderContext within a terminal draw.
         terminal
             .draw(|frame| {
                 let ctx = RenderContext {
@@ -128,6 +130,7 @@ mod tests {
                     services,
                     tui_state,
                 };
+                // Then the context has the expected area.
                 assert_eq!(ctx.area, area);
             })
             .unwrap();
@@ -135,7 +138,11 @@ mod tests {
 
     #[test]
     fn dummy_component_implements_render() {
+        // Given a type assertion function for Render trait.
         fn assert_render<T: Render>() {}
+
+        // When checking if DummyComponent implements Render.
+        // Then the assertion compiles without error.
         assert_render::<DummyComponent>();
     }
 }

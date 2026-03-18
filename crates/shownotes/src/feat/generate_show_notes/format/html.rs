@@ -37,35 +37,51 @@ mod tests {
 
     #[test]
     fn format_creates_html_links() {
+        // Given entries with sources.
         let entries = vec![entry("video.mp4", None, vec!["https://example.com"])];
+
+        // When formatting as HTML.
         let output = HtmlFormat.format(&entries);
+
+        // Then HTML links are created.
         assert_eq!(output, "<a href=\"https://example.com\">video.mp4</a>");
     }
 
     #[test]
     fn format_uses_alias() {
+        // Given an entry with an alias.
         let entries = vec![entry(
             "video.mp4",
             Some("My Video"),
             vec!["https://example.com"],
         )];
+
+        // When formatting as HTML.
         let output = HtmlFormat.format(&entries);
+
+        // Then the alias is used as the link text.
         assert_eq!(output, "<a href=\"https://example.com\">My Video</a>");
     }
 
     #[test]
     fn format_multiple_sources() {
+        // Given an entry with multiple sources.
         let entries = vec![entry(
             "video.mp4",
             None,
             vec!["https://a.com", "https://b.com"],
         )];
+
+        // When formatting as HTML.
         let output = HtmlFormat.format(&entries);
+
+        // Then only the first source is used.
         assert_eq!(output, "<a href=\"https://a.com\">video.mp4</a>");
     }
 
     #[test]
     fn format_uses_only_first_source() {
+        // Given an entry with many sources.
         let entries = vec![entry(
             "video.mp4",
             None,
@@ -75,7 +91,11 @@ mod tests {
                 "https://third.com",
             ],
         )];
+
+        // When formatting as HTML.
         let output = HtmlFormat.format(&entries);
+
+        // Then only the first source appears in output.
         assert_eq!(output, "<a href=\"https://first.com\">video.mp4</a>");
         assert!(!output.contains("second.com"));
         assert!(!output.contains("third.com"));
@@ -84,18 +104,28 @@ mod tests {
 
     #[test]
     fn format_skips_entries_without_sources() {
+        // Given entries where some lack sources.
         let entries = vec![
             entry("video.mp4", None, vec!["https://example.com"]),
             entry("no-source.mp4", None, vec![]),
         ];
+
+        // When formatting as HTML.
         let output = HtmlFormat.format(&entries);
+
+        // Then only entries with sources are included.
         assert_eq!(output, "<a href=\"https://example.com\">video.mp4</a>");
     }
 
     #[test]
     fn format_empty_entries() {
+        // Given no entries.
         let entries: Vec<ShowNotesEntry> = vec![];
+
+        // When formatting as HTML.
         let output = HtmlFormat.format(&entries);
+
+        // Then the output is empty.
         assert!(output.is_empty());
     }
 }

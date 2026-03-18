@@ -50,50 +50,85 @@ mod tests {
 
     #[test]
     fn new_creates_empty_status_bar() {
+        // Given no setup needed.
+
+        // When creating a new status bar.
         let status_bar = StatusBar::new();
+
+        // Then it has no message.
         assert!(status_bar.message().is_none());
     }
 
     #[test]
     fn default_creates_empty_status_bar() {
+        // Given no setup needed.
+
+        // When creating a default status bar.
         let status_bar = StatusBar::default();
+
+        // Then it has no message.
         assert!(status_bar.message().is_none());
     }
 
     #[test]
     fn set_sets_message() {
+        // Given a new status bar.
         let mut status_bar = StatusBar::new();
+
+        // When setting a message.
         status_bar.set("Test message");
+
+        // Then the message is stored.
         assert_eq!(status_bar.message(), Some("Test message"));
     }
 
     #[test]
     fn set_accepts_string() {
+        // Given a new status bar.
         let mut status_bar = StatusBar::new();
+
+        // When setting a message with a String.
         status_bar.set(String::from("Test message"));
+
+        // Then the message is stored.
         assert_eq!(status_bar.message(), Some("Test message"));
     }
 
     #[test]
     fn clear_removes_message() {
+        // Given a status bar with a message.
         let mut status_bar = StatusBar::new();
         status_bar.set("Test message");
+
+        // When clearing the message.
         status_bar.clear();
+
+        // Then the message is removed.
         assert!(status_bar.message().is_none());
     }
 
     #[test]
     fn set_replaces_existing_message() {
+        // Given a status bar with an existing message.
         let mut status_bar = StatusBar::new();
         status_bar.set("First message");
+
+        // When setting a new message.
         status_bar.set("Second message");
+
+        // Then the new message replaces the old one.
         assert_eq!(status_bar.message(), Some("Second message"));
     }
 
     #[test]
     fn clear_when_empty_does_nothing() {
+        // Given an empty status bar.
         let mut status_bar = StatusBar::new();
+
+        // When clearing the message.
         status_bar.clear();
+
+        // Then the status bar remains empty.
         assert!(status_bar.message().is_none());
     }
 }

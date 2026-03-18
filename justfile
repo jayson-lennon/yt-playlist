@@ -1,6 +1,9 @@
 COPYRIGHT_NAME := "Jayson Lennon"
 COPYRIGHT_YEAR := "2026"
 
+clippy:
+  cargo clippy --all-targets
+
 test:
   cargo nextest run --workspace --exclude acceptance
   cargo test --package acceptance

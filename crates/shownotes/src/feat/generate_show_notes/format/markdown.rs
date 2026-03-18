@@ -37,35 +37,51 @@ mod tests {
 
     #[test]
     fn format_creates_markdown_links() {
+        // Given entries with sources.
         let entries = vec![entry("video.mp4", None, vec!["https://example.com"])];
+
+        // When formatting as markdown.
         let output = MarkdownFormat.format(&entries);
+
+        // Then markdown links are created.
         assert_eq!(output, "- [video.mp4](https://example.com)");
     }
 
     #[test]
     fn format_uses_alias() {
+        // Given an entry with an alias.
         let entries = vec![entry(
             "video.mp4",
             Some("My Video"),
             vec!["https://example.com"],
         )];
+
+        // When formatting as markdown.
         let output = MarkdownFormat.format(&entries);
+
+        // Then the alias is used as the display name.
         assert_eq!(output, "- [My Video](https://example.com)");
     }
 
     #[test]
     fn format_multiple_sources() {
+        // Given an entry with multiple sources.
         let entries = vec![entry(
             "video.mp4",
             None,
             vec!["https://a.com", "https://b.com"],
         )];
+
+        // When formatting as markdown.
         let output = MarkdownFormat.format(&entries);
+
+        // Then only the first source is used.
         assert_eq!(output, "- [video.mp4](https://a.com)");
     }
 
     #[test]
     fn format_uses_only_first_source() {
+        // Given an entry with three sources.
         let entries = vec![entry(
             "video.mp4",
             None,
@@ -75,7 +91,11 @@ mod tests {
                 "https://third.com",
             ],
         )];
+
+        // When formatting as markdown.
         let output = MarkdownFormat.format(&entries);
+
+        // Then only the first source appears in output.
         assert_eq!(output, "- [video.mp4](https://first.com)");
         assert!(!output.contains("second.com"));
         assert!(!output.contains("third.com"));
@@ -84,18 +104,28 @@ mod tests {
 
     #[test]
     fn format_skips_entries_without_sources() {
+        // Given entries where one has no sources.
         let entries = vec![
             entry("video.mp4", None, vec!["https://example.com"]),
             entry("no-source.mp4", None, vec![]),
         ];
+
+        // When formatting as markdown.
         let output = MarkdownFormat.format(&entries);
+
+        // Then only entries with sources are included.
         assert_eq!(output, "- [video.mp4](https://example.com)");
     }
 
     #[test]
     fn format_empty_entries() {
+        // Given an empty list of entries.
         let entries: Vec<ShowNotesEntry> = vec![];
+
+        // When formatting as markdown.
         let output = MarkdownFormat.format(&entries);
+
+        // Then the output is empty.
         assert!(output.is_empty());
     }
 }

@@ -93,6 +93,10 @@ mod tests {
 
     #[test]
     fn extract_filename_returns_basename() {
+        // Given various file paths.
+
+        // When extracting filename.
+        // Then basename is returned.
         assert_eq!(extract_filename("/path/to/video.mp4"), "video.mp4");
         assert_eq!(extract_filename("video.mp4"), "video.mp4");
         assert_eq!(extract_filename("./video.mp4"), "video.mp4");
@@ -100,51 +104,77 @@ mod tests {
 
     #[test]
     fn display_name_uses_alias_when_present() {
+        // Given an entry with an alias.
         let entry = ShowNotesEntry {
             path: "/path/to/video.mp4".to_string(),
             filename: "video.mp4".to_string(),
             alias: Some("My Cool Video".to_string()),
             sources: vec![],
         };
+
+        // When getting display name.
+        // Then alias is returned.
         assert_eq!(entry.display_name(), "My Cool Video");
     }
 
     #[test]
     fn display_name_uses_filename_when_no_alias() {
+        // Given an entry without an alias.
         let entry = ShowNotesEntry {
             path: "/path/to/video.mp4".to_string(),
             filename: "video.mp4".to_string(),
             alias: None,
             sources: vec![],
         };
+
+        // When getting display name.
+        // Then filename is returned.
         assert_eq!(entry.display_name(), "video.mp4");
     }
 
     #[test]
     fn format_registry_returns_markdown() {
+        // Given a format registry.
         let registry = FormatRegistry::new();
+
+        // When getting markdown format.
         let format = registry.get("markdown");
+
+        // Then markdown formatter is returned.
         assert!(format.is_some());
         assert_eq!(format.unwrap().name(), "markdown");
     }
 
     #[test]
     fn format_registry_is_case_insensitive() {
+        // Given a format registry.
         let registry = FormatRegistry::new();
+
+        // When looking up formats with different cases.
+        // Then all cases return the format.
         assert!(registry.get("MARKDOWN").is_some());
         assert!(registry.get("Markdown").is_some());
     }
 
     #[test]
     fn format_registry_returns_none_for_unknown() {
+        // Given a format registry.
         let registry = FormatRegistry::new();
+
+        // When looking up an unknown format.
+        // Then none is returned.
         assert!(registry.get("unknown").is_none());
     }
 
     #[test]
     fn format_registry_lists_all_formats() {
+        // Given a format registry.
         let registry = FormatRegistry::new();
+
+        // When listing available formats.
         let formats = registry.available_formats();
+
+        // Then all expected formats are present.
         assert!(formats.contains(&"markdown"));
         assert!(formats.contains(&"plain"));
         assert!(formats.contains(&"html"));

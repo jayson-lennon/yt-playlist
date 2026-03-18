@@ -509,11 +509,15 @@ mod tests {
 
     #[tokio::test]
     async fn load_empty_workspace_returns_empty_data() {
+        // Given an empty storage and workspace.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
+
+        // When loading data.
         let result = storage.load(&working_dir).await;
 
+        // Then the result is empty.
         assert!(result.is_ok());
         let data = result.unwrap();
         assert!(data.playlist.is_empty());
@@ -523,6 +527,7 @@ mod tests {
 
     #[tokio::test]
     async fn save_and_load_playlist() {
+        // Given a storage with playlist data.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -573,10 +578,12 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
         let loaded = storage.load(&working_dir).await.unwrap();
 
+        // Then the loaded data matches the saved data.
         assert_eq!(loaded.playlist.len(), 2);
         assert_eq!(loaded.playlist[0], file1);
         assert_eq!(loaded.playlist[1], file2);
@@ -595,6 +602,7 @@ mod tests {
 
     #[tokio::test]
     async fn virtual_file_handling() {
+        // Given a storage with virtual files.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -633,10 +641,12 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
         let loaded = storage.load(&working_dir).await.unwrap();
 
+        // Then virtual files are preserved.
         assert_eq!(loaded.playlist.len(), 1);
         let meta = loaded.files.get(&virtual_file).unwrap();
         assert!(meta.is_virtual);
@@ -647,6 +657,7 @@ mod tests {
 
     #[tokio::test]
     async fn deleted_file_handling() {
+        // Given a storage with deleted files.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -685,8 +696,10 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
+        // Then deleted flags are preserved.
         let loaded = storage.load(&working_dir).await.unwrap();
         let meta = loaded.files.get(&file).unwrap();
         assert!(meta.deleted);
@@ -697,6 +710,7 @@ mod tests {
 
     #[tokio::test]
     async fn alias_resolution_priority() {
+        // Given aliases for the same file in different workspaces.
         let storage = create_test_storage().await;
 
         let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
@@ -712,7 +726,10 @@ mod tests {
             .await
             .unwrap();
 
+        // When resolving aliases for each workspace.
         let alias_ws1 = storage.resolve_alias(&file, &workspace1).await.unwrap();
+
+        // Then each workspace gets its own alias.
         assert_eq!(alias_ws1, Some("Workspace1 Alias".to_string()));
 
         let alias_ws2 = storage.resolve_alias(&file, &workspace2).await.unwrap();
@@ -721,6 +738,7 @@ mod tests {
 
     #[tokio::test]
     async fn alias_fallback_to_most_recent() {
+        // Given aliases for a file in multiple workspaces.
         let storage = create_test_storage().await;
 
         let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
@@ -740,12 +758,16 @@ mod tests {
             .await
             .unwrap();
 
+        // When resolving alias for a workspace without its own alias.
         let fallback = storage.resolve_alias(&file, &workspace3).await.unwrap();
+
+        // Then a fallback alias is returned.
         assert!(fallback.is_some());
     }
 
     #[tokio::test]
     async fn alias_loaded_with_file_metadata() {
+        // Given a file with an alias set.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -777,7 +799,10 @@ mod tests {
             .await
             .unwrap();
 
+        // When loading the playlist.
         let loaded = storage.load(&working_dir).await.unwrap();
+
+        // Then the alias is included in the file metadata.
         let meta = loaded.files.get(&file).unwrap();
         assert_eq!(meta.alias, Some("My Video".to_string()));
     }
@@ -821,6 +846,7 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_alias_not_overridden_by_other_workspace() {
+        // Given a shared file with different aliases in two workspaces.
         let storage = create_test_storage().await;
 
         let temp1 = TempDir::new().unwrap();
@@ -879,9 +905,11 @@ mod tests {
             .await
             .unwrap();
 
+        // When loading both workspaces.
         let loaded1 = storage.load(&workspace1).await.unwrap();
         let loaded2 = storage.load(&workspace2).await.unwrap();
 
+        // Then each workspace shows its own alias.
         let meta1 = loaded1.files.get(&shared_file).unwrap();
         let meta2 = loaded2.files.get(&shared_file).unwrap();
 
@@ -899,6 +927,7 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_alias_priority_over_fallback() {
+        // Given a shared file with aliases in two workspaces at different times.
         let storage = create_test_storage().await;
 
         let temp1 = TempDir::new().unwrap();
@@ -959,14 +988,18 @@ mod tests {
             .await
             .unwrap();
 
+        // When loading both workspaces and resolving aliases directly.
         let loaded1 = storage.load(&workspace1).await.unwrap();
         let meta1 = loaded1.files.get(&shared_file).unwrap();
+
+        // Then workspace1 shows its own alias despite being older.
         assert_eq!(
             meta1.alias,
             Some("Older Alias from WS1".to_string()),
             "Workspace1 should show its own alias even though workspace2's alias is newer"
         );
 
+        // And workspace2 shows its own alias.
         let loaded2 = storage.load(&workspace2).await.unwrap();
         let meta2 = loaded2.files.get(&shared_file).unwrap();
         assert_eq!(
@@ -975,6 +1008,7 @@ mod tests {
             "Workspace2 should show its own alias"
         );
 
+        // And direct resolution returns correct aliases.
         let direct1 = storage
             .resolve_alias(&shared_file_canonical, &workspace1)
             .await
@@ -989,6 +1023,7 @@ mod tests {
 
     #[tokio::test]
     async fn multiple_workspaces_isolation() {
+        // Given two workspaces with different files.
         let storage = create_test_storage().await;
 
         let temp1 = TempDir::new().unwrap();
@@ -1035,9 +1070,11 @@ mod tests {
             .collect(),
         };
 
+        // When saving both workspaces.
         storage.save(&data1).await.unwrap();
         storage.save(&data2).await.unwrap();
 
+        // Then each workspace loads its own files.
         let loaded1 = storage.load(&workspace1).await.unwrap();
         let loaded2 = storage.load(&workspace2).await.unwrap();
 
@@ -1050,6 +1087,7 @@ mod tests {
 
     #[tokio::test]
     async fn save_overwrites_existing_playlist() {
+        // Given a workspace with an existing playlist.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1091,6 +1129,7 @@ mod tests {
 
         storage.save(&data1).await.unwrap();
 
+        // When saving a new playlist with different files.
         let data2 = PlaylistData {
             working_directory: working_dir.clone(),
             playlist: vec![file3.clone()],
@@ -1111,6 +1150,7 @@ mod tests {
 
         storage.save(&data2).await.unwrap();
 
+        // Then only the new playlist is present.
         let loaded = storage.load(&working_dir).await.unwrap();
         assert_eq!(loaded.playlist.len(), 1);
         assert_eq!(loaded.playlist[0], file3);
@@ -1118,6 +1158,7 @@ mod tests {
 
     #[tokio::test]
     async fn playlist_order_preserved() {
+        // Given a playlist with 10 files in specific order.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1147,8 +1188,10 @@ mod tests {
                 .collect(),
         };
 
+        // When saving and loading the playlist.
         storage.save(&data).await.unwrap();
 
+        // Then the order is preserved.
         let loaded = storage.load(&working_dir).await.unwrap();
         assert_eq!(loaded.playlist.len(), 10);
         for i in 0..10 {
@@ -1158,6 +1201,7 @@ mod tests {
 
     #[tokio::test]
     async fn time_added_preserved() {
+        // Given a file with time_added metadata.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1198,8 +1242,10 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
+        // Then time_added is preserved for all files.
         let loaded = storage.load(&working_dir).await.unwrap();
         let meta = loaded.files.get(&file).unwrap();
         assert!(meta.time_added.is_some());
@@ -1210,12 +1256,17 @@ mod tests {
 
     #[tokio::test]
     async fn storage_name() {
+        // Given a sqlite storage.
         let storage = create_test_storage().await;
+
+        // When getting the storage name.
+        // Then it returns "sqlite".
         assert_eq!(storage.name(), "sqlite");
     }
 
     #[tokio::test]
     async fn upsert_file_metadata_updates_existing() {
+        // Given a file with initial metadata.
         let storage = create_test_storage().await;
 
         let file = PathBuf::from("/test/file.mp4");
@@ -1242,6 +1293,7 @@ mod tests {
             .unwrap();
         assert_eq!(loaded1.duration, Some(Duration::from_secs(100)));
 
+        // When updating the metadata with new values.
         let meta2 = FileMetadata {
             duration: Some(Duration::from_secs(200)),
             is_virtual: false,
@@ -1253,6 +1305,7 @@ mod tests {
 
         storage.upsert_file_metadata(file_id, &meta2).await.unwrap();
 
+        // Then the metadata is updated.
         let loaded2 = storage
             .get_file_metadata(file_id, workspace_id)
             .await
@@ -1264,20 +1317,28 @@ mod tests {
 
     #[tokio::test]
     async fn virtual_file_flag_toggles() {
+        // Given a file in storage.
         let storage = create_test_storage().await;
 
         let file = PathBuf::from("/test/file.mp4");
         let file_id = storage.get_or_create_file_path(&file).await.unwrap();
 
+        // When setting virtual to true.
         storage.upsert_virtual_file(file_id, true).await.unwrap();
+
+        // Then the file is marked as virtual.
         assert!(storage.is_virtual_file(file_id).await.unwrap());
 
+        // When setting virtual to false.
         storage.upsert_virtual_file(file_id, false).await.unwrap();
+
+        // Then the file is no longer marked as virtual.
         assert!(!storage.is_virtual_file(file_id).await.unwrap());
     }
 
     #[tokio::test]
     async fn playlist_item_duration_is_persisted() {
+        // Given a playlist item with duration metadata.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1302,10 +1363,12 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
         let loaded = storage.load(&working_dir).await.unwrap();
 
+        // Then the duration is persisted.
         assert_eq!(loaded.playlist.len(), 1);
         assert_eq!(loaded.playlist[0], file);
 
@@ -1318,6 +1381,7 @@ mod tests {
 
     #[tokio::test]
     async fn library_file_duration_is_persisted() {
+        // Given a playlist with both playlist items and library files.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1356,10 +1420,12 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
         let loaded = storage.load(&working_dir).await.unwrap();
 
+        // Then library file duration is persisted.
         assert_eq!(loaded.playlist.len(), 1);
         assert!(loaded.files.contains_key(&library_file));
 
@@ -1370,6 +1436,7 @@ mod tests {
 
     #[tokio::test]
     async fn full_metadata_preserved_across_save_load_cycle() {
+        // Given a playlist with playlist items, library files, and virtual files.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1421,10 +1488,12 @@ mod tests {
             .collect(),
         };
 
+        // When saving and loading the data.
         storage.save(&data).await.unwrap();
 
         let loaded = storage.load(&working_dir).await.unwrap();
 
+        // Then all metadata is preserved for all file types.
         assert_eq!(loaded.playlist.len(), 2);
         assert_eq!(loaded.playlist[0], playlist_file);
         assert_eq!(loaded.playlist[1], virtual_file);
@@ -1454,6 +1523,7 @@ mod tests {
 
     #[tokio::test]
     async fn duration_updated_on_resave() {
+        // Given a file with initial duration.
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
@@ -1485,6 +1555,7 @@ mod tests {
             Some(Duration::from_secs(100))
         );
 
+        // When saving with an updated duration.
         data.files.insert(
             file.clone(),
             FileMetadata {
@@ -1499,6 +1570,7 @@ mod tests {
 
         storage.save(&data).await.unwrap();
 
+        // Then the duration is updated.
         let loaded2 = storage.load(&working_dir).await.unwrap();
         assert_eq!(
             loaded2.files.get(&file).unwrap().duration,
@@ -1508,6 +1580,7 @@ mod tests {
 
     #[tokio::test]
     async fn alias_resolution_with_different_path_formats() {
+        // Given a file with an alias.
         let storage = create_test_storage().await;
 
         let temp = TempDir::new().unwrap();
@@ -1540,12 +1613,16 @@ mod tests {
             .await
             .unwrap();
 
+        // When resolving the alias directly and loading the playlist.
         let alias_same = storage
             .resolve_alias(&file_canonical, &workspace)
             .await
             .unwrap();
+
+        // Then the alias is returned.
         assert_eq!(alias_same, Some("My Alias".to_string()));
 
+        // And the alias is included in loaded metadata.
         let loaded = storage.load(&workspace).await.unwrap();
         let meta = loaded.files.get(&file).unwrap();
         assert_eq!(meta.alias, Some("My Alias".to_string()));
@@ -1553,14 +1630,19 @@ mod tests {
 
     #[tokio::test]
     async fn get_path_counts_returns_empty_when_no_playlists() {
+        // Given an empty storage.
         let storage = create_test_storage().await;
 
+        // When getting path counts.
         let counts = storage.get_path_counts().await.unwrap();
+
+        // Then the result is empty.
         assert!(counts.is_empty());
     }
 
     #[tokio::test]
     async fn get_path_counts_returns_correct_counts_for_multiple_workspaces() {
+        // Given two workspaces with overlapping files.
         let storage = create_test_storage().await;
 
         let temp1 = TempDir::new().unwrap();
@@ -1623,8 +1705,10 @@ mod tests {
         storage.save(&data1).await.unwrap();
         storage.save(&data2).await.unwrap();
 
+        // When getting path counts.
         let counts = storage.get_path_counts().await.unwrap();
 
+        // Then counts reflect how many workspaces contain each file.
         let file1_id = storage
             .resolve_file_path_id(&file1)
             .await
@@ -1642,6 +1726,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_path_counts_file_in_single_workspace_has_count_one() {
+        // Given a file in a single workspace.
         let storage = create_test_storage().await;
 
         let temp = TempDir::new().unwrap();
@@ -1669,8 +1754,10 @@ mod tests {
 
         storage.save(&data).await.unwrap();
 
+        // When getting path counts.
         let counts = storage.get_path_counts().await.unwrap();
 
+        // Then the file has count 1.
         let file_id = storage.resolve_file_path_id(&file).await.unwrap().unwrap();
         assert_eq!(counts.get(&file_id), Some(&1));
     }

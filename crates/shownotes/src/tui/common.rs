@@ -206,28 +206,48 @@ mod tests {
 
     #[test]
     fn format_duration_formats_seconds() {
+        // Given a duration of 65 seconds.
         let duration = Duration::from_secs(65);
+
+        // When formatting the duration.
         let result = format_duration(Some(duration));
+
+        // Then it displays as [00:01:05].
         assert_eq!(result, "[00:01:05]");
     }
 
     #[test]
     fn format_duration_formats_hours() {
+        // Given a duration of 3661 seconds (1 hour, 1 minute, 1 second).
         let duration = Duration::from_secs(3661);
+
+        // When formatting the duration.
         let result = format_duration(Some(duration));
+
+        // Then it displays as [01:01:01].
         assert_eq!(result, "[01:01:01]");
     }
 
     #[test]
     fn format_duration_handles_zero() {
+        // Given a duration of 0 seconds.
         let duration = Duration::from_secs(0);
+
+        // When formatting the duration.
         let result = format_duration(Some(duration));
+
+        // Then it displays as [00:00:00].
         assert_eq!(result, "[00:00:00]");
     }
 
     #[test]
     fn format_duration_handles_none() {
+        // Given no duration.
+
+        // When formatting None.
         let result = format_duration(None);
+
+        // Then it displays as [--:--:--].
         assert_eq!(result, "[--:--:--]");
     }
 
@@ -240,34 +260,55 @@ mod tests {
     #[case(3600, "[01:00:00]")]
     #[case(86399, "[23:59:59]")]
     fn format_duration_various_cases(#[case] secs: u64, #[case] expected: &str) {
+        // Given / When / Then inline for simple cases
         assert_eq!(format_duration(Some(Duration::from_secs(secs))), expected);
     }
 
     #[test]
     fn get_display_name_returns_alias_when_set() {
+        // Given an item with an alias.
         let item = item_with_alias("/path/to/video.mp4", "My Video");
+
+        // When getting the display name.
         let result = get_display_name(&item);
+
+        // Then it returns the alias.
         assert_eq!(result, "My Video");
     }
 
     #[test]
     fn get_display_name_returns_filename_when_no_alias() {
+        // Given an item without an alias.
         let item = item("/path/to/video.mp4");
+
+        // When getting the display name.
         let result = get_display_name(&item);
+
+        // Then it returns the file stem.
         assert_eq!(result, "video");
     }
 
     #[test]
     fn get_display_name_handles_path_without_filename() {
+        // Given an item with a directory path.
         let item = item("/path/to/dir/");
+
+        // When getting the display name.
         let result = get_display_name(&item);
+
+        // Then it returns the directory name.
         assert_eq!(result, "dir");
     }
 
     #[test]
     fn filter_items_returns_all_when_no_filter() {
+        // Given a list of items with no filter.
         let items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+
+        // When filtering with empty input and no applied filter.
         let result = filter_items(&items, "", None);
+
+        // Then all items are returned with original indices.
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].0, 0);
         assert_eq!(result[1].0, 1);
@@ -276,8 +317,13 @@ mod tests {
 
     #[test]
     fn filter_items_filters_by_pattern() {
+        // Given a list of items.
         let items = vec![item("apple.mp4"), item("banana.mp4"), item("cherry.mp4")];
+
+        // When filtering with pattern "an".
         let result = filter_items(&items, "an", None);
+
+        // Then only matching items are returned.
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0].1.path,
@@ -287,9 +333,14 @@ mod tests {
 
     #[test]
     fn filter_items_uses_applied_filter_when_input_empty() {
+        // Given a list of items and an applied filter.
         let items = vec![item("test.mp4"), item("other.mp4")];
         let applied = String::from("test");
+
+        // When filtering with empty input but an applied filter.
         let result = filter_items(&items, "", Some(&applied));
+
+        // Then the applied filter is used.
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0].1.path,
@@ -299,9 +350,14 @@ mod tests {
 
     #[test]
     fn filter_items_prefers_input_over_applied() {
+        // Given a list of items with both input and applied filter.
         let items = vec![item("apple.mp4"), item("banana.mp4")];
         let applied = String::from("apple");
+
+        // When filtering with input that differs from applied filter.
         let result = filter_items(&items, "banana", Some(&applied));
+
+        // Then the input filter takes precedence.
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0].1.path,
@@ -311,58 +367,94 @@ mod tests {
 
     #[test]
     fn filter_items_returns_empty_when_no_match() {
+        // Given a list of items.
         let items = vec![item("apple.mp4"), item("banana.mp4")];
+
+        // When filtering with a pattern that matches nothing.
         let result = filter_items(&items, "xyz", None);
+
+        // Then an empty list is returned.
         assert!(result.is_empty());
     }
 
     #[test]
     fn filter_items_searches_alias() {
+        // Given items with aliases.
         let items = vec![
             item_with_alias("a.mp4", "First Video"),
             item_with_alias("b.mp4", "Second Clip"),
         ];
+
+        // When filtering by alias content.
         let result = filter_items(&items, "Second", None);
+
+        // Then items matching the alias are returned.
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].1.alias, Some("Second Clip".to_string()));
     }
 
     #[test]
     fn filter_items_preserves_original_indices() {
+        // Given a list of items.
         let items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+
+        // When filtering for the last item.
         let result = filter_items(&items, "c", None);
+
+        // Then the original index is preserved.
         assert_eq!(result[0].0, 2);
     }
 
     #[test]
     fn format_mime_type_returns_full_mime_for_video() {
+        // Given a video mime type.
         let mime = "video/mp4";
+
+        // When formatting the mime type.
         let result = format_mime_type(Some(mime));
+
+        // Then it returns the full mime type.
         assert_eq!(result, "video/mp4");
     }
 
     #[test]
     fn format_mime_type_returns_full_mime_for_audio() {
+        // Given an audio mime type.
         let mime = "audio/mpeg";
+
+        // When formatting the mime type.
         let result = format_mime_type(Some(mime));
+
+        // Then it returns the full mime type.
         assert_eq!(result, "audio/mpeg");
     }
 
     #[test]
     fn format_mime_type_returns_subtype_for_application() {
+        // Given an application mime type.
         let mime = "application/pdf";
+
+        // When formatting the mime type.
         let result = format_mime_type(Some(mime));
+
+        // Then it returns only the subtype.
         assert_eq!(result, "pdf");
     }
 
     #[test]
     fn format_mime_type_returns_unknown_for_none() {
+        // Given no mime type.
+
+        // When formatting None.
         let result = format_mime_type(None);
+
+        // Then it returns "unknown".
         assert_eq!(result, "unknown");
     }
 
     #[test]
     fn format_item_line_formats_with_duration_and_alias() {
+        // Given an item with duration, alias, and mime type.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -372,12 +464,17 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it includes mime type, duration, file stem, and alias.
         assert_eq!(result, "[video/mp4] [00:01:05] video / My Video");
     }
 
     #[test]
     fn format_item_line_formats_with_duration_no_alias() {
+        // Given an item with duration and mime type but no alias.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -387,12 +484,17 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it includes mime type, duration, and file stem without alias.
         assert_eq!(result, "[video/mp4] [00:01:05] video");
     }
 
     #[test]
     fn format_item_line_formats_without_duration_with_alias() {
+        // Given an item with alias and mime type but no duration.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/doc.pdf"))),
             duration: None,
@@ -402,12 +504,17 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it shows placeholder duration and includes alias.
         assert_eq!(result, "[pdf] [--:--:--] doc / My Doc");
     }
 
     #[test]
     fn format_item_line_formats_without_duration_or_alias() {
+        // Given an item with mime type but no duration or alias.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/doc.pdf"))),
             duration: None,
@@ -417,12 +524,17 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it shows placeholder duration and file stem only.
         assert_eq!(result, "[pdf] [--:--:--] doc");
     }
 
     #[test]
     fn format_item_line_uses_unknown_when_no_mime() {
+        // Given an item without mime type.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.xyz"))),
             duration: None,
@@ -432,12 +544,17 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it shows "unknown" for mime type.
         assert_eq!(result, "[unknown] [--:--:--] file");
     }
 
     #[test]
     fn format_item_line_shows_full_url_for_virtual_items() {
+        // Given a virtual item with a URL path.
         let item = PlaylistItem {
             path: ItemPath::Url("https://youtube.com/watch?v=abc123".to_string()),
             duration: None,
@@ -447,7 +564,11 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it shows the full URL.
         assert_eq!(
             result,
             "[url] [--:--:--] https://youtube.com/watch?v=abc123"
@@ -456,6 +577,7 @@ mod tests {
 
     #[test]
     fn format_item_line_shows_full_url_with_alias() {
+        // Given a virtual item with URL and alias.
         let item = PlaylistItem {
             path: ItemPath::Url("https://youtube.com/watch?v=abc123".to_string()),
             duration: None,
@@ -465,7 +587,11 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it shows the full URL with alias.
         assert_eq!(
             result,
             "[url] [--:--:--] https://youtube.com/watch?v=abc123 / My Video"
@@ -474,6 +600,7 @@ mod tests {
 
     #[test]
     fn format_item_line_shows_file_stem_for_non_virtual_items() {
+        // Given a non-virtual file item.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: None,
@@ -483,26 +610,41 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line.
         let result = format_item_line(&item, ItemDisplayMode::Path, 0, 0, 2);
+
+        // Then it shows the file stem.
         assert_eq!(result, "[video/mp4] [--:--:--] video");
     }
 
     #[test]
     fn format_mime_type_shows_url_without_extra_brackets() {
+        // Given a "url" mime type.
         let mime = "url";
+
+        // When formatting the mime type.
         let result = format_mime_type(Some(mime));
+
+        // Then it returns "url" without extra formatting.
         assert_eq!(result, "url");
     }
 
     #[test]
     fn format_mime_type_shows_deleted_without_extra_brackets() {
+        // Given a "deleted" mime type.
         let mime = "deleted";
+
+        // When formatting the mime type.
         let result = format_mime_type(Some(mime));
+
+        // Then it returns "deleted" without extra formatting.
         assert_eq!(result, "deleted");
     }
 
     #[test]
     fn format_item_line_no_count_shown_when_count_is_zero() {
+        // Given an item with playlist_count of 0.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -512,12 +654,17 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When formatting the item line with count 0.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 0, 2);
+
+        // Then no count is shown.
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
     #[test]
     fn format_item_line_no_count_shown_when_count_is_one() {
+        // Given an item with playlist_count of 1.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -527,12 +674,17 @@ mod tests {
             playlist_count: 1,
             has_sources: true,
         };
+
+        // When formatting the item line with count 1 and min_count 2.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 80, 1, 2);
+
+        // Then no count is shown (below threshold).
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
     #[test]
     fn format_item_line_shows_count_when_count_is_two() {
+        // Given an item with playlist_count of 2.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -542,12 +694,17 @@ mod tests {
             playlist_count: 2,
             has_sources: true,
         };
+
+        // When formatting the item line with count 2 and min_count 2.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 2, 2);
+
+        // Then the count is shown.
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (2)");
     }
 
     #[test]
     fn format_item_line_shows_count_when_count_is_three() {
+        // Given an item with playlist_count of 3.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -557,12 +714,17 @@ mod tests {
             playlist_count: 3,
             has_sources: true,
         };
+
+        // When formatting the item line with count 3 and min_count 2.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 3, 2);
+
+        // Then the count is shown.
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (3)");
     }
 
     #[test]
     fn format_item_line_no_count_when_pane_width_is_zero() {
+        // Given an item with playlist_count of 5.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -572,12 +734,17 @@ mod tests {
             playlist_count: 5,
             has_sources: true,
         };
+
+        // When formatting with pane width 0.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 0, 5, 2);
+
+        // Then no count is shown.
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
     #[test]
     fn format_item_line_no_count_when_line_too_long() {
+        // Given an item with playlist_count of 2.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -587,12 +754,17 @@ mod tests {
             playlist_count: 2,
             has_sources: true,
         };
+
+        // When formatting with a narrow pane width.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 20, 2, 2);
+
+        // Then no count is shown (not enough room).
         assert_eq!(result, "[video/mp4] [00:01:05] My Video");
     }
 
     #[test]
     fn format_item_line_shows_count_when_min_count_is_one_and_count_is_one() {
+        // Given an item with playlist_count of 1.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
             duration: Some(Duration::from_secs(65)),
@@ -602,7 +774,11 @@ mod tests {
             playlist_count: 1,
             has_sources: true,
         };
+
+        // When formatting with min_count 1.
         let result = format_item_line(&item, ItemDisplayMode::Alias, 50, 1, 1);
+
+        // Then the count is shown (meets threshold).
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (1)");
     }
 }

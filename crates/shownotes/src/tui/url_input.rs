@@ -159,40 +159,50 @@ mod tests {
 
     #[test]
     fn start_clears_input_and_activates() {
+        // Given a new URL input component.
         let mut url_input = UrlInput::new();
 
+        // When starting input.
         url_input.start();
 
+        // Then it is active with empty input.
         assert!(url_input.is_active());
         assert!(url_input.input.is_empty());
     }
 
     #[test]
     fn cancel_clears_state() {
+        // Given an active URL input with some characters.
         let mut url_input = UrlInput::new();
         url_input.start();
         url_input.push_char('h');
         url_input.push_char('t');
 
+        // When canceling input.
         url_input.cancel();
 
+        // Then it becomes inactive with empty input.
         assert!(!url_input.is_active());
         assert!(url_input.input.is_empty());
     }
 
     #[test]
     fn push_char_appends_to_input() {
+        // Given an active URL input.
         let mut url_input = UrlInput::new();
         url_input.start();
 
+        // When pushing characters.
         url_input.push_char('a');
         url_input.push_char('b');
 
+        // Then the input contains the appended characters.
         assert_eq!(url_input.input(), "ab");
     }
 
     #[test]
     fn pop_char_removes_last_character() {
+        // Given an active URL input with characters.
         let mut url_input = UrlInput::new();
         url_input.start();
         url_input.push_char('h');
@@ -200,25 +210,32 @@ mod tests {
         url_input.push_char('t');
         url_input.push_char('p');
 
+        // When popping a character.
         url_input.pop_char();
 
+        // Then the last character is removed.
         assert_eq!(url_input.input(), "htt");
     }
 
     #[test]
     fn pop_char_does_nothing_on_empty_input() {
+        // Given an active URL input with no characters.
         let mut url_input = UrlInput::new();
         url_input.start();
 
+        // When popping a character.
         url_input.pop_char();
 
+        // Then the input remains empty.
         assert!(url_input.input().is_empty());
     }
 
     #[test]
     fn multiple_start_cancel_cycles() {
+        // Given a URL input component.
         let mut url_input = UrlInput::new();
 
+        // When starting and canceling multiple times.
         url_input.start();
         url_input.push_char('a');
         url_input.cancel();
@@ -229,36 +246,45 @@ mod tests {
         url_input.cancel();
         assert!(!url_input.is_active());
 
+        // Then the input is empty after all cycles.
         assert!(url_input.input.is_empty());
     }
 
     #[test]
     fn default_creates_inactive_url_input() {
+        // Given a default URL input.
         let url_input = UrlInput::default();
 
+        // Then it is inactive with empty input.
         assert!(!url_input.is_active());
         assert!(url_input.input.is_empty());
     }
 
     #[test]
     fn handle_key_returns_ignored_when_inactive() {
+        // Given an inactive URL input.
         let mut url_input = UrlInput::new();
 
+        // When handling a key press.
         let key = KeyEvent::from(KeyCode::Char('a'));
         let result = url_input.handle_key(key);
 
+        // Then the key is not consumed.
         assert!(!result.is_consumed());
     }
 
     #[test]
     fn handle_key_esc_cancels_url_input() {
+        // Given an active URL input with characters.
         let mut url_input = UrlInput::new();
         url_input.start();
         url_input.push_char('h');
 
+        // When pressing Escape.
         let key = KeyEvent::from(KeyCode::Esc);
         let result = url_input.handle_key(key);
 
+        // Then the input is canceled and cleared.
         assert!(result.is_consumed());
         assert!(!url_input.is_active());
         assert!(url_input.input.is_empty());
@@ -266,14 +292,17 @@ mod tests {
 
     #[test]
     fn handle_key_enter_returns_url_submit_action() {
+        // Given an active URL input with characters.
         let mut url_input = UrlInput::new();
         url_input.start();
         url_input.push_char('h');
         url_input.push_char('t');
 
+        // When pressing Enter.
         let key = KeyEvent::from(KeyCode::Enter);
         let result = url_input.handle_key(key);
 
+        // Then a UrlSubmit action is returned and input is deactivated.
         assert!(result.is_consumed());
         assert_eq!(result.actions.len(), 1);
         assert_eq!(
@@ -285,12 +314,15 @@ mod tests {
 
     #[test]
     fn handle_key_enter_submits_empty_string() {
+        // Given an active URL input with no characters.
         let mut url_input = UrlInput::new();
         url_input.start();
 
+        // When pressing Enter.
         let key = KeyEvent::from(KeyCode::Enter);
         let result = url_input.handle_key(key);
 
+        // Then an empty UrlSubmit action is returned.
         assert!(result.is_consumed());
         assert_eq!(result.actions.len(), 1);
         assert_eq!(
@@ -302,38 +334,47 @@ mod tests {
 
     #[test]
     fn handle_key_backspace_pops_char() {
+        // Given an active URL input with characters.
         let mut url_input = UrlInput::new();
         url_input.start();
         url_input.push_char('a');
         url_input.push_char('b');
 
+        // When pressing Backspace.
         let key = KeyEvent::from(KeyCode::Backspace);
         let result = url_input.handle_key(key);
 
+        // Then the last character is removed.
         assert!(result.is_consumed());
         assert_eq!(url_input.input(), "a");
     }
 
     #[test]
     fn handle_key_char_pushes_char() {
+        // Given an active URL input.
         let mut url_input = UrlInput::new();
         url_input.start();
 
+        // When pressing a character key.
         let key = KeyEvent::from(KeyCode::Char('x'));
         let result = url_input.handle_key(key);
 
+        // Then the character is added to the input.
         assert!(result.is_consumed());
         assert_eq!(url_input.input(), "x");
     }
 
     #[test]
     fn handle_key_consumes_all_keys_when_active() {
+        // Given an active URL input.
         let mut url_input = UrlInput::new();
         url_input.start();
 
+        // When pressing any key (e.g., F1).
         let key = KeyEvent::from(KeyCode::F(1));
         let result = url_input.handle_key(key);
 
+        // Then the key is consumed.
         assert!(result.is_consumed());
     }
 }

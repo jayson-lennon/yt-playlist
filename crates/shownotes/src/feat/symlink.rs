@@ -54,13 +54,16 @@ mod tests {
 
     #[test]
     fn creates_symlink_with_original_name() {
+        // Given a target file and destination directory.
         let temp = TempDir::new().unwrap();
         let target = temp.path().join("video.mp4");
         std::fs::write(&target, "content").unwrap();
-
         let dest_dir = TempDir::new().unwrap();
+
+        // When creating a symlink.
         let result = create_symlink_with_suffix(&target, dest_dir.path());
 
+        // Then the symlink is created with the original name.
         assert!(result.is_ok());
         let link = result.unwrap();
         assert_eq!(link.file_name().unwrap().to_str().unwrap(), "video.mp4");
@@ -68,6 +71,7 @@ mod tests {
 
     #[test]
     fn appends_suffix_when_file_exists() {
+        // Given a target file and a destination with an existing file.
         let temp = TempDir::new().unwrap();
         let target = temp.path().join("video.mp4");
         std::fs::write(&target, "content").unwrap();
@@ -75,8 +79,10 @@ mod tests {
         let dest_dir = TempDir::new().unwrap();
         std::fs::write(dest_dir.path().join("video.mp4"), "existing").unwrap();
 
+        // When creating a symlink.
         let result = create_symlink_with_suffix(&target, dest_dir.path());
 
+        // Then the symlink is created with a numeric suffix.
         assert!(result.is_ok());
         let link = result.unwrap();
         assert_eq!(link.file_name().unwrap().to_str().unwrap(), "video_1.mp4");
@@ -84,6 +90,7 @@ mod tests {
 
     #[test]
     fn appends_incrementing_suffix() {
+        // Given a target file and a destination with multiple existing files.
         let temp = TempDir::new().unwrap();
         let target = temp.path().join("video.mp4");
         std::fs::write(&target, "content").unwrap();
@@ -92,8 +99,10 @@ mod tests {
         std::fs::write(dest_dir.path().join("video.mp4"), "existing").unwrap();
         std::fs::write(dest_dir.path().join("video_1.mp4"), "existing1").unwrap();
 
+        // When creating a symlink.
         let result = create_symlink_with_suffix(&target, dest_dir.path());
 
+        // Then the symlink uses the next available suffix.
         assert!(result.is_ok());
         let link = result.unwrap();
         assert_eq!(link.file_name().unwrap().to_str().unwrap(), "video_2.mp4");
@@ -101,6 +110,7 @@ mod tests {
 
     #[test]
     fn handles_files_without_extension() {
+        // Given a target file without extension and a destination with an existing file.
         let temp = TempDir::new().unwrap();
         let target = temp.path().join("README");
         std::fs::write(&target, "content").unwrap();
@@ -108,8 +118,10 @@ mod tests {
         let dest_dir = TempDir::new().unwrap();
         std::fs::write(dest_dir.path().join("README"), "existing").unwrap();
 
+        // When creating a symlink.
         let result = create_symlink_with_suffix(&target, dest_dir.path());
 
+        // Then the symlink is created with a suffix and no extension.
         assert!(result.is_ok());
         let link = result.unwrap();
         assert_eq!(link.file_name().unwrap().to_str().unwrap(), "README_1");
@@ -117,9 +129,13 @@ mod tests {
 
     #[test]
     fn fails_when_target_has_no_filename() {
+        // Given a target path with no filename.
         let dest_dir = TempDir::new().unwrap();
+
+        // When creating a symlink from a path with no filename.
         let result = create_symlink_with_suffix(Path::new("/"), dest_dir.path());
 
+        // Then the operation fails.
         assert!(result.is_err());
     }
 

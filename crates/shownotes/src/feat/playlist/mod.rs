@@ -266,11 +266,16 @@ mod tests {
 
     #[tokio::test]
     async fn playlist_storage_delegates_to_backend() {
+        // Given a service with a fake backend.
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
+
+        // When loading from storage.
         let result = storage.load(&working_dir).await;
+
+        // Then the backend was called and result is successful.
         assert!(result.is_ok());
         assert_eq!(
             backend
@@ -282,6 +287,7 @@ mod tests {
 
     #[tokio::test]
     async fn playlist_storage_save_delegates_to_backend() {
+        // Given a service with a fake backend and playlist data.
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let backend = Arc::new(FakeStorageBackend::default());
@@ -291,7 +297,11 @@ mod tests {
             playlist: Vec::new(),
             files: HashMap::new(),
         };
+
+        // When saving to storage.
         let result = storage.save(&data).await;
+
+        // Then the backend was called and result is successful.
         assert!(result.is_ok());
         assert_eq!(
             backend
@@ -303,6 +313,7 @@ mod tests {
 
     #[test]
     fn file_metadata_can_be_cloned() {
+        // Given file metadata with various fields.
         let metadata = FileMetadata {
             duration: Some(Duration::from_secs(120)),
             is_virtual: false,
@@ -311,7 +322,11 @@ mod tests {
             time_added: None,
             alias: Some("My Video".to_string()),
         };
+
+        // When cloning the metadata.
         let cloned = metadata.clone();
+
+        // Then all fields are equal.
         assert_eq!(cloned.duration, metadata.duration);
         assert_eq!(cloned.time_added, metadata.time_added);
         assert_eq!(cloned.alias, metadata.alias);
@@ -319,20 +334,25 @@ mod tests {
 
     #[tokio::test]
     async fn playlist_storage_upsert_alias_delegates_to_backend() {
+        // Given a service with a fake backend.
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
 
+        // When upserting an alias.
         let file = CanonicalPath::new(PathBuf::from("/test/video.mp4"));
         let result = storage
             .upsert_alias(&file, &working_dir, "My Video")
             .await;
+
+        // Then the result is successful.
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn playlist_storage_resolve_alias_delegates_to_backend() {
+        // Given a service with a fake backend and an existing alias.
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let backend = Arc::new(FakeStorageBackend::default());
@@ -344,7 +364,10 @@ mod tests {
             .await
             .unwrap();
 
+        // When resolving the alias.
         let result = storage.resolve_alias(&file, &working_dir).await;
+
+        // Then the alias is returned.
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Some("My Video".to_string()));
     }

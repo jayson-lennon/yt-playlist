@@ -341,6 +341,7 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_isolation() {
+        // Given a backend with two workspaces containing different files.
         let backend = FakeStorageBackend::new();
 
         let temp1 = TempDir::new().unwrap();
@@ -370,9 +371,11 @@ mod tests {
         backend.save(&data1).await.unwrap();
         backend.save(&data2).await.unwrap();
 
+        // When loading data from each workspace.
         let loaded1 = backend.load(&workspace1).await.unwrap();
         let loaded2 = backend.load(&workspace2).await.unwrap();
 
+        // Then each workspace has its own files and unique IDs.
         assert_eq!(loaded1.playlist.len(), 1);
         assert_eq!(loaded1.playlist[0], file1);
         assert_eq!(loaded2.playlist.len(), 1);
@@ -385,6 +388,7 @@ mod tests {
 
     #[tokio::test]
     async fn alias_resolution_priority() {
+        // Given a file with different aliases in different workspaces.
         let backend = FakeStorageBackend::new();
 
         let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
@@ -409,15 +413,18 @@ mod tests {
             );
         }
 
+        // When resolving aliases for each workspace.
         let alias1 = backend.resolve_alias(&file, &workspace1).await.unwrap();
         let alias2 = backend.resolve_alias(&file, &workspace2).await.unwrap();
 
+        // Then each workspace gets its own alias.
         assert_eq!(alias1, Some("alias_ws1".to_string()));
         assert_eq!(alias2, Some("alias_ws2".to_string()));
     }
 
     #[tokio::test]
     async fn alias_fallback_to_most_recent() {
+        // Given a file with aliases at different timestamps and an unknown workspace.
         let backend = FakeStorageBackend::new();
 
         let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
@@ -446,15 +453,19 @@ mod tests {
             );
         }
 
+        // When resolving the alias from an unknown workspace.
         let alias = backend
             .resolve_alias(&file, &unknown_workspace)
             .await
             .unwrap();
+
+        // Then the most recent alias is returned.
         assert_eq!(alias, Some("newer_alias".to_string()));
     }
 
     #[tokio::test]
     async fn alias_loaded_with_file_metadata() {
+        // Given a workspace with a file that has an alias.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
@@ -476,13 +487,17 @@ mod tests {
             .await
             .unwrap();
 
+        // When loading the playlist data.
         let loaded = backend.load(&workspace).await.unwrap();
+
+        // Then the alias is included in the file metadata.
         let meta = loaded.files.get(&file).unwrap();
         assert_eq!(meta.alias, Some("My File".to_string()));
     }
 
     #[tokio::test]
     async fn virtual_file_handling() {
+        // Given a workspace with both virtual and regular files.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
@@ -523,9 +538,11 @@ mod tests {
 
         backend.save(&data).await.unwrap();
 
+        // When checking virtual file status and loading data.
         assert!(backend.is_virtual_file(&virtual_file));
         assert!(!backend.is_virtual_file(&regular_file));
 
+        // Then virtual files are correctly identified.
         let loaded = backend.load(&workspace).await.unwrap();
         assert!(loaded.files.get(&virtual_file).unwrap().is_virtual);
         assert!(!loaded.files.get(&regular_file).unwrap().is_virtual);
@@ -533,6 +550,7 @@ mod tests {
 
     #[tokio::test]
     async fn metadata_persistence() {
+        // Given a workspace with a file containing metadata.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
@@ -550,9 +568,11 @@ mod tests {
 
         backend.save(&data).await.unwrap();
 
+        // When loading the data and fetching metadata directly.
         let loaded = backend.load(&workspace).await.unwrap();
         let loaded_metadata = loaded.files.get(&file).unwrap();
 
+        // Then the metadata is correctly persisted.
         assert_eq!(loaded_metadata.duration, original_metadata.duration);
         assert_eq!(loaded_metadata.mime_type, original_metadata.mime_type);
         assert_eq!(loaded_metadata.deleted, original_metadata.deleted);
@@ -563,6 +583,7 @@ mod tests {
 
     #[tokio::test]
     async fn load_and_save_counters() {
+        // Given a new backend with zero counters.
         let backend = FakeStorageBackend::new();
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
@@ -570,6 +591,7 @@ mod tests {
         assert_eq!(backend.load_called.load(Ordering::SeqCst), 0);
         assert_eq!(backend.save_called.load(Ordering::SeqCst), 0);
 
+        // When calling load and save operations.
         backend.load(&workspace).await.unwrap();
         assert_eq!(backend.load_called.load(Ordering::SeqCst), 1);
 
@@ -583,11 +605,14 @@ mod tests {
 
         backend.load(&workspace).await.unwrap();
         backend.load(&workspace).await.unwrap();
+
+        // Then the counters accurately track call counts.
         assert_eq!(backend.load_called.load(Ordering::SeqCst), 3);
     }
 
     #[tokio::test]
     async fn playlist_order_preserved() {
+        // Given a workspace with files in a specific order.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
@@ -607,17 +632,24 @@ mod tests {
 
         backend.save(&data).await.unwrap();
 
+        // When loading the playlist.
         let loaded = backend.load(&workspace).await.unwrap();
+
+        // Then the order is preserved.
         assert_eq!(loaded.playlist, files);
     }
 
     #[tokio::test]
     async fn empty_workspace_returns_empty_playlist() {
+        // Given a backend with an empty workspace.
         let backend = FakeStorageBackend::new();
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
 
+        // When loading from an empty workspace.
         let loaded = backend.load(&workspace).await.unwrap();
+
+        // Then the playlist and files are empty.
         assert!(loaded.playlist.is_empty());
         assert!(loaded.files.is_empty());
         assert_eq!(loaded.working_directory, workspace);
@@ -625,17 +657,20 @@ mod tests {
 
     #[tokio::test]
     async fn upsert_alias_trait_method() {
+        // Given a backend and a file.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
         let file = CanonicalPath::new(PathBuf::from("/test/file.mp3"));
 
+        // When upserting an alias.
         backend
             .upsert_alias(&file, &workspace, "My File")
             .await
             .unwrap();
 
+        // Then the alias can be resolved.
         let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
         assert_eq!(alias, Some("My File".to_string()));
     }
@@ -666,26 +701,35 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_alias_returns_none_for_unknown_file() {
+        // Given a backend with no aliases.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
         let file = CanonicalPath::new(PathBuf::from("/unknown/file.mp3"));
 
+        // When resolving an alias for an unknown file.
         let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
+
+        // Then no alias is returned.
         assert!(alias.is_none());
     }
 
     #[tokio::test]
     async fn get_path_counts_returns_empty_when_no_playlists() {
+        // Given a backend with no saved playlists.
         let backend = FakeStorageBackend::new();
 
+        // When getting path counts.
         let counts = backend.get_path_counts().await.unwrap();
+
+        // Then the result is empty.
         assert!(counts.is_empty());
     }
 
     #[tokio::test]
     async fn get_path_counts_returns_correct_counts_for_multiple_workspaces() {
+        // Given two workspaces with overlapping files.
         let backend = FakeStorageBackend::new();
 
         let temp1 = TempDir::new().unwrap();
@@ -718,8 +762,10 @@ mod tests {
         backend.save(&data1).await.unwrap();
         backend.save(&data2).await.unwrap();
 
+        // When getting path counts.
         let counts = backend.get_path_counts().await.unwrap();
 
+        // Then files shared across workspaces have correct counts.
         let file1_id = backend.resolve_file_path_id(&file1).await.unwrap().unwrap();
         let file2_id = backend.resolve_file_path_id(&file2).await.unwrap().unwrap();
 
@@ -729,6 +775,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_path_counts_file_in_single_workspace_has_count_one() {
+        // Given a workspace with a single file.
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
@@ -746,8 +793,10 @@ mod tests {
 
         backend.save(&data).await.unwrap();
 
+        // When getting path counts.
         let counts = backend.get_path_counts().await.unwrap();
 
+        // Then the file has count one.
         let file_id = backend.resolve_file_path_id(&file).await.unwrap().unwrap();
         assert_eq!(counts.get(&file_id), Some(&1));
     }

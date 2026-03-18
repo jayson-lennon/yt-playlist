@@ -111,13 +111,21 @@ mod tests {
 
     #[test]
     fn key_display_shows_char() {
+        // Given a character key.
         let key = Key::Char('a');
+
+        // When displaying the key.
+        // Then the character is shown.
         assert_eq!(key.display(), "a");
     }
 
     #[test]
     fn key_display_shows_space() {
+        // Given a space character key.
         let key = Key::Char(' ');
+
+        // When displaying the key.
+        // Then "Space" is shown.
         assert_eq!(key.display(), "Space");
     }
 
@@ -135,24 +143,37 @@ mod tests {
     #[case(Key::PageUp, "PgUp")]
     #[case(Key::PageDown, "PgDn")]
     fn key_display_special_keys(#[case] key: Key, #[case] expected: &str) {
+        // Given / When / Then inline for simple cases
         assert_eq!(key.display(), expected);
     }
 
     #[test]
     fn parse_simple_chars() {
+        // Given a simple character sequence.
         let keys = parse_key_sequence("abc");
+
+        // When parsing the sequence.
+        // Then each character becomes a Key::Char.
         assert_eq!(keys, vec![Key::Char('a'), Key::Char('b'), Key::Char('c')]);
     }
 
     #[test]
     fn parse_special_keys() {
+        // Given a sequence with special key notation.
         let keys = parse_key_sequence("<Tab><Enter>");
+
+        // When parsing the sequence.
+        // Then special keys are parsed correctly.
         assert_eq!(keys, vec![Key::Tab, Key::Enter]);
     }
 
     #[test]
     fn parse_mixed() {
+        // Given a mixed sequence of chars and special keys.
         let keys = parse_key_sequence("g<Space>m");
+
+        // When parsing the sequence.
+        // Then both types are parsed correctly.
         assert_eq!(keys, vec![Key::Char('g'), Key::Char(' '), Key::Char('m')]);
     }
 

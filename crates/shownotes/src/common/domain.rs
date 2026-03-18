@@ -96,46 +96,71 @@ mod tests {
 
     #[test]
     fn item_path_as_file_returns_path_for_file() {
+        // Given a file path.
         let path = ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.mp4")));
+
+        // When checking as_file and as_url.
+        // Then as_file returns Some and as_url returns None.
         assert!(path.as_file().is_some());
         assert!(path.as_url().is_none());
     }
 
     #[test]
     fn item_path_as_url_returns_url_for_url() {
+        // Given a URL path.
         let path = ItemPath::Url("https://example.com/video.mp4".to_string());
+
+        // When checking as_url and as_file.
+        // Then as_url returns Some and as_file returns None.
         assert!(path.as_url().is_some());
         assert!(path.as_file().is_none());
     }
 
     #[test]
     fn item_path_is_url_returns_true_for_url() {
+        // Given a URL path and a file path.
         let path = ItemPath::Url("https://example.com/video.mp4".to_string());
-        assert!(path.is_url());
         let file_path = ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.mp4")));
+
+        // When checking is_url on both.
+        // Then the URL path returns true and the file path returns false.
+        assert!(path.is_url());
         assert!(!file_path.is_url());
     }
 
     #[test]
     fn item_path_file_stem_returns_filename_without_extension() {
+        // Given a file path with an extension.
         let path = ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4")));
+
+        // When getting the file stem.
+        // Then the filename without extension is returned.
         assert_eq!(path.file_stem(), Some("video"));
     }
 
     #[test]
     fn item_path_file_stem_returns_none_for_url() {
+        // Given a URL path.
         let path = ItemPath::Url("https://example.com/video.mp4".to_string());
+
+        // When getting the file stem.
+        // Then None is returned.
         assert_eq!(path.file_stem(), None);
     }
 
     #[test]
     fn item_path_to_string_lossy_returns_url_for_url() {
+        // Given a URL path.
         let path = ItemPath::Url("https://example.com/video.mp4".to_string());
+
+        // When converting to string lossy.
+        // Then the URL string is returned.
         assert_eq!(path.to_string_lossy(), "https://example.com/video.mp4");
     }
 
     #[test]
     fn playlist_item_can_be_created() {
+        // Given a PlaylistItem with all fields populated.
         let item = PlaylistItem {
             path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.mp4"))),
             duration: Some(Duration::from_secs(120)),
@@ -145,6 +170,9 @@ mod tests {
             playlist_count: 0,
             has_sources: true,
         };
+
+        // When accessing the item fields.
+        // Then the values match what was set.
         assert_eq!(item.duration, Some(Duration::from_secs(120)));
         assert_eq!(item.alias, Some("My Video".to_string()));
     }

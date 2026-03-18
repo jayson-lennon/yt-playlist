@@ -284,6 +284,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_single_path_saves_note_to_database() {
+        // Given a context with a fake editor configured with content.
         let fake_editor = Arc::new(FakeEditor::new());
         fake_editor.set_content("my new note".to_string());
         let ctx = NoteTestContextBuilder::new()
@@ -292,8 +293,10 @@ mod tests {
             .await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
+        // When adding a note for a single path.
         let result = super::add(&ctx.ctx, vec![canonical]).await;
 
+        // Then the note is saved to the database.
         assert!(result.is_ok());
         let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("my new note".to_string()));
@@ -301,6 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_multiple_paths_prepends_to_existing_notes() {
+        // Given a context with a fake editor and an existing note on one file.
         let fake_editor = Arc::new(FakeEditor::new());
         fake_editor.set_content("new content".to_string());
         let ctx = NoteTestContextBuilder::new()
@@ -312,7 +316,6 @@ mod tests {
         let canonical1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let canonical2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        // Set up existing note on canonical1
         let path_str1 = temp1.path().to_string_lossy();
         let file_path_id1 = ctx.ctx.services.db.get_or_create_file_path(&path_str1).await.unwrap();
         ctx.ctx.services
@@ -321,8 +324,10 @@ mod tests {
             .await
             .unwrap();
 
+        // When adding notes for multiple paths.
         let result = super::add(&ctx.ctx, vec![canonical1, canonical2]).await;
 
+        // Then the new content is prepended to the existing note.
         assert!(result.is_ok());
         let note1 = ctx.ctx.services.db.get_note(file_path_id1).await.unwrap();
         assert_eq!(note1, Some("existing note\n\nnew content".to_string()));
@@ -330,15 +335,19 @@ mod tests {
 
     #[tokio::test]
     async fn add_returns_error_for_empty_paths() {
+        // Given a test context.
         let ctx = NoteTestContext::new().await;
 
+        // When adding notes with an empty path list.
         let result = super::add(&ctx.ctx, vec![]).await;
 
+        // Then an error is returned.
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn search_returns_matching_paths_from_database() {
+        // Given a context with a note containing a keyword.
         let ctx = NoteTestContext::new().await;
         ctx.ctx.services
             .db
@@ -346,8 +355,10 @@ mod tests {
             .await
             .unwrap();
 
+        // When searching for the keyword.
         let result = super::search(&ctx.ctx, "keyword", false).await;
 
+        // Then the matching path is returned.
         assert!(result.is_ok());
         let (paths, _) = result.unwrap();
         assert_eq!(paths.len(), 1);
@@ -356,6 +367,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_creates_symlinks_when_requested() {
+        // Given a context with a video file that has a note.
         let ctx = NoteTestContext::new().await;
         let temp_dir = TempDir::new().unwrap();
         let video_file = temp_dir.path().join("video.mp4");
@@ -372,10 +384,12 @@ mod tests {
         let original_cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(dest_dir.path()).unwrap();
 
+        // When searching with symlink creation enabled.
         let result = super::search(&ctx.ctx, "test", true).await;
 
         std::env::set_current_dir(&original_cwd).unwrap();
 
+        // Then a symlink is created.
         assert!(result.is_ok());
         let (_, symlinks_created) = result.unwrap();
         assert_eq!(symlinks_created, 1);
@@ -383,6 +397,7 @@ mod tests {
 
     #[tokio::test]
     async fn fuzzy_returns_selected_paths() {
+        // Given a context with a fake fuzzy search configured with selected paths.
         let fake_fuzzy = Arc::new(FakeFuzzySearch::new());
         let expected_path = "/test/path.mp4".to_string();
         fake_fuzzy.set_selected_paths(vec![expected_path.clone()]);
@@ -396,8 +411,10 @@ mod tests {
             .await
             .unwrap();
 
+        // When running fuzzy search without symlink creation.
         let result = super::fuzzy(&ctx.ctx, false).await;
 
+        // Then the selected paths are returned.
         assert!(result.is_ok());
         let (paths, _) = result.unwrap();
         assert_eq!(paths, vec![expected_path]);
@@ -405,6 +422,7 @@ mod tests {
 
     #[tokio::test]
     async fn fuzzy_creates_symlinks_when_requested() {
+        // Given a context with a fake fuzzy search and a video file with a note.
         let fake_fuzzy = Arc::new(FakeFuzzySearch::new());
         let temp_dir = TempDir::new().unwrap();
         let video_file = temp_dir.path().join("video.mp4");
@@ -425,10 +443,12 @@ mod tests {
         let original_cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(dest_dir.path()).unwrap();
 
+        // When running fuzzy search with symlink creation enabled.
         let result = super::fuzzy(&ctx.ctx, true).await;
 
         std::env::set_current_dir(&original_cwd).unwrap();
 
+        // Then a symlink is created.
         assert!(result.is_ok());
         let (_, symlinks_created) = result.unwrap();
         assert_eq!(symlinks_created, 1);
@@ -436,6 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_alias_as_note_appends_to_empty_notes() {
+        // Given a context with a file that has an empty note.
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.ctx.services
@@ -444,10 +465,12 @@ mod tests {
             .await
             .unwrap();
 
+        // When adding an alias as a note.
         let result = super::add_alias_as_note(&ctx.ctx, &canonical, "my-alias")
             .await
             .unwrap();
 
+        // Then the alias is saved as the note.
         assert!(result);
         let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("my-alias".to_string()));
@@ -455,23 +478,29 @@ mod tests {
 
     #[tokio::test]
     async fn add_alias_as_note_skips_blank_alias() {
+        // Given a context with a file.
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
+        // When adding a blank alias as a note.
         let result = super::add_alias_as_note(&ctx.ctx, &canonical, "").await.unwrap();
 
+        // Then the operation is skipped.
         assert!(!result);
     }
 
     #[tokio::test]
     async fn add_alias_as_note_adds_when_no_conflicts() {
+        // Given a context with a file that has no existing note.
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
 
+        // When adding an alias as a note.
         let result = super::add_alias_as_note(&ctx.ctx, &canonical, "my-alias")
             .await
             .unwrap();
 
+        // Then the alias is saved as the note.
         assert!(result);
         let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("my-alias".to_string()));
@@ -479,6 +508,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_alias_as_note_skips_exact_match() {
+        // Given a context with a file that has a note matching the alias.
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.ctx.services
@@ -487,10 +517,12 @@ mod tests {
             .await
             .unwrap();
 
+        // When adding an alias that exactly matches the existing note.
         let result = super::add_alias_as_note(&ctx.ctx, &canonical, "foo")
             .await
             .unwrap();
 
+        // Then the operation is skipped and the note is unchanged.
         assert!(!result);
         let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("foo".to_string()));
@@ -498,6 +530,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_alias_as_note_skips_substring_match() {
+        // Given a context with a file that has a note containing the alias as a substring.
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.ctx.services
@@ -506,10 +539,12 @@ mod tests {
             .await
             .unwrap();
 
+        // When adding an alias that is a substring of the existing note.
         let result = super::add_alias_as_note(&ctx.ctx, &canonical, "foo")
             .await
             .unwrap();
 
+        // Then the operation is skipped and the note is unchanged.
         assert!(!result);
         let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("foo bar".to_string()));
@@ -517,6 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_alias_as_note_appends_to_existing() {
+        // Given a context with a file that has an existing note.
         let ctx = NoteTestContext::new().await;
         let canonical = CanonicalPath::from_path(ctx.temp_file.path()).unwrap();
         ctx.ctx.services
@@ -525,10 +561,12 @@ mod tests {
             .await
             .unwrap();
 
+        // When adding a new alias as a note.
         let result = super::add_alias_as_note(&ctx.ctx, &canonical, "second")
             .await
             .unwrap();
 
+        // Then the alias is appended to the existing note.
         assert!(result);
         let note = ctx.ctx.services.db.get_note(ctx.file_path_id).await.unwrap();
         assert_eq!(note, Some("first\nsecond".to_string()));
@@ -536,6 +574,7 @@ mod tests {
 
     #[tokio::test]
     async fn migrate_aliases_to_notes_migrates_files_with_aliases() {
+        // Given a context with files that have no aliases.
         let ctx = NoteTestContext::new().await;
         let temp1 = create_temp_file();
         let temp2 = create_temp_file();
@@ -564,14 +603,17 @@ mod tests {
             },
         );
 
+        // When migrating aliases to notes.
         let (migrated, skipped) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
 
+        // Then no files are migrated or skipped.
         assert_eq!(migrated, 0);
         assert_eq!(skipped, 0);
     }
 
     #[tokio::test]
     async fn migrate_aliases_to_notes_skips_files_without_aliases() {
+        // Given a context with files that have no aliases.
         let ctx = NoteTestContext::new().await;
         let temp1 = create_temp_file();
         let temp2 = create_temp_file();
@@ -600,14 +642,17 @@ mod tests {
             },
         );
 
+        // When migrating aliases to notes.
         let (migrated, skipped) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
 
+        // Then no files are migrated or skipped.
         assert_eq!(migrated, 0);
         assert_eq!(skipped, 0);
     }
 
     #[tokio::test]
     async fn migrate_aliases_to_notes_is_idempotent() {
+        // Given a context with a file that has no alias.
         let ctx = NoteTestContext::new().await;
         let temp = create_temp_file();
 
@@ -624,9 +669,11 @@ mod tests {
             },
         );
 
+        // When migrating aliases to notes twice.
         let (migrated1, skipped1) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
         let (migrated2, skipped2) = super::migrate_aliases_to_notes(&ctx.ctx, &files).await;
 
+        // Then both calls produce the same result.
         assert_eq!(migrated1, 0);
         assert_eq!(skipped1, 0);
         assert_eq!(migrated2, 0);

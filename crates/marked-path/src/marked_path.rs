@@ -301,42 +301,63 @@ mod tests {
 
     #[rstest]
     fn absolute_new_accepts_absolute_path() {
+        // Given an absolute path.
         let path = if cfg!(windows) {
             PathBuf::from("C:\\some\\path")
         } else {
             PathBuf::from("/some/path")
         };
+
+        // When creating a marked path.
         let result = MarkedPath::<Absolute>::new(path);
+
+        // Then the result is ok.
         assert!(result.is_ok());
     }
 
     #[rstest]
     fn absolute_new_rejects_relative_path() {
+        // Given a relative path.
         let path = PathBuf::from("some/relative/path");
+
+        // When creating an absolute marked path.
         let result = MarkedPath::<Absolute>::new(path);
+
+        // Then the result is an error.
         assert!(result.is_err());
     }
 
     #[rstest]
     fn relative_new_accepts_relative_path() {
+        // Given a relative path.
         let path = PathBuf::from("some/relative/path");
+
+        // When creating a relative marked path.
         let result = MarkedPath::<Relative>::new(path);
+
+        // Then the result is ok.
         assert!(result.is_ok());
     }
 
     #[rstest]
     fn relative_new_rejects_absolute_path() {
+        // Given an absolute path.
         let path = if cfg!(windows) {
             PathBuf::from("C:\\some\\path")
         } else {
             PathBuf::from("/some/path")
         };
+
+        // When creating a relative marked path.
         let result = MarkedPath::<Relative>::new(path);
+
+        // Then the result is an error.
         assert!(result.is_err());
     }
 
     #[rstest]
     fn push_path_on_absolute_accepts_relative() {
+        // Given an absolute marked path and a relative marked path.
         let base_path = if cfg!(windows) {
             PathBuf::from("C:\\base")
         } else {
@@ -344,7 +365,11 @@ mod tests {
         };
         let mut absolute = MarkedPath::<Absolute>::new(base_path).unwrap();
         let relative = MarkedPath::<Relative>::new(PathBuf::from("subdir/file.txt")).unwrap();
+
+        // When pushing the relative path onto the absolute path.
         absolute.push_path(&relative);
+
+        // Then the path is the combined result.
         let expected = if cfg!(windows) {
             "C:\\base\\subdir\\file.txt"
         } else {
@@ -355,17 +380,27 @@ mod tests {
 
     #[rstest]
     fn push_path_on_relative_accepts_relative() {
+        // Given two relative marked paths.
         let mut base = MarkedPath::<Relative>::new(PathBuf::from("base")).unwrap();
         let other = MarkedPath::<Relative>::new(PathBuf::from("subdir/file.txt")).unwrap();
+
+        // When pushing one path onto the other.
         base.push_path(&other);
+
+        // Then the path is the combined result.
         assert_eq!(base.as_path(), Path::new("base/subdir/file.txt"));
     }
 
     #[rstest]
     fn canonical_path_from_existing_file() {
+        // Given an existing file.
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path();
+
+        // When creating a canonical path from the file path.
         let canonical = CanonicalPath::from_path(path);
+
+        // Then the result is ok and the path is absolute.
         assert!(canonical.is_ok());
         let canonical = canonical.unwrap();
         assert!(canonical.as_path().is_absolute());
@@ -373,6 +408,7 @@ mod tests {
 
     #[rstest]
     fn canonical_path_hash_and_eq() {
+        // Given two canonical paths to the same file.
         use std::collections::HashSet;
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -380,10 +416,13 @@ mod tests {
         let canonical1 = CanonicalPath::from_path(path).unwrap();
         let canonical2 = CanonicalPath::from_path(path).unwrap();
 
+        // When comparing them and using in a HashSet.
         assert_eq!(canonical1, canonical2);
 
         let mut set = HashSet::new();
         set.insert(canonical1.clone());
+
+        // Then they are equal and both hash to the same value.
         assert!(set.contains(&canonical2));
     }
 }

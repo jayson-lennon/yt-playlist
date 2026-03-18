@@ -106,23 +106,32 @@ mod tests {
 
     #[test]
     fn file_launcher_uses_shell_from_env() {
+        // Given a new XdgLauncher.
         let launcher = XdgLauncher::new();
+
+        // Then the shell is not empty.
         assert!(!launcher.shell.is_empty());
     }
 
     #[test]
     fn launch_result_tracks_default_opener_usage() {
+        // Given a LaunchResult with default opener used.
         let result = LaunchResult {
             used_default_opener: true,
         };
+
+        // Then the flag is true.
         assert!(result.used_default_opener);
     }
 
     #[test]
     fn launch_result_tracks_custom_command_usage() {
+        // Given a LaunchResult with custom command used.
         let result = LaunchResult {
             used_default_opener: false,
         };
+
+        // Then the flag is false.
         assert!(!result.used_default_opener);
     }
 
@@ -180,7 +189,10 @@ mod tests {
 
     #[test]
     fn fake_launcher_records_command() {
+        // Given a fake launcher.
         let launcher = FakeLauncher::new();
+
+        // When launching with a command.
         launcher
             .launch(
                 &PathBuf::from("test.mp4"),
@@ -188,12 +200,17 @@ mod tests {
                 "/tmp/socket",
             )
             .unwrap();
+
+        // Then the command is recorded.
         assert_eq!(launcher.last_command(), Some("mpv {{path}}".to_string()));
     }
 
     #[test]
     fn fake_launcher_records_path() {
+        // Given a fake launcher.
         let launcher = FakeLauncher::new();
+
+        // When launching with a path.
         launcher
             .launch(
                 &PathBuf::from("/video/test.mp4"),
@@ -201,24 +218,36 @@ mod tests {
                 "/tmp/socket",
             )
             .unwrap();
+
+        // Then the path is recorded.
         assert_eq!(launcher.last_path(), Some(PathBuf::from("/video/test.mp4")));
     }
 
     #[test]
     fn fake_launcher_records_none_when_no_command() {
+        // Given a fake launcher.
         let launcher = FakeLauncher::new();
+
+        // When launching without a command.
         launcher
             .launch(&PathBuf::from("test.txt"), None, "/tmp/socket")
             .unwrap();
+
+        // Then no command is recorded.
         assert!(launcher.last_command().is_none());
     }
 
     #[test]
     fn fake_launcher_returns_used_default_flag() {
+        // Given a fake launcher configured to report default opener usage.
         let launcher = FakeLauncher::new().with_used_default(true);
+
+        // When launching a file.
         let result = launcher
             .launch(&PathBuf::from("test.txt"), None, "/tmp/socket")
             .unwrap();
+
+        // Then the result indicates default opener was used.
         assert!(result.used_default_opener);
     }
 }

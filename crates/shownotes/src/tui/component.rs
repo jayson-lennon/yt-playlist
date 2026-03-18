@@ -95,38 +95,53 @@ mod tests {
 
     #[test]
     fn default_is_active_returns_false() {
+        // Given an inactive component.
         let component = InactiveComponent;
+
+        // When checking is_active.
+        // Then it returns false.
         assert!(!component.is_active());
     }
 
     #[test]
     fn overridden_is_active_returns_true() {
+        // Given an active component.
         let component = ActiveComponent;
+
+        // When checking is_active.
+        // Then it returns true.
         assert!(component.is_active());
     }
 
     #[test]
     fn default_handle_key_returns_ignored() {
+        // Given a component that ignores keys.
         let mut component = IgnoringComponent;
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
 
+        // When handling a key.
         let result = component.handle_key(key);
 
+        // Then the result is not consumed.
         assert!(!result.is_consumed());
     }
 
     #[test]
     fn overridden_handle_key_returns_consumed() {
+        // Given a component that consumes keys.
         let mut component = ActiveComponent;
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
 
+        // When handling a key.
         let result = component.handle_key(key);
 
+        // Then the result is consumed.
         assert!(result.is_consumed());
     }
 
     #[test]
     fn handle_key_with_context_delegates_to_handle_key() {
+        // Given a component with default context handling.
         let mut component = IgnoringComponent;
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('a'));
         let keymap = Keymap::default();
@@ -135,13 +150,16 @@ mod tests {
             focused_pane: Pane::Playlist,
         };
 
+        // When handling a key with context.
         let result = component.handle_key_with_context(key, &ctx);
 
+        // Then the result delegates to handle_key and is not consumed.
         assert!(!result.is_consumed());
     }
 
     #[test]
     fn handle_key_with_context_can_be_overridden() {
+        // Given a component that overrides handle_key_with_context.
         let mut component = ContextUsingComponent { last_key: None };
         let key = KeyEvent::from(crossterm::event::KeyCode::Char('x'));
         let keymap = Keymap::default();
@@ -150,8 +168,10 @@ mod tests {
             focused_pane: Pane::Playlist,
         };
 
+        // When handling a key with context.
         let result = component.handle_key_with_context(key, &ctx);
 
+        // Then the result is consumed and the key was stored.
         assert!(result.is_consumed());
         assert!(component.last_key.is_some());
     }

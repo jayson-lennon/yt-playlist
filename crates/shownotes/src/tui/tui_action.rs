@@ -114,13 +114,19 @@ mod tests {
 
     #[test]
     fn rename_submit_variant_exists() {
+        // Given a RenameSubmit action.
         let action = TuiAction::RenameSubmit("new_name".to_string());
+
+        // Then it matches the expected variant.
         assert!(matches!(action, TuiAction::RenameSubmit(_)));
     }
 
     #[test]
     fn url_submit_variant_exists() {
+        // Given a UrlSubmit action.
         let action = TuiAction::UrlSubmit("https://example.com".to_string());
+
+        // Then it matches the expected variant.
         assert!(matches!(action, TuiAction::UrlSubmit(_)));
     }
 }

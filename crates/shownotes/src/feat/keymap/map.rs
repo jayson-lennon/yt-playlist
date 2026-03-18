@@ -525,13 +525,19 @@ mod tests {
 
     #[test]
     fn leader_key_resolves_to_space_by_default() {
+        // Given a new keymap.
         let keymap = Keymap::new();
+
+        // Then leader key is space.
         assert_eq!(keymap.leader_key, Key::Char(' '));
     }
 
     #[test]
     fn custom_leader_key_resolves_correctly() {
+        // Given a keymap with a custom leader key.
         let keymap = Keymap::with_leader(Key::Char(','));
+
+        // Then leader key is the custom key.
         assert_eq!(keymap.leader_key, Key::Char(','));
     }
 }
