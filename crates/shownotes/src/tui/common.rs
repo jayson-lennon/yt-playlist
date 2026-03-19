@@ -3,6 +3,10 @@ use std::time::Duration;
 pub use crate::common::domain::{get_mime_type, ItemPath, PlaylistItem};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+};
 
 /// Controls how playlist items are displayed in the TUI.
 ///
@@ -144,6 +148,68 @@ pub fn filter_items<'a>(
                 .collect()
         }
     }
+}
+
+pub fn split_pane_layout(area: Rect) -> (Rect, Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .split(area);
+    (chunks[0], chunks[1])
+}
+
+pub fn item_style(is_selected: bool, file_missing: bool, has_sources: bool) -> Style {
+    if is_selected {
+        if file_missing {
+            Style::default()
+                .fg(Color::Red)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        }
+    } else if !has_sources {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    }
+}
+
+pub fn focused_border_style(is_focused: bool) -> Style {
+    if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default()
+    }
+}
+
+pub fn focused_text_style(is_focused: bool) -> Style {
+    if is_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default()
+    }
+}
+
+pub fn pane_title(base: &str, has_filter: bool, is_focused: bool) -> String {
+    if has_filter {
+        if is_focused {
+            format!(" {base} [filtered] [*] ")
+        } else {
+            format!(" {base} [filtered] ")
+        }
+    } else if is_focused {
+        format!(" {base} [*] ")
+    } else {
+        format!(" {base} ")
+    }
+}
+
+pub fn total_duration<'a>(items: impl Iterator<Item = &'a PlaylistItem>) -> Duration {
+    items.filter_map(|item| item.duration).sum()
 }
 
 #[cfg(test)]
@@ -780,5 +846,205 @@ mod tests {
 
         // Then the count is shown (meets threshold).
         assert_eq!(result, "[video/mp4] [00:01:05] My Video                (1)");
+    }
+
+    #[test]
+    fn split_pane_layout_splits_into_list_and_footer() {
+        // Given a pane area of 10 rows by 40 columns.
+        let area = Rect::new(0, 0, 40, 10);
+
+        // When splitting the layout.
+        let (list_area, footer_area) = split_pane_layout(area);
+
+        // Then list gets min 1 row and footer gets 1 row.
+        assert_eq!(list_area.height, 9);
+        assert_eq!(footer_area.height, 1);
+        assert_eq!(list_area.width, 40);
+        assert_eq!(footer_area.width, 40);
+    }
+
+    #[test]
+    fn item_style_selected_missing_file_returns_red_on_yellow_bold() {
+        // Given selected item with missing file.
+        let style = item_style(true, true, true);
+
+        // Then style is red on yellow with bold.
+        assert_eq!(style.fg, Some(Color::Red));
+        assert_eq!(style.bg, Some(Color::Yellow));
+        assert!(style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn item_style_selected_normal_file_returns_black_on_yellow_bold() {
+        // Given selected item with file present.
+        let style = item_style(true, false, true);
+
+        // Then style is black on yellow with bold.
+        assert_eq!(style.fg, Some(Color::Black));
+        assert_eq!(style.bg, Some(Color::Yellow));
+        assert!(style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn item_style_unselected_no_sources_returns_yellow() {
+        // Given unselected item without sources.
+        let style = item_style(false, false, false);
+
+        // Then style is yellow foreground.
+        assert_eq!(style.fg, Some(Color::Yellow));
+        assert_eq!(style.bg, None);
+    }
+
+    #[test]
+    fn item_style_unselected_normal_returns_default() {
+        // Given unselected item with sources.
+        let style = item_style(false, false, true);
+
+        // Then style is default.
+        assert_eq!(style.fg, None);
+        assert_eq!(style.bg, None);
+    }
+
+    #[test]
+    fn focused_border_style_focused_returns_cyan() {
+        // Given a focused pane.
+        let style = focused_border_style(true);
+
+        // Then style is cyan.
+        assert_eq!(style.fg, Some(Color::Cyan));
+    }
+
+    #[test]
+    fn focused_border_style_unfocused_returns_default() {
+        // Given an unfocused pane.
+        let style = focused_border_style(false);
+
+        // Then style is default.
+        assert_eq!(style.fg, None);
+    }
+
+    #[test]
+    fn focused_text_style_focused_returns_cyan() {
+        // Given a focused pane.
+        let style = focused_text_style(true);
+
+        // Then style is cyan.
+        assert_eq!(style.fg, Some(Color::Cyan));
+    }
+
+    #[test]
+    fn focused_text_style_unfocused_returns_default() {
+        // Given an unfocused pane.
+        let style = focused_text_style(false);
+
+        // Then style is default.
+        assert_eq!(style.fg, None);
+    }
+
+    #[test]
+    fn pane_title_no_filter_no_focus_returns_base() {
+        // Given base title with no filter and not focused.
+        let title = pane_title("Playlist", false, false);
+
+        // Then title is just the base with spaces.
+        assert_eq!(title, " Playlist ");
+    }
+
+    #[test]
+    fn pane_title_no_filter_with_focus_returns_base_with_asterisk() {
+        // Given base title with no filter but focused.
+        let title = pane_title("Playlist", false, true);
+
+        // Then title includes focus indicator.
+        assert_eq!(title, " Playlist [*] ");
+    }
+
+    #[test]
+    fn pane_title_with_filter_no_focus_returns_base_with_filtered() {
+        // Given base title with filter but not focused.
+        let title = pane_title("Playlist", true, false);
+
+        // Then title includes filter indicator.
+        assert_eq!(title, " Playlist [filtered] ");
+    }
+
+    #[test]
+    fn pane_title_with_filter_and_focus_returns_base_with_both_indicators() {
+        // Given base title with filter and focused.
+        let title = pane_title("Playlist", true, true);
+
+        // Then title includes both indicators.
+        assert_eq!(title, " Playlist [filtered] [*] ");
+    }
+
+    #[test]
+    fn total_duration_sums_item_durations() {
+        // Given items with durations.
+        let items = vec![
+            PlaylistItem {
+                path: ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4"))),
+                duration: Some(Duration::from_secs(60)),
+                alias: None,
+                mime_type: None,
+                is_virtual: false,
+                playlist_count: 0,
+                has_sources: true,
+            },
+            PlaylistItem {
+                path: ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4"))),
+                duration: Some(Duration::from_secs(120)),
+                alias: None,
+                mime_type: None,
+                is_virtual: false,
+                playlist_count: 0,
+                has_sources: true,
+            },
+        ];
+
+        // When calculating total duration.
+        let total = total_duration(items.iter());
+
+        // Then it sums to 180 seconds.
+        assert_eq!(total, Duration::from_secs(180));
+    }
+
+    #[test]
+    fn total_duration_ignores_items_without_duration() {
+        // Given items with mixed durations.
+        let items = vec![
+            PlaylistItem {
+                path: ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4"))),
+                duration: Some(Duration::from_secs(60)),
+                alias: None,
+                mime_type: None,
+                is_virtual: false,
+                playlist_count: 0,
+                has_sources: true,
+            },
+            PlaylistItem {
+                path: ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4"))),
+                duration: None,
+                alias: None,
+                mime_type: None,
+                is_virtual: false,
+                playlist_count: 0,
+                has_sources: true,
+            },
+            PlaylistItem {
+                path: ItemPath::File(CanonicalPath::new(PathBuf::from("c.mp4"))),
+                duration: Some(Duration::from_secs(30)),
+                alias: None,
+                mime_type: None,
+                is_virtual: false,
+                playlist_count: 0,
+                has_sources: true,
+            },
+        ];
+
+        // When calculating total duration.
+        let total = total_duration(items.iter());
+
+        // Then it only sums items with durations (90 seconds).
+        assert_eq!(total, Duration::from_secs(90));
     }
 }

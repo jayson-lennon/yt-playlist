@@ -1,14 +1,15 @@
 use crossterm::event::KeyEvent;
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    layout::Rect,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
 use super::common::{
-    filter_items, format_duration, format_item_line, ItemDisplayMode, ItemPath, Pane, PlaylistItem,
+    filter_items, focused_border_style, focused_text_style, format_duration, format_item_line,
+    item_style, pane_title, split_pane_layout, total_duration, ItemDisplayMode, ItemPath, Pane,
+    PlaylistItem,
 };
 use super::component::Component;
 use super::event::HandleKeyResult;
@@ -148,6 +149,52 @@ impl LibraryPane {
         &mut self.filter
     }
 
+    fn build_list_items(
+        &self,
+        filtered: &[(usize, &PlaylistItem)],
+        list_area: Rect,
+        is_focused: bool,
+        is_filtering: bool,
+        display_mode: ItemDisplayMode,
+    ) -> Vec<ListItem> {
+        filtered
+            .iter()
+            .enumerate()
+            .map(|(display_idx, (_original_idx, item))| {
+                let is_selected = display_idx == self.selected && is_focused && !is_filtering;
+                let file_missing =
+                    !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
+                let style = item_style(is_selected, file_missing, item.has_sources);
+                let text = format_item_line(
+                    item,
+                    display_mode,
+                    list_area.width.saturating_sub(BORDER_COLUMNS),
+                    item.playlist_count,
+                    1,
+                );
+                ListItem::new(text).style(style)
+            })
+            .collect()
+    }
+
+    fn render_footer(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        is_filtering: bool,
+        is_focused: bool,
+        total_duration: std::time::Duration,
+    ) {
+        if is_filtering {
+            self.filter.render(frame, area);
+        } else {
+            let total_str = format_duration(Some(total_duration));
+            let footer =
+                Paragraph::new(format!("Total: {total_str}")).style(focused_text_style(is_focused));
+            frame.render_widget(footer, area);
+        }
+    }
+
     pub fn render(
         &self,
         frame: &mut Frame,
@@ -158,74 +205,21 @@ impl LibraryPane {
         let is_filtering = self.filter.is_active();
         let has_filter = self.filter.has_applied();
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(1), Constraint::Length(1)])
-            .split(area);
-
-        let list_area = chunks[0];
-        let footer_area = chunks[1];
+        let (list_area, footer_area) = split_pane_layout(area);
 
         let filtered = self.get_filtered();
-        let total_duration: std::time::Duration =
-            filtered.iter().filter_map(|(_, item)| item.duration).sum();
+        let duration = total_duration(filtered.iter().map(|(_, item)| *item));
 
-        let items: Vec<ListItem> = filtered
-            .iter()
-            .enumerate()
-            .map(|(display_idx, (_original_idx, item))| {
-                let is_selected = display_idx == self.selected && is_focused && !is_filtering;
-                let file_missing =
-                    !item.path.as_file().is_some_and(|p| p.as_path().exists()) && !item.is_virtual;
-                let style = if is_selected {
-                    if file_missing {
-                        Style::default()
-                            .fg(Color::Red)
-                            .bg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default()
-                            .fg(Color::Black)
-                            .bg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD)
-                    }
-                } else if !item.has_sources {
-                    Style::default().fg(Color::Yellow)
-                } else {
-                    Style::default()
-                };
-                let text = format_item_line(
-                    item,
-                    display_mode,
-                    list_area.width.saturating_sub(BORDER_COLUMNS),
-                    item.playlist_count,
-                    1, // Show count when >= 1 for library pane
-                );
-                ListItem::new(text).style(style)
-            })
-            .collect();
+        let items =
+            self.build_list_items(&filtered, list_area, is_focused, is_filtering, display_mode);
 
-        let title = if has_filter {
-            if is_focused {
-                " Library [filtered] [*] "
-            } else {
-                " Library [filtered] "
-            }
-        } else if is_focused {
-            " Library [*] "
-        } else {
-            " Library "
-        };
+        let title = pane_title("Library", has_filter, is_focused);
 
         let list = List::new(items).block(
             Block::default()
                 .title(title)
                 .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-                .border_style(if is_focused {
-                    Style::default().fg(Color::Cyan)
-                } else {
-                    Style::default()
-                }),
+                .border_style(focused_border_style(is_focused)),
         );
 
         let mut list_state = ListState::default();
@@ -234,17 +228,7 @@ impl LibraryPane {
         }
         frame.render_stateful_widget(list, list_area, &mut list_state);
 
-        if is_filtering {
-            self.filter.render(frame, footer_area);
-        } else {
-            let total_str = format_duration(Some(total_duration));
-            let footer = Paragraph::new(format!("Total: {total_str}")).style(if is_focused {
-                Style::default().fg(Color::Cyan)
-            } else {
-                Style::default()
-            });
-            frame.render_widget(footer, footer_area);
-        }
+        self.render_footer(frame, footer_area, is_filtering, is_focused, duration);
     }
 }
 
