@@ -182,17 +182,20 @@ impl SqliteStorage {
     async fn upsert_virtual_file(
         &self,
         file_path_id: i64,
+        workspace_id: i64,
         is_virtual: bool,
     ) -> Result<(), Report<IoError>> {
         if is_virtual {
-            sqlx::query("INSERT OR IGNORE INTO virtual_files (file_path_id) VALUES (?)")
+            sqlx::query("INSERT OR IGNORE INTO virtual_files (file_path_id, workspace_id) VALUES (?, ?)")
                 .bind(file_path_id)
+                .bind(workspace_id)
                 .execute(&self.pool)
                 .await
                 .change_context(IoError)?;
         } else {
-            sqlx::query("DELETE FROM virtual_files WHERE file_path_id = ?")
+            sqlx::query("DELETE FROM virtual_files WHERE file_path_id = ? AND workspace_id = ?")
                 .bind(file_path_id)
+                .bind(workspace_id)
                 .execute(&self.pool)
                 .await
                 .change_context(IoError)?;
@@ -229,10 +232,11 @@ impl SqliteStorage {
         Ok(())
     }
 
-    async fn is_virtual_file(&self, file_path_id: i64) -> Result<bool, Report<IoError>> {
+    async fn is_virtual_file(&self, file_path_id: i64, workspace_id: i64) -> Result<bool, Report<IoError>> {
         let exists =
-            sqlx::query_scalar::<_, i64>("SELECT 1 FROM virtual_files WHERE file_path_id = ?")
+            sqlx::query_scalar::<_, i64>("SELECT 1 FROM virtual_files WHERE file_path_id = ? AND workspace_id = ?")
                 .bind(file_path_id)
+                .bind(workspace_id)
                 .fetch_optional(&self.pool)
                 .await
                 .change_context(IoError)?;
@@ -253,7 +257,7 @@ impl SqliteStorage {
         .await
         .change_context(IoError)?;
 
-        let is_virtual = self.is_virtual_file(file_path_id).await?;
+        let is_virtual = self.is_virtual_file(file_path_id, workspace_id).await?;
         let alias = self.resolve_alias_by_id(file_path_id, workspace_id).await?;
 
         match row {
@@ -335,11 +339,17 @@ impl PlaylistStorage for SqliteStorage {
             SELECT fp.path, fm.file_path_id
             FROM file_metadata fm
             JOIN file_paths fp ON fm.file_path_id = fp.id
-            LEFT JOIN virtual_files vf ON fm.file_path_id = vf.file_path_id
-            WHERE fp.path LIKE ? OR vf.file_path_id IS NOT NULL
+            WHERE fp.path LIKE ?
+            UNION
+            SELECT fp.path, fm.file_path_id
+            FROM file_metadata fm
+            JOIN file_paths fp ON fm.file_path_id = fp.id
+            JOIN virtual_files vf ON fm.file_path_id = vf.file_path_id
+            WHERE vf.workspace_id = ?
             "#,
         )
         .bind(format!("{}%", working_dir_str.as_ref()))
+        .bind(workspace_id)
         .fetch_all(&self.pool)
         .await
         .change_context(IoError)?;
@@ -401,7 +411,7 @@ impl PlaylistStorage for SqliteStorage {
             let path = item_path_to_path(item_path);
             let file_path_id = self.get_or_create_file_path(&path).await?;
             self.upsert_file_metadata(file_path_id, metadata).await?;
-            self.upsert_virtual_file(file_path_id, metadata.is_virtual)
+            self.upsert_virtual_file(file_path_id, workspace_id, metadata.is_virtual)
                 .await?;
         }
 
@@ -1322,18 +1332,28 @@ mod tests {
 
         let file = PathBuf::from("/test/file.mp4");
         let file_id = storage.get_or_create_file_path(&file).await.unwrap();
+        let workspace_id = storage
+            .get_or_create_workspace(Path::new("/test"))
+            .await
+            .unwrap();
 
         // When setting virtual to true.
-        storage.upsert_virtual_file(file_id, true).await.unwrap();
+        storage
+            .upsert_virtual_file(file_id, workspace_id, true)
+            .await
+            .unwrap();
 
         // Then the file is marked as virtual.
-        assert!(storage.is_virtual_file(file_id).await.unwrap());
+        assert!(storage.is_virtual_file(file_id, workspace_id).await.unwrap());
 
         // When setting virtual to false.
-        storage.upsert_virtual_file(file_id, false).await.unwrap();
+        storage
+            .upsert_virtual_file(file_id, workspace_id, false)
+            .await
+            .unwrap();
 
         // Then the file is no longer marked as virtual.
-        assert!(!storage.is_virtual_file(file_id).await.unwrap());
+        assert!(!storage.is_virtual_file(file_id, workspace_id).await.unwrap());
     }
 
     #[tokio::test]
@@ -1760,5 +1780,80 @@ mod tests {
         // Then the file has count 1.
         let file_id = storage.resolve_file_path_id(&file).await.unwrap().unwrap();
         assert_eq!(counts.get(&file_id), Some(&1));
+    }
+
+    #[tokio::test]
+    async fn virtual_files_are_workspace_scoped() {
+        // Given two workspaces with different virtual files.
+        let storage = create_test_storage().await;
+
+        let temp1 = TempDir::new().unwrap();
+        let temp2 = TempDir::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
+        let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
+
+        let url1 = ItemPath::Url("https://example.com/video1.mp4".to_string());
+        let url2 = ItemPath::Url("https://example.com/video2.mp4".to_string());
+
+        let data1 = PlaylistData {
+            working_directory: workspace1.clone(),
+            playlist: vec![],
+            files: [(
+                url1.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: true,
+                    deleted: false,
+                    mime_type: Some("video/mp4".to_string()),
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let data2 = PlaylistData {
+            working_directory: workspace2.clone(),
+            playlist: vec![],
+            files: [(
+                url2.clone(),
+                FileMetadata {
+                    duration: None,
+                    is_virtual: true,
+                    deleted: false,
+                    mime_type: Some("video/mp4".to_string()),
+                    time_added: None,
+                    alias: None,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        // When saving to both workspaces.
+        storage.save(&data1).await.unwrap();
+        storage.save(&data2).await.unwrap();
+
+        // Then each workspace only sees its own virtual files.
+        let loaded1 = storage.load(&workspace1).await.unwrap();
+        let loaded2 = storage.load(&workspace2).await.unwrap();
+
+        assert!(
+            loaded1.files.contains_key(&url1),
+            "workspace1 should contain url1"
+        );
+        assert!(
+            !loaded1.files.contains_key(&url2),
+            "workspace1 should NOT contain url2"
+        );
+        assert!(
+            loaded2.files.contains_key(&url2),
+            "workspace2 should contain url2"
+        );
+        assert!(
+            !loaded2.files.contains_key(&url1),
+            "workspace2 should NOT contain url1"
+        );
     }
 }

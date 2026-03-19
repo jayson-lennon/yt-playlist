@@ -37,7 +37,7 @@ struct StorageData {
     workspaces: HashMap<PathBuf, i64>,
     playlists: HashMap<i64, Vec<PathBuf>>,
     metadata: HashMap<PathBuf, FileMetadata>,
-    virtual_files: HashSet<PathBuf>,
+    virtual_files: HashSet<(PathBuf, i64)>,
     aliases: HashMap<(PathBuf, PathBuf), (String, Timestamp)>,
     next_file_path_id: i64,
     file_paths: HashMap<PathBuf, i64>,
@@ -127,10 +127,10 @@ impl FakeStorageBackend {
     }
 
     #[allow(clippy::missing_panics_doc)]
-    pub fn is_virtual_file(&self, path: &ItemPath) -> bool {
+    pub fn is_virtual_file(&self, path: &ItemPath, workspace_id: i64) -> bool {
         let data = self.data.read().unwrap();
         let path_buf = item_path_to_pathbuf(path);
-        data.virtual_files.contains(&path_buf)
+        data.virtual_files.contains(&(path_buf, workspace_id))
     }
 
     #[allow(clippy::missing_panics_doc)]
@@ -190,7 +190,7 @@ impl PlaylistStorage for FakeStorageBackend {
                     item_path,
                     FileMetadata {
                         duration: None,
-                        is_virtual: data.virtual_files.contains(path_buf),
+                        is_virtual: data.virtual_files.contains(&(path_buf.clone(), workspace_id)),
                         deleted: false,
                         mime_type: None,
                         time_added: None,
@@ -202,6 +202,13 @@ impl PlaylistStorage for FakeStorageBackend {
 
         for (path_buf, metadata) in &data.metadata {
             if playlist_path_set.contains(path_buf) {
+                continue;
+            }
+            if metadata.is_virtual
+                && !data
+                    .virtual_files
+                    .contains(&(path_buf.clone(), workspace_id))
+            {
                 continue;
             }
             let alias = self.resolve_alias_internal(path_buf, &workspace_path_buf);
@@ -236,7 +243,7 @@ impl PlaylistStorage for FakeStorageBackend {
             let path_buf = item_path_to_pathbuf(item_path);
             storage.metadata.insert(path_buf.clone(), metadata.clone());
             if metadata.is_virtual {
-                storage.virtual_files.insert(path_buf);
+                storage.virtual_files.insert((path_buf, workspace_id));
             }
         }
 
@@ -538,9 +545,11 @@ mod tests {
 
         backend.save(&data).await.unwrap();
 
+        let workspace_id = backend.get_workspace_id(&workspace).unwrap();
+
         // When checking virtual file status and loading data.
-        assert!(backend.is_virtual_file(&virtual_file));
-        assert!(!backend.is_virtual_file(&regular_file));
+        assert!(backend.is_virtual_file(&virtual_file, workspace_id));
+        assert!(!backend.is_virtual_file(&regular_file, workspace_id));
 
         // Then virtual files are correctly identified.
         let loaded = backend.load(&workspace).await.unwrap();
