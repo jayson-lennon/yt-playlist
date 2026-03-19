@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
+};
 use std::{path::{Path, PathBuf}, time::Duration};
 
 use async_trait::async_trait;
@@ -78,8 +81,28 @@ impl MediaQuery for FakeMediaBackend {
     }
 }
 
-/// Simple stub launcher for tests.
-pub struct FakeLauncher;
+/// Stateful fake launcher for tests that tracks calls.
+pub struct FakeLauncher {
+    pub launch_called: AtomicUsize,
+    pub last_path: Mutex<Option<PathBuf>>,
+    pub last_command: Mutex<Option<String>>,
+}
+
+impl FakeLauncher {
+    pub fn new() -> Self {
+        Self {
+            launch_called: AtomicUsize::new(0),
+            last_path: Mutex::new(None),
+            last_command: Mutex::new(None),
+        }
+    }
+}
+
+impl Default for FakeLauncher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl FileLauncher for FakeLauncher {
     fn name(&self) -> &'static str {
@@ -88,12 +111,15 @@ impl FileLauncher for FakeLauncher {
 
     fn launch(
         &self,
-        _path: &Path,
-        _command: Option<&str>,
+        path: &Path,
+        command: Option<&str>,
         _socket_path: &str,
     ) -> Result<LaunchResult, Report<crate::feat::launcher::LaunchError>> {
+        self.launch_called.fetch_add(1, Ordering::SeqCst);
+        *self.last_path.lock().unwrap() = Some(path.to_path_buf());
+        *self.last_command.lock().unwrap() = command.map(str::to_string);
         Ok(LaunchResult {
-            used_default_opener: false,
+            used_default_opener: true,
         })
     }
 }

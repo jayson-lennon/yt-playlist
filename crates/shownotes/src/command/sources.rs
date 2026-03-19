@@ -141,7 +141,7 @@ mod tests {
             media: MediaQueryService::new(Arc::new(FakeMediaBackend)),
             storage: PlaylistStorageService::new(Arc::new(FakeStorageBackend)),
             mpv_launcher: MpvLauncherService::new(Arc::new(FakeMpvLauncher::new())),
-            file_launcher: FileLauncherService::new(Arc::new(FakeLauncher)),
+            file_launcher: FileLauncherService::new(Arc::new(FakeLauncher::new())),
             db: NoteDbService::new(db.clone()),
             editor: ExternalEditorService::new(editor),
             path_resolver: PathResolverService::new(Arc::new(SystemPathResolver)),

@@ -345,7 +345,7 @@ mod tests {
                     crate::test_utils::FakeMpvLauncher::new(),
                 )),
                 file_launcher: crate::feat::launcher::FileLauncherService::new(Arc::new(
-                    crate::test_utils::FakeLauncher,
+                    crate::test_utils::FakeLauncher::new(),
                 )),
                 db: crate::feat::note_db::NoteDbService::new(db.clone()),
                 editor: crate::feat::external_editor::ExternalEditorService::new(Arc::new(

@@ -14,6 +14,11 @@ use crate::services::Services;
 use super::fakes::{FakeLauncher, FakeMediaBackend, FakeMpvBackend, FakeMpvLauncher, FakeStorageBackend};
 
 pub async fn create_test_services() -> Services {
+    let launcher = Arc::new(FakeLauncher::new());
+    create_test_services_with_launcher(launcher).await
+}
+
+pub async fn create_test_services_with_launcher(launcher: Arc<FakeLauncher>) -> Services {
     let db = Arc::new(SqliteNoteDb::new("sqlite::memory:").await.unwrap());
     let path_resolver = Arc::new(SystemPathResolver);
     let rt = tokio::runtime::Handle::current();
@@ -23,7 +28,7 @@ pub async fn create_test_services() -> Services {
         media: MediaQueryService::new(Arc::new(FakeMediaBackend)),
         storage: PlaylistStorageService::new(Arc::new(FakeStorageBackend)),
         mpv_launcher: MpvLauncherService::new(Arc::new(FakeMpvLauncher::new())),
-        file_launcher: FileLauncherService::new(Arc::new(FakeLauncher)),
+        file_launcher: FileLauncherService::new(launcher),
         db: NoteDbService::new(db.clone()),
         editor: ExternalEditorService::new(Arc::new(SystemEditor)),
         path_resolver: PathResolverService::new(path_resolver),

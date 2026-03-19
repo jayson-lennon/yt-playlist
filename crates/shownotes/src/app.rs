@@ -181,7 +181,7 @@ mod tests {
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
                 storage_backend: FakeStorageBackend::new(),
-                file_launcher: FakeLauncher,
+                file_launcher: FakeLauncher::new(),
                 focused_pane: None,
             }
         }
