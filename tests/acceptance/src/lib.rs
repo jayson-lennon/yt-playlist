@@ -37,6 +37,12 @@ impl Drop for ShownotesWorld {
     }
 }
 
+impl Default for ShownotesWorld {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShownotesWorld {
     pub fn new() -> Self {
         tokio::task::block_in_place(|| {

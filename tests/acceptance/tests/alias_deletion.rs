@@ -63,7 +63,7 @@ fn then_file_has_no_alias(world: &mut AliasDeletionWorld, path: String) {
             matches!(&i.path, ItemPath::File(p) if p == &canonical)
         });
         assert!(
-            item.map_or(true, |i| i.alias.is_none()),
+            item.is_none_or(|i| i.alias.is_none()),
             "expected file '{path}' to have no alias"
         );
     }

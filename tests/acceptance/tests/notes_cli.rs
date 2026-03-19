@@ -92,9 +92,7 @@ fn then_file_has_note(world: &mut NotesWorld, filename: String, expected_note: S
         let path_str = full_path.to_string_lossy();
         assert!(
             paths.iter().any(|p| p.contains(&*path_str)),
-            "expected file '{}' to have note '{}'",
-            filename,
-            expected_note
+            "expected file '{filename}' to have note '{expected_note}'"
         );
     } else {
         panic!("expected NotesSearch result");

@@ -37,6 +37,7 @@ impl NoteTestContext {
         Self { ctx, temp_file, file_path_id }
     }
 
+    #[allow(dead_code)]
     pub fn builder() -> NoteTestContextBuilder {
         NoteTestContextBuilder::new()
     }

@@ -474,7 +474,7 @@ impl PlaylistStorage for SqliteStorage {
 
         Ok(rows
             .into_iter()
-            .map(|(file_path_id, count)| (file_path_id, count as usize))
+            .map(|(file_path_id, count)| (file_path_id, usize::try_from(count).unwrap_or(0)))
             .collect())
     }
 

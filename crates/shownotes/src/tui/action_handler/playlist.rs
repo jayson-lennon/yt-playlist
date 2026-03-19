@@ -9,24 +9,20 @@ use crate::tui::Pane;
 use crate::tui::TuiActionResponse;
 use error_stack::{Report, ResultExt};
 
-pub fn handle_reorder_up(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_reorder_up(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if !ctx.tui_state.has_active_filter(Pane::Playlist) {
         ctx.tui_state.reorder_playlist_up();
         ctx.tui_state.needs_clear = true;
     }
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_reorder_down(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_reorder_down(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if !ctx.tui_state.has_active_filter(Pane::Playlist) {
         ctx.tui_state.reorder_playlist_down();
         ctx.tui_state.needs_clear = true;
     }
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
 pub fn handle_move_to_library(

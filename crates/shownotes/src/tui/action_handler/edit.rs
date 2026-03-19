@@ -5,44 +5,36 @@ use crate::tui::ShowNoteKind;
 use crate::tui::TuiActionResponse;
 use error_stack::{Report, ResultExt};
 
-pub fn handle_notes(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_notes(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if let Some(item) = ctx.tui_state.get_selected_item() {
         ctx.fork.notes_path = Some(item.path.clone());
     }
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_fuzzy_notes(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_fuzzy_notes(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.fork.fuzzy_notes = true;
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_edit_sources(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_edit_sources(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if let Some(item) = ctx.tui_state.get_selected_item() {
         ctx.fork.sources_path = Some(item.path.clone());
     }
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_rename(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_rename(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.tui_state.start_rename();
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
 pub fn handle_generate_show_notes(
     ctx: &mut TuiActionCtx<'_>,
     kind: ShowNoteKind,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+) -> TuiActionResponse {
     ctx.fork.generate_notes = Some(kind.as_str().to_string());
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
 pub fn handle_rename_submit(

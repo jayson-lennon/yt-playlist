@@ -5,9 +5,7 @@ use crate::tui::state::RefreshError;
 use crate::tui::{ItemDisplayMode, TuiActionResponse};
 use error_stack::{Report, ResultExt};
 
-pub fn handle_quit(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_quit(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     match ctx.execute(Command::PlaylistSave {
         playlist_items: ctx.tui_state.playlist_pane.items.clone(),
         library_items: ctx.tui_state.library_pane.items.clone(),
@@ -20,12 +18,10 @@ pub fn handle_quit(
         }
         _ => unreachable!(),
     }
-    Ok(TuiActionResponse::ShouldQuit)
+    TuiActionResponse::ShouldQuit
 }
 
-pub fn handle_save(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_save(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     match ctx.execute(Command::PlaylistSave {
         playlist_items: ctx.tui_state.playlist_pane.items.clone(),
         library_items: ctx.tui_state.library_pane.items.clone(),
@@ -38,42 +34,32 @@ pub fn handle_save(
         }
         _ => unreachable!(),
     }
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_show_help(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_show_help(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.tui_state.global_handler.toggle_help();
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_start_filter(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_start_filter(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.tui_state.start_filter();
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_show_alias(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_show_alias(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.tui_state.display_mode = ItemDisplayMode::Alias;
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_show_path(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_show_path(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.tui_state.display_mode = ItemDisplayMode::Path;
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_add_url(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_add_url(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     ctx.tui_state.start_url_input();
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
 pub fn handle_url_submit(
@@ -103,9 +89,7 @@ pub fn handle_url_submit(
     Ok(TuiActionResponse::Continue)
 }
 
-pub fn handle_delete(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_delete(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if let Some(item) = ctx.tui_state.selected_library_item() {
         if item.is_virtual {
             ctx.tui_state.library_pane.remove();
@@ -127,15 +111,13 @@ pub fn handle_delete(
                 .set("Only virtual entries (URLs) can be deleted.");
         }
     }
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }
 
-pub fn handle_refresh(
-    ctx: &mut TuiActionCtx<'_>,
-) -> Result<TuiActionResponse, Report<TuiActionError>> {
+pub fn handle_refresh(ctx: &mut TuiActionCtx<'_>) -> TuiActionResponse {
     if ctx.tui_state.is_refreshing() {
         ctx.tui_state.status_bar.set("Refresh already in progress...");
-        return Ok(TuiActionResponse::Continue);
+        return TuiActionResponse::Continue;
     }
 
     let system_ctx = ctx.ctx.clone();
@@ -151,5 +133,5 @@ pub fn handle_refresh(
 
     ctx.tui_state.start_refresh(handle);
     ctx.tui_state.status_bar.set("Refreshing library...");
-    Ok(TuiActionResponse::Continue)
+    TuiActionResponse::Continue
 }

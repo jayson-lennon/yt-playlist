@@ -30,7 +30,7 @@ fn given_file(world: &mut SourcesBasicWorld, filename: String) {
 }
 
 #[given(expr = r#"a file {string} with source {string}"#)]
-async fn given_file_with_source(world: &mut SourcesBasicWorld, filename: String, url: String) {
+fn given_file_with_source(world: &mut SourcesBasicWorld, filename: String, url: String) {
     world.inner.create_file(&filename);
     let full_path = world.inner.resolve_path(&filename);
 

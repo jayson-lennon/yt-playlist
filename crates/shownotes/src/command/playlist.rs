@@ -9,6 +9,9 @@ use crate::feat::playlist::{FileMetadata, PlaylistData};
 use crate::system_ctx::SystemCtx;
 use crate::common::domain::{get_mime_type, ItemPath, PlaylistItem};
 
+/// # Errors
+///
+/// Returns an error if storage operations fail.
 pub async fn load_playlist(
     ctx: &SystemCtx,
 ) -> Result<CommandResult, Report<CommandError>> {
@@ -91,6 +94,9 @@ pub async fn load_playlist(
     })
 }
 
+/// # Errors
+///
+/// Returns an error if storage operations fail.
 pub async fn save_playlist(
     ctx: &SystemCtx,
     playlist_items: &[PlaylistItem],
@@ -133,6 +139,9 @@ pub async fn save_playlist(
     Ok(CommandResult::PlaylistSaved)
 }
 
+/// # Errors
+///
+/// Returns an error if storage operations fail.
 pub async fn refresh_library(
     ctx: &SystemCtx,
 ) -> Result<CommandResult, Report<CommandError>> {
@@ -202,6 +211,9 @@ pub fn add_url(url: &str) -> PlaylistItem {
     }
 }
 
+/// # Errors
+///
+/// Returns an error if storage operations fail.
 pub async fn rename_alias(
     ctx: &SystemCtx,
     path: &ItemPath,
@@ -239,6 +251,9 @@ pub async fn get_item_counts(
     result
 }
 
+/// # Errors
+///
+/// Returns an error if storage operations fail.
 pub async fn analyze_library(
     ctx: &SystemCtx,
 ) -> Result<CommandResult, Report<CommandError>> {
@@ -560,7 +575,7 @@ mod tests {
         let ctx = create_ctx_with_storage(storage, library_path).await;
 
         // When getting item counts for unknown paths.
-        let counts = get_item_counts(&ctx, &[unknown_file.clone()]).await;
+        let counts = get_item_counts(&ctx, std::slice::from_ref(&unknown_file)).await;
 
         // Then zero is returned for unknown paths.
         assert_eq!(counts.get(&unknown_file), Some(&0));

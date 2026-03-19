@@ -27,6 +27,9 @@ impl FakeEditor {
         *guard = Some(content);
     }
 
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned.
     pub fn set_append_mode(&self, mode: bool) {
         let mut guard = self.append_mode.lock().unwrap();
         *guard = mode;

@@ -67,13 +67,10 @@ fn then_file_has_note(world: &mut AliasNotesWorld, path: String, expected: Strin
     if let CommandResult::NotesSearch { paths, .. } = result {
         assert!(
             paths.iter().any(|p| p.contains(&*path_str)),
-            "expected file '{}' to be found in search for '{}', but got: {:?}",
-            path_str,
-            expected,
-            paths
+            "expected file '{path_str}' to be found in search for '{expected}', but got: {paths:?}"
         );
     } else {
-        panic!("expected NotesSearch result, got: {:?}", result);
+        panic!("expected NotesSearch result, got: {result:?}");
     }
 }
 
@@ -90,8 +87,7 @@ fn then_file_has_no_notes(world: &mut AliasNotesWorld, path: String) {
     if let CommandResult::NotesSearch { paths, .. } = result {
         assert!(
             !paths.iter().any(|p| p.contains(&*path_str)),
-            "expected file '{}' to have no notes, but it was found in search results",
-            path_str
+            "expected file '{path_str}' to have no notes, but it was found in search results"
         );
     }
 }
@@ -115,14 +111,12 @@ fn then_file_has_exactly_n_note_lines(
         if count == 0 {
             assert!(
                 !found,
-                "expected file '{}' to have 0 note lines, but it was found",
-                path_str
+                "expected file '{path_str}' to have 0 note lines, but it was found"
             );
         } else {
             assert!(
                 found,
-                "expected file '{}' to have {} note lines, but it was not found",
-                path_str, count
+                "expected file '{path_str}' to have {count} note lines, but it was not found"
             );
         }
     }

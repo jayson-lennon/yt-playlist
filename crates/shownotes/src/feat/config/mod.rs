@@ -176,9 +176,9 @@ pub fn load() -> Result<Config, Report<ConfigError>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
-    use serial_test::serial;
 
     fn with_temp_home<F, R>(f: F) -> R
     where
@@ -229,8 +229,7 @@ mod tests {
             assert!(config.audio.mime_types.contains(&"audio/mpeg".to_string()));
             assert!(
                 expected_config_path.join("shownotes.toml").exists(),
-                "config file should be created at {:?}",
-                expected_config_path
+                "config file should be created at {expected_config_path:?}"
             );
         });
     }

@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::process::{Command, Stdio};
 
 use error_stack::{Report, ResultExt};
@@ -23,7 +24,7 @@ impl FuzzySearch for SkimBackend {
                     .filter(|line| !line.trim().is_empty())
                     .collect::<Vec<_>>()
                     .join(". ");
-                output.push_str(&format!("{path}\t{cleaned}\n"));
+                let _ = writeln!(output, "{path}\t{cleaned}");
                 output
             });
 

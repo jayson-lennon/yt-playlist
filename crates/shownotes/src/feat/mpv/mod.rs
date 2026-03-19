@@ -145,17 +145,17 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct FakeMpvClient {
-        load_file_calls: AtomicUsize,
-        load_playlist_calls: AtomicUsize,
-        toggle_play_calls: AtomicUsize,
+        load_file: AtomicUsize,
+        load_playlist: AtomicUsize,
+        toggle_play: AtomicUsize,
     }
 
     impl FakeMpvClient {
         fn new() -> Self {
             Self {
-                load_file_calls: AtomicUsize::new(0),
-                load_playlist_calls: AtomicUsize::new(0),
-                toggle_play_calls: AtomicUsize::new(0),
+                load_file: AtomicUsize::new(0),
+                load_playlist: AtomicUsize::new(0),
+                toggle_play: AtomicUsize::new(0),
             }
         }
     }
@@ -166,17 +166,17 @@ mod tests {
         }
 
         fn load_file(&self, _path: &Path) -> Result<(), Report<MpvError>> {
-            self.load_file_calls.fetch_add(1, Ordering::SeqCst);
+            self.load_file.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
         fn load_playlist(&self, _paths: &[PathBuf]) -> Result<(), Report<MpvError>> {
-            self.load_playlist_calls.fetch_add(1, Ordering::SeqCst);
+            self.load_playlist.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
         fn toggle_play(&self) -> Result<(), Report<MpvError>> {
-            self.toggle_play_calls.fetch_add(1, Ordering::SeqCst);
+            self.toggle_play.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
     }
@@ -230,9 +230,9 @@ mod tests {
         let _ = service.toggle_play();
 
         // Then each backend method was called exactly once.
-        assert_eq!(fake.load_file_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(fake.load_playlist_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(fake.toggle_play_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(fake.load_file.load(Ordering::SeqCst), 1);
+        assert_eq!(fake.load_playlist.load(Ordering::SeqCst), 1);
+        assert_eq!(fake.toggle_play.load(Ordering::SeqCst), 1);
     }
 
     #[test]
