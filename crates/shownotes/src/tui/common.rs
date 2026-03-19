@@ -171,6 +171,8 @@ pub fn item_style(is_selected: bool, file_missing: bool, has_sources: bool) -> S
                 .bg(Color::Yellow)
                 .add_modifier(Modifier::BOLD)
         }
+    } else if file_missing {
+        Style::default().fg(Color::Red)
     } else if !has_sources {
         Style::default().fg(Color::Yellow)
     } else {
