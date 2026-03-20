@@ -1033,7 +1033,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let a = create_test_file(&dir, "a.mp4");
         let b = create_test_file(&dir, "b.mp4");
-        let items = vec![
+        let items = [
             PlaylistItem {
                 path: ItemPath::File(a),
                 duration: Some(Duration::from_secs(60)),
@@ -1068,7 +1068,7 @@ mod tests {
         let a = create_test_file(&dir, "a.mp4");
         let b = create_test_file(&dir, "b.mp4");
         let c = create_test_file(&dir, "c.mp4");
-        let items = vec![
+        let items = [
             PlaylistItem {
                 path: ItemPath::File(a),
                 duration: Some(Duration::from_secs(60)),

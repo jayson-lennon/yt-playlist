@@ -324,10 +324,6 @@ mod tests {
     use std::time::Duration;
     use tempfile::{NamedTempFile, TempDir};
 
-    fn item_path_from_canonical(path: &CanonicalPath) -> ItemPath {
-        ItemPath::File(path.clone())
-    }
-
     fn item_path_from_temp(temp: &NamedTempFile) -> ItemPath {
         ItemPath::File(CanonicalPath::from_path(temp.path()).unwrap())
     }

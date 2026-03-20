@@ -139,7 +139,6 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::sync::Arc;
 
     use crossterm::event::{KeyCode, KeyModifiers};

@@ -422,7 +422,7 @@ mod tests {
             .and_then(|n| n.to_str())
             .unwrap();
         assert_eq!(results[0].1, expected_filename);
-        assert!(!results[0].1.contains("/")); // filename shouldn't have path separators
+        assert!(!results[0].1.contains('/')); // filename shouldn't have path separators
     }
 
     #[tokio::test]
@@ -444,16 +444,16 @@ mod tests {
         // Then both paths are returned with appropriate content.
         assert_eq!(results.len(), 2);
 
-        let result1 = results.iter().find(|(p, _)| p == path1).unwrap();
-        assert_eq!(result1.1, "note for file 1");
+        let entry1 = results.iter().find(|(p, _)| p == path1).unwrap();
+        assert_eq!(entry1.1, "note for file 1");
 
-        let result2 = results.iter().find(|(p, _)| p == path2).unwrap();
+        let entry2 = results.iter().find(|(p, _)| p == path2).unwrap();
         let expected_filename = Path::new(path2)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap();
-        assert_eq!(result2.1, expected_filename);
-        assert!(!result2.1.contains("/"));
+        assert_eq!(entry2.1, expected_filename);
+        assert!(!entry2.1.contains('/'));
     }
 
     #[tokio::test]

@@ -156,7 +156,7 @@ impl PlaylistPane {
         is_focused: bool,
         is_filtering: bool,
         display_mode: ItemDisplayMode,
-    ) -> Vec<ListItem> {
+    ) -> Vec<ListItem<'_>> {
         filtered
             .iter()
             .enumerate()
