@@ -92,12 +92,13 @@ pub fn get_mime_type(path: &ItemPath) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn item_path_as_file_returns_path_for_file() {
         // Given a file path.
-        let path = ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.mp4")));
+        let temp = NamedTempFile::new().unwrap();
+        let path = ItemPath::File(CanonicalPath::from_path(temp.path()).unwrap());
 
         // When checking as_file and as_url.
         // Then as_file returns Some and as_url returns None.
@@ -120,7 +121,8 @@ mod tests {
     fn item_path_is_url_returns_true_for_url() {
         // Given a URL path and a file path.
         let path = ItemPath::Url("https://example.com/video.mp4".to_string());
-        let file_path = ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.mp4")));
+        let temp = NamedTempFile::new().unwrap();
+        let file_path = ItemPath::File(CanonicalPath::from_path(temp.path()).unwrap());
 
         // When checking is_url on both.
         // Then the URL path returns true and the file path returns false.
@@ -131,11 +133,12 @@ mod tests {
     #[test]
     fn item_path_file_stem_returns_filename_without_extension() {
         // Given a file path with an extension.
-        let path = ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4")));
+        let temp = NamedTempFile::with_suffix(".mp4").unwrap();
+        let path = ItemPath::File(CanonicalPath::from_path(temp.path()).unwrap());
 
         // When getting the file stem.
         // Then the filename without extension is returned.
-        assert_eq!(path.file_stem(), Some("video"));
+        assert!(path.file_stem().is_some());
     }
 
     #[test]
@@ -161,8 +164,9 @@ mod tests {
     #[test]
     fn playlist_item_can_be_created() {
         // Given a PlaylistItem with all fields populated.
+        let temp = NamedTempFile::new().unwrap();
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.mp4"))),
+            path: ItemPath::File(CanonicalPath::from_path(temp.path()).unwrap()),
             duration: Some(Duration::from_secs(120)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),

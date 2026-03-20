@@ -158,7 +158,9 @@ pub async fn refresh_library(
         let aliases: HashMap<PathBuf, Option<String>> = {
             let mut result = HashMap::new();
             for path in &paths {
-                let canonical = CanonicalPath::new(path.canonicalize().unwrap_or_else(|_| path.clone()));
+                let Ok(canonical) = CanonicalPath::from_path(&path.canonicalize().unwrap_or_else(|_| path.clone())) else {
+                    continue;
+                };
                 let alias = services
                     .storage
                     .resolve_alias(&canonical, &workspace)
@@ -173,7 +175,10 @@ pub async fn refresh_library(
         for path in paths {
             let canonical = path.canonicalize().unwrap_or(path);
             let duration = ctx.services.media.get_duration(&canonical).ok();
-            let item_path = ItemPath::File(CanonicalPath::new(canonical.clone()));
+            let Ok(cp) = CanonicalPath::from_path(&canonical) else {
+                continue;
+            };
+            let item_path = ItemPath::File(cp);
             let mime_type = get_mime_type(&item_path);
             let alias = aliases.get(&canonical).cloned().flatten();
             entries.push(PlaylistItem {
@@ -378,7 +383,8 @@ mod tests {
 
         let virtual_in_playlist = ItemPath::Url("https://example.com/in-playlist.mp3".to_string());
         let virtual_not_in_playlist = ItemPath::Url("https://example.com/not-in-playlist.mp3".to_string());
-        let regular_file = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/regular/file.mp3")));
+        let regular_temp = tempfile::NamedTempFile::new().unwrap();
+        let regular_file = ItemPath::File(CanonicalPath::from_path(regular_temp.path()).unwrap());
 
         let data = PlaylistData {
             working_directory: library_path.clone(),
@@ -498,8 +504,10 @@ mod tests {
         let library_path = CanonicalPath::from_path(temp.path()).unwrap();
         let storage = Arc::new(FakeStorageBackend::new());
 
-        let file1 = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/file1.mp3")));
-        let file2 = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/file2.mp3")));
+        let temp1 = tempfile::NamedTempFile::new().unwrap();
+        let temp2 = tempfile::NamedTempFile::new().unwrap();
+        let file1 = ItemPath::File(CanonicalPath::from_path(temp1.path()).unwrap());
+        let file2 = ItemPath::File(CanonicalPath::from_path(temp2.path()).unwrap());
 
         let data = PlaylistData {
             working_directory: library_path.clone(),
@@ -550,8 +558,10 @@ mod tests {
         let library_path = CanonicalPath::from_path(temp.path()).unwrap();
         let storage = Arc::new(FakeStorageBackend::new());
 
-        let known_file = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/known.mp3")));
-        let unknown_file = ItemPath::File(CanonicalPath::new(std::path::PathBuf::from("/path/unknown.mp3")));
+        let known_temp = tempfile::NamedTempFile::new().unwrap();
+        let unknown_temp = tempfile::NamedTempFile::new().unwrap();
+        let known_file = ItemPath::File(CanonicalPath::from_path(known_temp.path()).unwrap());
+        let unknown_file = ItemPath::File(CanonicalPath::from_path(unknown_temp.path()).unwrap());
 
         let data = PlaylistData {
             working_directory: library_path.clone(),

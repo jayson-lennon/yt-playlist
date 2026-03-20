@@ -154,7 +154,7 @@ impl MarkedPath<Absolute> {
     /// (e.g., if it doesn't exist or there are permission issues).
     pub fn canonicalize(&self) -> Result<CanonicalPath, Report<PathError>> {
         let canonicalized = self.path.canonicalize().change_context(PathError)?;
-        Ok(CanonicalPath::new(canonicalized))
+        CanonicalPath::new(canonicalized)
     }
 
     /// Appends a relative path to this absolute path.
@@ -221,15 +221,22 @@ impl Clone for CanonicalPath {
 }
 
 impl CanonicalPath {
-    /// Creates a new `CanonicalPath` from a pre-canonicalized path.
+    /// Creates a new `CanonicalPath` from a path, validating it is canonical.
     ///
-    /// This constructor should only be used when you are certain the path
-    /// is already canonicalized. For most cases, prefer [`from_path`](Self::from_path).
-    pub fn new(path: PathBuf) -> Self {
-        Self(MarkedPath {
+    /// # Errors
+    ///
+    /// Returns a [`PathError`] if:
+    /// - The path does not exist
+    /// - The path is not in canonical form (contains `.`, `..`, or is a symlink)
+    pub fn new(path: PathBuf) -> Result<Self, Report<PathError>> {
+        let canonicalized = path.canonicalize().change_context(PathError)?;
+        if canonicalized != path {
+            return Err(Report::new(PathError).attach("path is not in canonical form"));
+        }
+        Ok(Self(MarkedPath {
             path,
             _marker: PhantomData,
-        })
+        }))
     }
 
     /// Creates a `CanonicalPath` by canonicalizing the given path.
@@ -237,10 +244,10 @@ impl CanonicalPath {
     /// # Errors
     ///
     /// Returns a [`PathError`] if the path cannot be canonicalized
-    /// (e.g., if it doesn't exist or there are permission issues).
+    /// (e.g., if it doesn't exist or if there are permission issues).
     pub fn from_path(path: &Path) -> Result<Self, Report<PathError>> {
         let canonicalized = path.canonicalize().change_context(PathError)?;
-        Ok(Self::new(canonicalized))
+        CanonicalPath::new(canonicalized)
     }
 
     /// Returns a reference to the underlying [`Path`].

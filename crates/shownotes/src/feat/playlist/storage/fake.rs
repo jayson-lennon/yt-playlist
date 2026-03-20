@@ -27,7 +27,7 @@ fn pathbuf_to_item_path(path: PathBuf) -> ItemPath {
     if path_str.starts_with("http://") || path_str.starts_with("https://") {
         ItemPath::Url(path_str.into_owned())
     } else {
-        ItemPath::File(CanonicalPath::new(path))
+        ItemPath::File(CanonicalPath::from_path(&path).expect("path must exist for fake storage"))
     }
 }
 
@@ -322,17 +322,18 @@ impl PlaylistStorage for FakeStorageBackend {
 mod tests {
     use super::*;
     use std::time::Duration;
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
 
-    fn item_path(path: impl Into<PathBuf>) -> ItemPath {
-        let path = path.into();
-        if path.to_string_lossy().starts_with("http://")
-            || path.to_string_lossy().starts_with("https://")
-        {
-            ItemPath::Url(path.to_string_lossy().to_string())
-        } else {
-            ItemPath::File(CanonicalPath::new(path))
-        }
+    fn item_path_from_canonical(path: &CanonicalPath) -> ItemPath {
+        ItemPath::File(path.clone())
+    }
+
+    fn item_path_from_temp(temp: &NamedTempFile) -> ItemPath {
+        ItemPath::File(CanonicalPath::from_path(temp.path()).unwrap())
+    }
+
+    fn url_path(url: &str) -> ItemPath {
+        ItemPath::Url(url.to_string())
     }
 
     fn create_test_metadata() -> FileMetadata {
@@ -356,8 +357,10 @@ mod tests {
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        let file1 = item_path("/workspace1/file1.mp3");
-        let file2 = item_path("/workspace2/file2.mp3");
+        let file1_temp = NamedTempFile::new().unwrap();
+        let file2_temp = NamedTempFile::new().unwrap();
+        let file1 = item_path_from_temp(&file1_temp);
+        let file2 = item_path_from_temp(&file2_temp);
 
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
@@ -398,9 +401,12 @@ mod tests {
         // Given a file with different aliases in different workspaces.
         let backend = FakeStorageBackend::new();
 
-        let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
-        let workspace2 = CanonicalPath::new(PathBuf::from("/workspace2"));
-        let file = CanonicalPath::new(PathBuf::from("/shared/file.mp3"));
+        let workspace1_temp = TempDir::new().unwrap();
+        let workspace2_temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(workspace1_temp.path()).unwrap();
+        let workspace2 = CanonicalPath::from_path(workspace2_temp.path()).unwrap();
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
 
         {
             let mut data = backend.data.write().unwrap();
@@ -434,9 +440,12 @@ mod tests {
         // Given a file with aliases at different timestamps and an unknown workspace.
         let backend = FakeStorageBackend::new();
 
-        let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
-        let unknown_workspace = CanonicalPath::new(PathBuf::from("/unknown"));
-        let file = CanonicalPath::new(PathBuf::from("/shared/file.mp3"));
+        let workspace1_temp = TempDir::new().unwrap();
+        let unknown_workspace_temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
+        let workspace1 = CanonicalPath::from_path(workspace1_temp.path()).unwrap();
+        let unknown_workspace = CanonicalPath::from_path(unknown_workspace_temp.path()).unwrap();
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
 
         let ts1 = Timestamp::now();
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -451,10 +460,11 @@ mod tests {
                 ),
                 ("older_alias".to_string(), ts1),
             );
+            let other_workspace_temp = TempDir::new().unwrap();
             data.aliases.insert(
                 (
                     file.as_path().to_path_buf(),
-                    PathBuf::from("/other_workspace"),
+                    other_workspace_temp.path().to_path_buf(),
                 ),
                 ("newer_alias".to_string(), ts2),
             );
@@ -476,8 +486,9 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = item_path("/workspace/file.mp3");
+        let file = item_path_from_temp(&file_temp);
 
         let data = PlaylistData {
             working_directory: workspace.clone(),
@@ -488,7 +499,7 @@ mod tests {
         };
         backend.save(&data).await.unwrap();
 
-        let file_canonical = CanonicalPath::new(PathBuf::from("/workspace/file.mp3"));
+        let file_canonical = CanonicalPath::from_path(file_temp.path()).unwrap();
         backend
             .upsert_alias(&file_canonical, &workspace, "My File")
             .await
@@ -508,9 +519,10 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let regular_file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let virtual_file = ItemPath::Url("https://example.com/stream.mp3".to_string());
-        let regular_file = item_path("/regular/file.mp3");
+        let virtual_file = url_path("https://example.com/stream.mp3");
+        let regular_file = item_path_from_temp(&regular_file_temp);
 
         let data = PlaylistData {
             working_directory: workspace.clone(),
@@ -563,8 +575,9 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = item_path("/workspace/audio.mp3");
+        let file = item_path_from_temp(&file_temp);
         let original_metadata = create_test_metadata();
 
         let data = PlaylistData {
@@ -626,9 +639,8 @@ mod tests {
 
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let files: Vec<ItemPath> = (0..5)
-            .map(|i| item_path(format!("/workspace/file{i}.mp3")))
-            .collect();
+        let file_temps: Vec<NamedTempFile> = (0..5).map(|_| NamedTempFile::new().unwrap()).collect();
+        let files: Vec<ItemPath> = file_temps.iter().map(item_path_from_temp).collect();
 
         let data = PlaylistData {
             working_directory: workspace.clone(),
@@ -670,8 +682,9 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = CanonicalPath::new(PathBuf::from("/test/file.mp3"));
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
 
         // When upserting an alias.
         backend
@@ -689,8 +702,9 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = CanonicalPath::new(PathBuf::from("/test/file.mp3"));
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
 
         // Given an alias exists
         backend
@@ -714,8 +728,9 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = CanonicalPath::new(PathBuf::from("/unknown/file.mp3"));
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
 
         // When resolving an alias for an unknown file.
         let alias = backend.resolve_alias(&file, &workspace).await.unwrap();
@@ -746,8 +761,10 @@ mod tests {
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        let file1 = item_path("/shared/file1.mp3");
-        let file2 = item_path("/shared/file2.mp3");
+        let file1_temp = NamedTempFile::new().unwrap();
+        let file2_temp = NamedTempFile::new().unwrap();
+        let file1 = item_path_from_temp(&file1_temp);
+        let file2 = item_path_from_temp(&file2_temp);
 
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
@@ -788,9 +805,9 @@ mod tests {
         let backend = FakeStorageBackend::new();
 
         let temp = TempDir::new().unwrap();
+        let file_temp = NamedTempFile::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
-
-        let file = item_path("/unique/file.mp3");
+        let file = item_path_from_temp(&file_temp);
 
         let data = PlaylistData {
             working_directory: workspace.clone(),

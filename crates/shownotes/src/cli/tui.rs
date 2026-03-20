@@ -432,13 +432,14 @@ mod tests {
     use super::*;
     use crate::common::domain::ItemPath;
     use marked_path::CanonicalPath;
-    use std::path::PathBuf;
 
     #[test]
     fn requires_suspend_returns_true_for_add_note() {
-        // Given an AddNote action.
+        // Given an AddNote action with a real temp file.
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
         let action = ForkAction::AddNote {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/test"))),
+            path: ItemPath::File(path),
         };
 
         // When checking if suspend is required.
@@ -458,9 +459,11 @@ mod tests {
 
     #[test]
     fn requires_suspend_returns_true_for_edit_sources() {
-        // Given an EditSources action.
+        // Given an EditSources action with a real temp file.
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
         let action = ForkAction::EditSources {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/test"))),
+            path: ItemPath::File(path),
         };
 
         // When checking if suspend is required.

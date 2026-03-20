@@ -160,8 +160,8 @@ mod tests {
     use crate::tui::{get_mime_type, Pane};
 
     struct TestAppBuilder {
-        playlist_items: Vec<PathBuf>,
-        library_items: Vec<PathBuf>,
+        playlist_items: Vec<CanonicalPath>,
+        library_items: Vec<CanonicalPath>,
         library_path: CanonicalPath,
         mpv_launcher: FakeMpvLauncher,
         mpv_backend: FakeMpvBackend,
@@ -176,7 +176,7 @@ mod tests {
             Self {
                 playlist_items: vec![],
                 library_items: vec![],
-                library_path: CanonicalPath::new(PathBuf::from(".")),
+                library_path: CanonicalPath::from_path(std::path::Path::new(".")).unwrap(),
                 mpv_launcher: FakeMpvLauncher::new(),
                 mpv_backend: FakeMpvBackend,
                 media_backend: FakeMediaBackend,
@@ -186,18 +186,18 @@ mod tests {
             }
         }
 
-        fn playlist_items(mut self, items: Vec<PathBuf>) -> Self {
+        fn playlist_items(mut self, items: Vec<CanonicalPath>) -> Self {
             self.playlist_items = items;
             self
         }
 
-        fn library_items(mut self, items: Vec<PathBuf>) -> Self {
+        fn library_items(mut self, items: Vec<CanonicalPath>) -> Self {
             self.library_items = items;
             self
         }
 
-        fn library_path(mut self, path: PathBuf) -> Self {
-            self.library_path = CanonicalPath::new(path);
+        fn library_path(mut self, path: CanonicalPath) -> Self {
+            self.library_path = path;
             self
         }
 
@@ -248,8 +248,8 @@ mod tests {
             };
 
             for path in self.playlist_items {
-                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
-                let duration = app.ctx.services.media.get_duration(&path).ok();
+                let item_path = ItemPath::File(path.clone());
+                let duration = app.ctx.services.media.get_duration(path.as_path()).ok();
                 let mime_type = get_mime_type(&item_path);
                 app.tui_state.playlist_pane.items.push(PlaylistItem {
                     path: item_path,
@@ -263,8 +263,8 @@ mod tests {
             }
 
             for path in self.library_items {
-                let item_path = ItemPath::File(CanonicalPath::new(path.clone()));
-                let duration = app.ctx.services.media.get_duration(&path).ok();
+                let item_path = ItemPath::File(path.clone());
+                let duration = app.ctx.services.media.get_duration(path.as_path()).ok();
                 let mime_type = get_mime_type(&item_path);
                 app.tui_state.library_pane.items.push(PlaylistItem {
                     path: item_path,
@@ -326,6 +326,23 @@ mod tests {
         ))
     }
 
+    fn temp_file() -> (tempfile::NamedTempFile, CanonicalPath) {
+        let temp = tempfile::NamedTempFile::with_suffix(".mp4").unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
+        (temp, path)
+    }
+
+    fn temp_files(n: usize) -> (Vec<tempfile::NamedTempFile>, Vec<CanonicalPath>) {
+        let mut temps = Vec::with_capacity(n);
+        let mut paths = Vec::with_capacity(n);
+        for _ in 0..n {
+            let (temp, path) = temp_file();
+            temps.push(temp);
+            paths.push(path);
+        }
+        (temps, paths)
+    }
+
     #[test]
     fn quit_action_saves_and_exits() {
         // Given an empty app.
@@ -348,8 +365,9 @@ mod tests {
     #[test]
     fn save_action_shows_status_message() {
         // Given an app with one item in the playlist.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // When executing Save action.
@@ -368,9 +386,10 @@ mod tests {
     #[test]
     fn switch_pane_toggles_between_panes() {
         // Given an app focused on the playlist pane with items in both panes.
+        let (_temps, paths) = temp_files(2);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .library_items(vec![PathBuf::from("library.mp4")])
+            .playlist_items(vec![paths[0].clone()])
+            .library_items(vec![paths[1].clone()])
             .build();
 
         // When executing SwitchPane action twice.
@@ -383,9 +402,10 @@ mod tests {
     #[test]
     fn focus_playlist_switches_to_playlist_pane() {
         // Given an app focused on the library pane with items in both panes.
+        let (_temps, paths) = temp_files(2);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .library_items(vec![PathBuf::from("library.mp4")])
+            .playlist_items(vec![paths[0].clone()])
+            .library_items(vec![paths[1].clone()])
             .build();
         app.tui_state.focused_pane = Pane::Library;
 
@@ -399,9 +419,10 @@ mod tests {
     #[test]
     fn focus_library_switches_to_library_pane() {
         // Given an app focused on the playlist pane with items in both panes.
+        let (_temps, paths) = temp_files(2);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("playlist.mp4")])
-            .library_items(vec![PathBuf::from("library.mp4")])
+            .playlist_items(vec![paths[0].clone()])
+            .library_items(vec![paths[1].clone()])
             .build();
 
         // When executing FocusLibrary action.
@@ -414,12 +435,9 @@ mod tests {
     #[test]
     fn move_down_moves_selection_down_in_playlist() {
         // Given a playlist with three items.
+        let (_temps, paths) = temp_files(3);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![
-                PathBuf::from("a.mp4"),
-                PathBuf::from("b.mp4"),
-                PathBuf::from("c.mp4"),
-            ])
+            .playlist_items(paths)
             .build();
 
         // When executing MoveDown action three times.
@@ -435,12 +453,9 @@ mod tests {
     #[test]
     fn move_up_moves_selection_up_in_playlist() {
         // Given a playlist with three items and selection on the last item.
+        let (_temps, paths) = temp_files(3);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![
-                PathBuf::from("a.mp4"),
-                PathBuf::from("b.mp4"),
-                PathBuf::from("c.mp4"),
-            ])
+            .playlist_items(paths)
             .build();
         app.tui_state.playlist_pane.selected = 2;
 
@@ -454,12 +469,9 @@ mod tests {
     #[test]
     fn move_up_down_navigate_library() {
         // Given a library with three items.
+        let (_temps, paths) = temp_files(3);
         let mut app = TestAppBuilder::new()
-            .library_items(vec![
-                PathBuf::from("x.mp4"),
-                PathBuf::from("y.mp4"),
-                PathBuf::from("z.mp4"),
-            ])
+            .library_items(paths)
             .focused_on(Pane::Library)
             .build();
 
@@ -473,12 +485,9 @@ mod tests {
     #[test]
     fn reorder_up_moves_playlist_item_up() {
         // Given a playlist with three items and middle item selected.
+        let (_temps, paths) = temp_files(3);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![
-                PathBuf::from("a.mp4"),
-                PathBuf::from("b.mp4"),
-                PathBuf::from("c.mp4"),
-            ])
+            .playlist_items(paths.clone())
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
         app.tui_state.playlist_pane.selected = 1;
@@ -490,23 +499,20 @@ mod tests {
         assert_eq!(app.tui_state.playlist_pane.selected, 0);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+            ItemPath::File(paths[1].clone())
         );
         assert_eq!(
             app.tui_state.playlist_pane.items[1].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4")))
+            ItemPath::File(paths[0].clone())
         );
     }
 
     #[test]
     fn reorder_down_moves_playlist_item_down() {
         // Given a playlist with items reordered and first item selected.
+        let (_temps, paths) = temp_files(3);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![
-                PathBuf::from("b.mp4"),
-                PathBuf::from("a.mp4"),
-                PathBuf::from("c.mp4"),
-            ])
+            .playlist_items(paths.clone())
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
         app.tui_state.playlist_pane.selected = 0;
@@ -518,19 +524,20 @@ mod tests {
         assert_eq!(app.tui_state.playlist_pane.selected, 1);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4")))
+            ItemPath::File(paths[1].clone())
         );
         assert_eq!(
             app.tui_state.playlist_pane.items[1].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+            ItemPath::File(paths[0].clone())
         );
     }
 
     #[test]
     fn move_to_playlist_moves_library_item_to_playlist() {
         // Given a library with one item and empty playlist.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![path.clone()])
             .build();
         app.tui_state.focused_pane = Pane::Library;
 
@@ -541,7 +548,7 @@ mod tests {
         assert_eq!(app.tui_state.playlist_pane.items.len(), 1);
         assert_eq!(
             app.tui_state.playlist_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4")))
+            ItemPath::File(path)
         );
         assert!(app.tui_state.library_pane.items.is_empty());
     }
@@ -549,10 +556,9 @@ mod tests {
     #[test]
     fn move_to_library_moves_playlist_item_to_library() {
         // Given a playlist with one item and empty library.
-        let temp_file = tempfile::NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path().to_path_buf();
+        let (_temp_file, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![temp_path.clone()])
+            .playlist_items(vec![path.clone()])
             .build();
         app.tui_state.focused_pane = Pane::Playlist;
 
@@ -564,15 +570,16 @@ mod tests {
         assert_eq!(app.tui_state.library_pane.items.len(), 1);
         assert_eq!(
             app.tui_state.library_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(temp_path))
+            ItemPath::File(path)
         );
     }
 
     #[test]
     fn launch_file_shows_status_message() {
         // Given a playlist with one item.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // When executing LaunchFile action.
@@ -591,8 +598,9 @@ mod tests {
     #[test]
     fn load_playlist_shows_status_message() {
         // Given a playlist with items.
+        let (_temps, paths) = temp_files(2);
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("a.mp4"), PathBuf::from("b.mp4")])
+            .playlist_items(paths)
             .build();
 
         // When executing LoadPlaylist action.
@@ -623,8 +631,9 @@ mod tests {
     #[test]
     fn switch_pane_does_not_switch_to_empty_library() {
         // Given a playlist with items and empty library.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // When executing SwitchPane action.
@@ -637,8 +646,9 @@ mod tests {
     #[test]
     fn switch_pane_does_not_switch_to_empty_playlist() {
         // Given an empty playlist and library with items.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![path])
             .build();
 
         // When executing SwitchPane action.
@@ -651,8 +661,9 @@ mod tests {
     #[test]
     fn focus_playlist_does_not_switch_to_empty_playlist() {
         // Given an empty playlist and library with items, focused on library.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![path])
             .build();
         app.tui_state.focused_pane = Pane::Library;
 
@@ -666,8 +677,9 @@ mod tests {
     #[test]
     fn focus_library_does_not_switch_to_empty_library() {
         // Given a playlist with items and empty library, focused on playlist.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // When executing FocusLibrary action.
@@ -680,8 +692,9 @@ mod tests {
     #[test]
     fn initial_focus_library_when_playlist_empty() {
         // Given an empty playlist and library with items.
+        let (_temp, path) = temp_file();
         let app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![path])
             .build();
 
         // Then focus is on library.
@@ -691,8 +704,9 @@ mod tests {
     #[test]
     fn initial_focus_playlist_when_library_empty() {
         // Given a playlist with items and empty library.
+        let (_temp, path) = temp_file();
         let app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // Then focus is on playlist.
@@ -702,9 +716,10 @@ mod tests {
     #[test]
     fn initial_focus_playlist_when_both_have_items() {
         // Given both panes with items.
+        let (_temps, paths) = temp_files(2);
         let app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("a.mp4")])
-            .library_items(vec![PathBuf::from("b.mp4")])
+            .playlist_items(vec![paths[0].clone()])
+            .library_items(vec![paths[1].clone()])
             .build();
 
         // Then focus is on playlist (default).
@@ -735,8 +750,9 @@ mod tests {
     #[test]
     fn start_filter_activates_on_playlist() {
         // Given an app focused on playlist with items, not filtering.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // When executing StartFilter action.
@@ -749,8 +765,9 @@ mod tests {
     #[test]
     fn start_filter_activates_on_library() {
         // Given an app focused on library with items, not filtering.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .library_items(vec![PathBuf::from("test.mp4")])
+            .library_items(vec![path])
             .focused_on(Pane::Library)
             .build();
 
@@ -764,8 +781,9 @@ mod tests {
     #[test]
     fn rename_starts_rename_mode() {
         // Given an app with a selected item, not renaming.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("test.mp4")])
+            .playlist_items(vec![path])
             .build();
 
         // When executing Rename action.
@@ -778,8 +796,9 @@ mod tests {
     #[test]
     fn notes_sets_pending_path_when_item_selected() {
         // Given an app with a selected item and no pending notes path.
+        let (_temp, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .playlist_items(vec![PathBuf::from("/path/to/video.mp4")])
+            .playlist_items(vec![path.clone()])
             .build();
 
         // When executing Notes action.
@@ -788,9 +807,7 @@ mod tests {
         // Then pending notes path is set to the selected item's path.
         assert_eq!(
             app.fork.notes_path,
-            Some(ItemPath::File(CanonicalPath::new(PathBuf::from(
-                "/path/to/video.mp4"
-            ))))
+            Some(ItemPath::File(path))
         );
     }
 
@@ -1014,8 +1031,11 @@ mod tests {
     fn missing_file_removed_when_moved_from_playlist_to_library() {
         // Given a playlist with a missing non-virtual file.
         let mut app = TestAppBuilder::new().build();
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
+        drop(temp);
         app.tui_state.playlist_pane.items.push(PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/nonexistent/file.mp4"))),
+            path: ItemPath::File(path),
             duration: None,
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -1040,8 +1060,9 @@ mod tests {
             "real.mp4": "video content",
         };
 
+        let library_path = CanonicalPath::from_path(tree.path()).unwrap();
         let mut app = TestAppBuilder::new()
-            .library_path(tree.path().to_path_buf())
+            .library_path(library_path)
             .build();
         let url = "https://example.com/video.mp4";
         app.tui_state.library_pane.items.push(PlaylistItem {
@@ -1079,11 +1100,15 @@ mod tests {
         // Given a temp directory with no files and an app with a non-virtual item.
         let tree = temptree::temptree! {};
 
+        let library_path = CanonicalPath::from_path(tree.path()).unwrap();
         let mut app = TestAppBuilder::new()
-            .library_path(tree.path().to_path_buf())
+            .library_path(library_path)
             .build();
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
+        drop(temp);
         app.tui_state.library_pane.items.push(PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/nonexistent/file.mp4"))),
+            path: ItemPath::File(path),
             duration: None,
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -1125,10 +1150,9 @@ mod tests {
     #[test]
     fn delete_action_rejected_for_non_virtual_items() {
         // Given an app with a non-virtual item in the library.
-        let temp_file = tempfile::NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path().to_path_buf();
+        let (_temp_file, path) = temp_file();
         let mut app = TestAppBuilder::new()
-            .library_items(vec![temp_path.clone()])
+            .library_items(vec![path])
             .build();
         app.tui_state.focused_pane = Pane::Library;
 
@@ -1161,10 +1185,9 @@ mod tests {
     #[test]
     fn fork_take_action_returns_add_note_and_clears_flag() {
         // Given a fork with notes_path set.
+        let (_temp, path) = temp_file();
         let mut fork = Fork {
-            notes_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from(
-                "/test/path",
-            )))),
+            notes_path: Some(ItemPath::File(path)),
             ..Default::default()
         };
 
@@ -1195,10 +1218,9 @@ mod tests {
     #[test]
     fn fork_take_action_returns_edit_sources_and_clears_flag() {
         // Given a fork with sources_path set.
+        let (_temp, path) = temp_file();
         let mut fork = Fork {
-            sources_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from(
-                "/test/sources",
-            )))),
+            sources_path: Some(ItemPath::File(path)),
             ..Default::default()
         };
 
@@ -1229,8 +1251,9 @@ mod tests {
     #[test]
     fn fork_take_action_priority_order() {
         // Given a fork with multiple flags set.
+        let (_temp, path) = temp_file();
         let mut fork = Fork {
-            notes_path: Some(ItemPath::File(CanonicalPath::new(PathBuf::from("/note")))),
+            notes_path: Some(ItemPath::File(path)),
             fuzzy_notes: true,
             ..Default::default()
         };

@@ -158,9 +158,9 @@ mod tests {
         }
     }
 
-    fn file_item(path: &str) -> PlaylistItem {
+    fn file_item(path: CanonicalPath) -> PlaylistItem {
         PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from(path))),
+            path: ItemPath::File(path),
             duration: None,
             alias: None,
             mime_type: None,
@@ -264,8 +264,10 @@ mod tests {
         // Given a TUI state with a file item selected.
         let launcher = Arc::new(FakeLauncher::new());
         let (ctx, _temp_file) = create_test_ctx_with_launcher(launcher.clone()).await;
+        let video_temp = NamedTempFile::new().unwrap();
+        let video_path = CanonicalPath::from_path(video_temp.path()).unwrap();
         let mut tui_state = TuiState::new();
-        tui_state.playlist_pane.items = vec![file_item("/path/to/video.mp4")];
+        tui_state.playlist_pane.items = vec![file_item(video_path)];
         tui_state.focused_pane = Pane::Playlist;
         let mut fork = Fork::default();
         let mut action_ctx = TuiActionCtx {
@@ -282,5 +284,6 @@ mod tests {
         // Then the launcher is called and status bar is set.
         assert_eq!(launcher.launch_called.load(Ordering::SeqCst), 1);
         assert!(tui_state.status_bar.message().is_some());
+        drop(video_temp);
     }
 }

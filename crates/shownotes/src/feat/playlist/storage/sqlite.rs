@@ -11,11 +11,13 @@ use wherror::Error;
 use super::super::{FileMetadata, IoError, PlaylistData, PlaylistStorage};
 use crate::common::domain::ItemPath;
 
-fn path_to_item_path(path: &str) -> ItemPath {
+fn path_to_item_path(path: &str) -> Option<ItemPath> {
     if path.starts_with("http://") || path.starts_with("https://") {
-        ItemPath::Url(path.to_string())
+        Some(ItemPath::Url(path.to_string()))
     } else {
-        ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
+        CanonicalPath::from_path(&PathBuf::from(path))
+            .ok()
+            .map(ItemPath::File)
     }
 }
 
@@ -321,16 +323,17 @@ impl PlaylistStorage for SqliteStorage {
 
         let playlist: Vec<ItemPath> = items
             .iter()
-            .map(|(path, _)| path_to_item_path(path))
+            .filter_map(|(path, _)| path_to_item_path(path))
             .collect();
         let playlist_file_ids: HashSet<i64> = items.iter().map(|(_, id)| *id).collect();
 
         let mut files: HashMap<ItemPath, FileMetadata> = HashMap::new();
 
         for (path_str, file_path_id) in &items {
-            let item_path = path_to_item_path(path_str);
-            let metadata = self.get_file_metadata(*file_path_id, workspace_id).await?;
-            files.insert(item_path, metadata);
+            if let Some(item_path) = path_to_item_path(path_str) {
+                let metadata = self.get_file_metadata(*file_path_id, workspace_id).await?;
+                files.insert(item_path, metadata);
+            }
         }
 
         let working_dir_str = working_directory.as_path().to_string_lossy();
@@ -359,9 +362,10 @@ impl PlaylistStorage for SqliteStorage {
                 continue;
             }
 
-            let item_path = path_to_item_path(&path_str);
-            let metadata = self.get_file_metadata(file_path_id, workspace_id).await?;
-            files.insert(item_path, metadata);
+            if let Some(item_path) = path_to_item_path(&path_str) {
+                let metadata = self.get_file_metadata(file_path_id, workspace_id).await?;
+                files.insert(item_path, metadata);
+            }
         }
 
         Ok(PlaylistData {
@@ -499,17 +503,25 @@ mod tests {
     use super::*;
     use crate::feat::note_db::SqliteNoteDb;
     use jiff::Timestamp;
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
 
-    fn item_path(path: impl Into<PathBuf>) -> ItemPath {
-        let path = path.into();
-        if path.to_string_lossy().starts_with("http://")
-            || path.to_string_lossy().starts_with("https://")
-        {
-            ItemPath::Url(path.to_string_lossy().to_string())
-        } else {
-            ItemPath::File(CanonicalPath::new(path))
-        }
+    fn create_temp_file() -> (NamedTempFile, CanonicalPath) {
+        let temp = tempfile::Builder::new()
+            .suffix(".mp4")
+            .tempfile()
+            .unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
+        (temp, path)
+    }
+
+    fn create_temp_file_in(dir: &Path, name: &str) -> (NamedTempFile, CanonicalPath) {
+        let temp = tempfile::Builder::new()
+            .prefix(name)
+            .suffix(".mp4")
+            .tempfile_in(dir)
+            .unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
+        (temp, path)
     }
 
     async fn create_test_storage() -> SqliteStorage {
@@ -542,9 +554,12 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file1 = item_path(working_dir.as_path().join("video1.mp4"));
-        let file2 = item_path(working_dir.as_path().join("video2.mp4"));
-        let non_playlist_file = item_path(working_dir.as_path().join("other.mp4"));
+        let (_temp1, file1_path) = create_temp_file_in(temp.path(), "file1");
+        let (_temp2, file2_path) = create_temp_file_in(temp.path(), "file2");
+        let (_temp3, non_playlist_file_path) = create_temp_file_in(temp.path(), "non_playlist");
+        let file1 = ItemPath::File(file1_path.clone());
+        let file2 = ItemPath::File(file2_path.clone());
+        let non_playlist_file = ItemPath::File(non_playlist_file_path.clone());
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -672,8 +687,10 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file = item_path(working_dir.as_path().join("deleted.mp4"));
-        let non_playlist_file = item_path(working_dir.as_path().join("other_deleted.mp4"));
+        let (_temp1, file_path) = create_temp_file_in(temp.path(), "file");
+        let (_temp2, non_playlist_file_path) = create_temp_file_in(temp.path(), "non_playlist");
+        let file = ItemPath::File(file_path.clone());
+        let non_playlist_file = ItemPath::File(non_playlist_file_path.clone());
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -723,9 +740,9 @@ mod tests {
         // Given aliases for the same file in different workspaces.
         let storage = create_test_storage().await;
 
-        let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
-        let workspace2 = CanonicalPath::new(PathBuf::from("/workspace2"));
-        let file = CanonicalPath::new(PathBuf::from("/shared/file.mp4"));
+        let (_temp1, workspace1) = create_temp_file();
+        let (_temp2, workspace2) = create_temp_file();
+        let (_temp_file, file) = create_temp_file();
 
         storage
             .upsert_alias(&file, &workspace1, "Workspace1 Alias")
@@ -751,10 +768,10 @@ mod tests {
         // Given aliases for a file in multiple workspaces.
         let storage = create_test_storage().await;
 
-        let workspace1 = CanonicalPath::new(PathBuf::from("/workspace1"));
-        let workspace2 = CanonicalPath::new(PathBuf::from("/workspace2"));
-        let workspace3 = CanonicalPath::new(PathBuf::from("/workspace3"));
-        let file = CanonicalPath::new(PathBuf::from("/shared/file.mp4"));
+        let (_temp1, workspace1) = create_temp_file();
+        let (_temp2, workspace2) = create_temp_file();
+        let (_temp3, workspace3) = create_temp_file();
+        let (_temp_file, file) = create_temp_file();
 
         storage
             .upsert_alias(&file, &workspace1, "First Alias")
@@ -782,7 +799,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file = item_path(working_dir.as_path().join("video.mp4"));
+        let (_temp, file_path) = create_temp_file();
+        let file = ItemPath::File(file_path.clone());
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -803,9 +821,8 @@ mod tests {
         };
         storage.save(&data).await.unwrap();
 
-        let file_canonical = CanonicalPath::new(working_dir.as_path().join("video.mp4"));
         storage
-            .upsert_alias(&file_canonical, &working_dir, "My Video")
+            .upsert_alias(&file_path, &working_dir, "My Video")
             .await
             .unwrap();
 
@@ -822,7 +839,7 @@ mod tests {
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = CanonicalPath::new(PathBuf::from("/test/file.mp4"));
+        let (_temp_file, file) = create_temp_file();
 
         // Given an alias exists
         storage
@@ -845,7 +862,7 @@ mod tests {
         let storage = create_test_storage().await;
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
-        let file = CanonicalPath::new(PathBuf::from("/test/file.mp4"));
+        let (_temp_file, file) = create_temp_file();
 
         // When deleting a non-existent alias
         let result = storage.delete_alias(&file, &working_dir).await;
@@ -864,7 +881,8 @@ mod tests {
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        let shared_file = item_path("/shared/video.mp4");
+        let (_shared_temp, shared_file_canonical) = create_temp_file();
+        let shared_file = ItemPath::File(shared_file_canonical.clone());
 
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
@@ -905,7 +923,6 @@ mod tests {
         storage.save(&data1).await.unwrap();
         storage.save(&data2).await.unwrap();
 
-        let shared_file_canonical = CanonicalPath::new(PathBuf::from("/shared/video.mp4"));
         storage
             .upsert_alias(&shared_file_canonical, &workspace1, "WS1 Alias")
             .await
@@ -945,7 +962,8 @@ mod tests {
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        let shared_file = item_path("/shared/video.mp4");
+        let (_shared_temp, shared_file_canonical) = create_temp_file();
+        let shared_file = ItemPath::File(shared_file_canonical.clone());
 
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
@@ -985,7 +1003,6 @@ mod tests {
         };
         storage.save(&data2).await.unwrap();
 
-        let shared_file_canonical = CanonicalPath::new(PathBuf::from("/shared/video.mp4"));
         storage
             .upsert_alias(&shared_file_canonical, &workspace1, "Older Alias from WS1")
             .await
@@ -1041,8 +1058,10 @@ mod tests {
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        let file1 = item_path("/ws1/file1.mp4");
-        let file2 = item_path("/ws2/file2.mp4");
+        let (_temp1, file1_path) = create_temp_file();
+        let (_temp2, file2_path) = create_temp_file();
+        let file1 = ItemPath::File(file1_path.clone());
+        let file2 = ItemPath::File(file2_path.clone());
 
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
@@ -1102,9 +1121,12 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file1 = item_path("/file1.mp4");
-        let file2 = item_path("/file2.mp4");
-        let file3 = item_path("/file3.mp4");
+        let (_temp1, file1_path) = create_temp_file();
+        let (_temp2, file2_path) = create_temp_file();
+        let (_temp3, file3_path) = create_temp_file();
+        let file1 = ItemPath::File(file1_path.clone());
+        let file2 = ItemPath::File(file2_path.clone());
+        let file3 = ItemPath::File(file3_path.clone());
 
         let data1 = PlaylistData {
             working_directory: working_dir.clone(),
@@ -1173,8 +1195,12 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let files: Vec<ItemPath> = (0..10)
-            .map(|i| item_path(format!("/file{i}.mp4")))
+        let temp_files: Vec<(NamedTempFile, CanonicalPath)> = (0..10)
+            .map(|_| create_temp_file())
+            .collect();
+        let files: Vec<ItemPath> = temp_files
+            .iter()
+            .map(|(_, path)| ItemPath::File(path.clone()))
             .collect();
 
         let data = PlaylistData {
@@ -1204,8 +1230,8 @@ mod tests {
         // Then the order is preserved.
         let loaded = storage.load(&working_dir).await.unwrap();
         assert_eq!(loaded.playlist.len(), 10);
-        for i in 0..10 {
-            assert_eq!(loaded.playlist[i], item_path(format!("/file{i}.mp4")));
+        for (i, expected) in files.iter().enumerate() {
+            assert_eq!(loaded.playlist[i], *expected);
         }
     }
 
@@ -1218,8 +1244,10 @@ mod tests {
 
         let timestamp = Timestamp::now();
 
-        let file = item_path(working_dir.as_path().join("file.mp4"));
-        let non_playlist_file = item_path(working_dir.as_path().join("other.mp4"));
+        let (_temp1, file_path) = create_temp_file_in(temp.path(), "file");
+        let (_temp2, non_playlist_file_path) = create_temp_file_in(temp.path(), "non_playlist");
+        let file = ItemPath::File(file_path.clone());
+        let non_playlist_file = ItemPath::File(non_playlist_file_path.clone());
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -1363,7 +1391,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file = item_path("/test/workspace/video.mp4");
+        let (_temp, file_path) = create_temp_file();
+        let file = ItemPath::File(file_path.clone());
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -1406,8 +1435,10 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let playlist_file = item_path(working_dir.as_path().join("playlist_item.mp4"));
-        let library_file = item_path(working_dir.as_path().join("library_file.mp4"));
+        let (_temp1, playlist_file_path) = create_temp_file_in(temp.path(), "playlist");
+        let (_temp2, library_file_path) = create_temp_file_in(temp.path(), "library");
+        let playlist_file = ItemPath::File(playlist_file_path.clone());
+        let library_file = ItemPath::File(library_file_path.clone());
 
         let data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -1462,8 +1493,10 @@ mod tests {
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
         let timestamp = Timestamp::now();
 
-        let playlist_file = item_path(working_dir.as_path().join("playlist.mp4"));
-        let library_file = item_path(working_dir.as_path().join("library.mp4"));
+        let (_temp1, playlist_file_path) = create_temp_file_in(temp.path(), "playlist");
+        let (_temp2, library_file_path) = create_temp_file_in(temp.path(), "library");
+        let playlist_file = ItemPath::File(playlist_file_path.clone());
+        let library_file = ItemPath::File(library_file_path.clone());
         let virtual_file = ItemPath::Url("https://example.com/stream.mp4".to_string());
 
         let data = PlaylistData {
@@ -1548,7 +1581,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let working_dir = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file = item_path("/test/workspace/video.mp4");
+        let (_file_temp, file_path) = create_temp_file_in(temp.path(), "video");
+        let file = ItemPath::File(file_path.clone());
 
         let mut data = PlaylistData {
             working_directory: working_dir.clone(),
@@ -1606,7 +1640,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file = item_path("/shared/video.mp4");
+        let (_file_temp, file_canonical) = create_temp_file();
+        let file = ItemPath::File(file_canonical.clone());
 
         let data = PlaylistData {
             working_directory: workspace.clone(),
@@ -1627,7 +1662,6 @@ mod tests {
         };
         storage.save(&data).await.unwrap();
 
-        let file_canonical = CanonicalPath::new(PathBuf::from("/shared/video.mp4"));
         storage
             .upsert_alias(&file_canonical, &workspace, "My Alias")
             .await
@@ -1670,8 +1704,10 @@ mod tests {
         let workspace1 = CanonicalPath::from_path(temp1.path()).unwrap();
         let workspace2 = CanonicalPath::from_path(temp2.path()).unwrap();
 
-        let file1 = item_path("/shared/file1.mp4");
-        let file2 = item_path("/shared/file2.mp4");
+        let (_file1_temp, file1_path) = create_temp_file_in(temp1.path(), "file1");
+        let (_file2_temp, file2_path) = create_temp_file_in(temp2.path(), "file2");
+        let file1 = ItemPath::File(file1_path.clone());
+        let file2 = ItemPath::File(file2_path.clone());
 
         let data1 = PlaylistData {
             working_directory: workspace1.clone(),
@@ -1752,7 +1788,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let workspace = CanonicalPath::from_path(temp.path()).unwrap();
 
-        let file = item_path("/unique/file.mp4");
+        let (_file_temp, file_path) = create_temp_file_in(temp.path(), "file");
+        let file = ItemPath::File(file_path.clone());
 
         let data = PlaylistData {
             working_directory: workspace.clone(),

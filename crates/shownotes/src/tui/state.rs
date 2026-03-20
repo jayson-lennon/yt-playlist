@@ -365,12 +365,18 @@ impl Default for TuiState {
 mod tests {
     use super::*;
     use marked_path::CanonicalPath;
-    use std::path::PathBuf;
     use std::time::Duration;
+    use tempfile::NamedTempFile;
 
-    fn item(path: &str) -> PlaylistItem {
+    fn create_temp_file() -> (NamedTempFile, CanonicalPath) {
+        let temp = NamedTempFile::new().unwrap();
+        let path = CanonicalPath::from_path(temp.path()).unwrap();
+        (temp, path)
+    }
+
+    fn item(path: &CanonicalPath) -> PlaylistItem {
         PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from(path))),
+            path: ItemPath::File(path.clone()),
             duration: None,
             alias: None,
             mime_type: None,
@@ -397,42 +403,42 @@ mod tests {
     #[test]
     fn selected_playlist_item_returns_current() {
         // Given a state with playlist items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.playlist_pane.selected = 1;
 
         // When getting selected item.
         let selected = state.selected_playlist_item();
 
         // Then correct item is returned.
-        assert_eq!(
-            selected.unwrap().path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
-        );
+        assert_eq!(selected.unwrap().path, ItemPath::File(path_b));
     }
 
     #[test]
     fn selected_library_item_returns_current() {
         // Given a state with library items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.library_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.library_pane.items = vec![item(&path_a), item(&path_b)];
         state.library_pane.selected = 1;
 
         // When getting selected item.
         let selected = state.selected_library_item();
 
         // Then correct item is returned.
-        assert_eq!(
-            selected.unwrap().path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
-        );
+        assert_eq!(selected.unwrap().path, ItemPath::File(path_b));
     }
 
     #[test]
     fn move_playlist_up_delegates_to_pane() {
         // Given a state with playlist items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.playlist_pane.selected = 1;
 
         // When moving up.
@@ -445,8 +451,10 @@ mod tests {
     #[test]
     fn move_playlist_down_delegates_to_pane() {
         // Given a state with playlist items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.playlist_pane.selected = 0;
 
         // When moving down.
@@ -459,8 +467,10 @@ mod tests {
     #[test]
     fn move_library_up_delegates_to_pane() {
         // Given a state with library items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.library_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.library_pane.items = vec![item(&path_a), item(&path_b)];
         state.library_pane.selected = 1;
 
         // When moving up.
@@ -473,8 +483,10 @@ mod tests {
     #[test]
     fn move_library_down_delegates_to_pane() {
         // Given a state with library items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.library_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.library_pane.items = vec![item(&path_a), item(&path_b)];
         state.library_pane.selected = 0;
 
         // When moving down.
@@ -487,45 +499,44 @@ mod tests {
     #[test]
     fn reorder_playlist_up_delegates_to_pane() {
         // Given a state with playlist items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.playlist_pane.selected = 1;
 
         // When reordering up.
         state.reorder_playlist_up();
 
         // Then items are swapped.
-        assert_eq!(
-            state.playlist_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
-        );
+        assert_eq!(state.playlist_pane.items[0].path, ItemPath::File(path_b));
     }
 
     #[test]
     fn reorder_playlist_down_delegates_to_pane() {
         // Given a state with playlist items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.playlist_pane.selected = 0;
 
         // When reordering down.
         state.reorder_playlist_down();
 
         // Then items are swapped.
-        assert_eq!(
-            state.playlist_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
-        );
+        assert_eq!(state.playlist_pane.items[0].path, ItemPath::File(path_b));
     }
 
     #[test]
     fn add_to_playlist_adds_item() {
         // Given an empty state.
+        let (_temp, path) = create_temp_file();
         let mut state = TuiState::new();
 
         // When adding to playlist.
         state.add_to_playlist(
-            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4"))),
+            ItemPath::File(path.clone()),
             Some(Duration::from_secs(120)),
             Some("alias".to_string()),
             Some("video/mp4".to_string()),
@@ -535,10 +546,7 @@ mod tests {
 
         // Then item is added.
         assert_eq!(state.playlist_pane.items.len(), 1);
-        assert_eq!(
-            state.playlist_pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4")))
-        );
+        assert_eq!(state.playlist_pane.items[0].path, ItemPath::File(path));
         assert_eq!(
             state.playlist_pane.items[0].alias,
             Some("alias".to_string())
@@ -548,8 +556,10 @@ mod tests {
     #[test]
     fn remove_from_playlist_removes_item() {
         // Given a state with playlist items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.playlist_pane.selected = 0;
 
         // When removing from playlist.
@@ -562,15 +572,17 @@ mod tests {
     #[test]
     fn remove_from_library_removes_item() {
         // Given a state with library items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.library_pane.items = vec![item("apple.mp4"), item("banana.mp4")];
-        state.library_pane.filter.applied = Some("an".to_string());
+        state.library_pane.items = vec![item(&path_a), item(&path_b)];
+        state.library_pane.selected = 0;
 
-        // When getting filtered library.
-        let filtered = state.get_filtered_library();
+        // When removing from library.
+        state.remove_from_library();
 
-        // Then filtered results are returned.
-        assert_eq!(filtered.len(), 1);
+        // Then item is removed.
+        assert_eq!(state.library_pane.items.len(), 1);
     }
 
     #[test]
@@ -659,8 +671,10 @@ mod tests {
         use crate::tui::TuiAction;
 
         // Given a state focused on playlist with items.
+        let (_temp_a, path_a) = create_temp_file();
+        let (_temp_b, path_b) = create_temp_file();
         let mut state = TuiState::new();
-        state.playlist_pane.items = vec![item("a.mp4"), item("b.mp4")];
+        state.playlist_pane.items = vec![item(&path_a), item(&path_b)];
         state.focused_pane = Pane::Playlist;
         let ctx = ctx();
 

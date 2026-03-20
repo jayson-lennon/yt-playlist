@@ -218,16 +218,27 @@ pub fn total_duration<'a>(items: impl Iterator<Item = &'a PlaylistItem>) -> Dura
 mod tests {
     use super::*;
     use marked_path::CanonicalPath;
-    use std::path::PathBuf;
+    use std::io::Write;
+    use tempfile::TempDir;
 
-    fn item(path: &str) -> PlaylistItem {
-        let item_path = if path.starts_with("http://") || path.starts_with("https://") {
-            ItemPath::Url(path.to_string())
-        } else {
-            ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
-        };
+    fn create_test_file(dir: &TempDir, name: &str) -> CanonicalPath {
+        let path = dir.path().join(name);
+        std::fs::File::create(&path)
+            .unwrap()
+            .write_all(b"")
+            .unwrap();
+        CanonicalPath::from_path(&path).unwrap()
+    }
+
+    fn create_test_dir(dir: &TempDir, name: &str) -> CanonicalPath {
+        let path = dir.path().join(name);
+        std::fs::create_dir(&path).unwrap();
+        CanonicalPath::from_path(&path).unwrap()
+    }
+
+    fn item(path: &CanonicalPath) -> PlaylistItem {
         PlaylistItem {
-            path: item_path,
+            path: ItemPath::File(path.clone()),
             duration: None,
             alias: None,
             mime_type: None,
@@ -237,14 +248,9 @@ mod tests {
         }
     }
 
-    fn item_with_alias(path: &str, alias: &str) -> PlaylistItem {
-        let item_path = if path.starts_with("http://") || path.starts_with("https://") {
-            ItemPath::Url(path.to_string())
-        } else {
-            ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
-        };
+    fn item_with_alias(path: &CanonicalPath, alias: &str) -> PlaylistItem {
         PlaylistItem {
-            path: item_path,
+            path: ItemPath::File(path.clone()),
             duration: None,
             alias: Some(alias.to_string()),
             mime_type: None,
@@ -255,14 +261,9 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    fn item_with_duration(path: &str, secs: u64) -> PlaylistItem {
-        let item_path = if path.starts_with("http://") || path.starts_with("https://") {
-            ItemPath::Url(path.to_string())
-        } else {
-            ItemPath::File(CanonicalPath::new(PathBuf::from(path)))
-        };
+    fn item_with_duration(path: &CanonicalPath, secs: u64) -> PlaylistItem {
         PlaylistItem {
-            path: item_path,
+            path: ItemPath::File(path.clone()),
             duration: Some(Duration::from_secs(secs)),
             alias: None,
             mime_type: None,
@@ -335,7 +336,9 @@ mod tests {
     #[test]
     fn get_display_name_returns_alias_when_set() {
         // Given an item with an alias.
-        let item = item_with_alias("/path/to/video.mp4", "My Video");
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
+        let item = item_with_alias(&path, "My Video");
 
         // When getting the display name.
         let result = get_display_name(&item);
@@ -347,7 +350,9 @@ mod tests {
     #[test]
     fn get_display_name_returns_filename_when_no_alias() {
         // Given an item without an alias.
-        let item = item("/path/to/video.mp4");
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
+        let item = item(&path);
 
         // When getting the display name.
         let result = get_display_name(&item);
@@ -359,7 +364,9 @@ mod tests {
     #[test]
     fn get_display_name_handles_path_without_filename() {
         // Given an item with a directory path.
-        let item = item("/path/to/dir/");
+        let dir = TempDir::new().unwrap();
+        let subdir = create_test_dir(&dir, "dir");
+        let item = item(&subdir);
 
         // When getting the display name.
         let result = get_display_name(&item);
@@ -371,7 +378,11 @@ mod tests {
     #[test]
     fn filter_items_returns_all_when_no_filter() {
         // Given a list of items with no filter.
-        let items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        let dir = TempDir::new().unwrap();
+        let a = create_test_file(&dir, "a.mp4");
+        let b = create_test_file(&dir, "b.mp4");
+        let c = create_test_file(&dir, "c.mp4");
+        let items = vec![item(&a), item(&b), item(&c)];
 
         // When filtering with empty input and no applied filter.
         let result = filter_items(&items, "", None);
@@ -386,23 +397,27 @@ mod tests {
     #[test]
     fn filter_items_filters_by_pattern() {
         // Given a list of items.
-        let items = vec![item("apple.mp4"), item("banana.mp4"), item("cherry.mp4")];
+        let dir = TempDir::new().unwrap();
+        let apple = create_test_file(&dir, "apple.mp4");
+        let banana = create_test_file(&dir, "banana.mp4");
+        let cherry = create_test_file(&dir, "cherry.mp4");
+        let items = vec![item(&apple), item(&banana), item(&cherry)];
 
         // When filtering with pattern "an".
         let result = filter_items(&items, "an", None);
 
         // Then only matching items are returned.
         assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].1.path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("banana.mp4")))
-        );
+        assert_eq!(result[0].1.path, ItemPath::File(banana));
     }
 
     #[test]
     fn filter_items_uses_applied_filter_when_input_empty() {
         // Given a list of items and an applied filter.
-        let items = vec![item("test.mp4"), item("other.mp4")];
+        let dir = TempDir::new().unwrap();
+        let test = create_test_file(&dir, "test.mp4");
+        let other = create_test_file(&dir, "other.mp4");
+        let items = vec![item(&test), item(&other)];
         let applied = String::from("test");
 
         // When filtering with empty input but an applied filter.
@@ -410,16 +425,16 @@ mod tests {
 
         // Then the applied filter is used.
         assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].1.path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("test.mp4")))
-        );
+        assert_eq!(result[0].1.path, ItemPath::File(test));
     }
 
     #[test]
     fn filter_items_prefers_input_over_applied() {
         // Given a list of items with both input and applied filter.
-        let items = vec![item("apple.mp4"), item("banana.mp4")];
+        let dir = TempDir::new().unwrap();
+        let apple = create_test_file(&dir, "apple.mp4");
+        let banana = create_test_file(&dir, "banana.mp4");
+        let items = vec![item(&apple), item(&banana)];
         let applied = String::from("apple");
 
         // When filtering with input that differs from applied filter.
@@ -427,16 +442,16 @@ mod tests {
 
         // Then the input filter takes precedence.
         assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].1.path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("banana.mp4")))
-        );
+        assert_eq!(result[0].1.path, ItemPath::File(banana));
     }
 
     #[test]
     fn filter_items_returns_empty_when_no_match() {
         // Given a list of items.
-        let items = vec![item("apple.mp4"), item("banana.mp4")];
+        let dir = TempDir::new().unwrap();
+        let apple = create_test_file(&dir, "apple.mp4");
+        let banana = create_test_file(&dir, "banana.mp4");
+        let items = vec![item(&apple), item(&banana)];
 
         // When filtering with a pattern that matches nothing.
         let result = filter_items(&items, "xyz", None);
@@ -448,9 +463,12 @@ mod tests {
     #[test]
     fn filter_items_searches_alias() {
         // Given items with aliases.
+        let dir = TempDir::new().unwrap();
+        let a = create_test_file(&dir, "a.mp4");
+        let b = create_test_file(&dir, "b.mp4");
         let items = vec![
-            item_with_alias("a.mp4", "First Video"),
-            item_with_alias("b.mp4", "Second Clip"),
+            item_with_alias(&a, "First Video"),
+            item_with_alias(&b, "Second Clip"),
         ];
 
         // When filtering by alias content.
@@ -464,7 +482,11 @@ mod tests {
     #[test]
     fn filter_items_preserves_original_indices() {
         // Given a list of items.
-        let items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        let dir = TempDir::new().unwrap();
+        let a = create_test_file(&dir, "a.mp4");
+        let b = create_test_file(&dir, "b.mp4");
+        let c = create_test_file(&dir, "c.mp4");
+        let items = vec![item(&a), item(&b), item(&c)];
 
         // When filtering for the last item.
         let result = filter_items(&items, "c", None);
@@ -523,8 +545,10 @@ mod tests {
     #[test]
     fn format_item_line_formats_with_duration_and_alias() {
         // Given an item with duration, alias, and mime type.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -543,8 +567,10 @@ mod tests {
     #[test]
     fn format_item_line_formats_with_duration_no_alias() {
         // Given an item with duration and mime type but no alias.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -563,8 +589,10 @@ mod tests {
     #[test]
     fn format_item_line_formats_without_duration_with_alias() {
         // Given an item with alias and mime type but no duration.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "doc.pdf");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/doc.pdf"))),
+            path: ItemPath::File(path),
             duration: None,
             alias: Some("My Doc".to_string()),
             mime_type: Some("application/pdf".to_string()),
@@ -583,8 +611,10 @@ mod tests {
     #[test]
     fn format_item_line_formats_without_duration_or_alias() {
         // Given an item with mime type but no duration or alias.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "doc.pdf");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/doc.pdf"))),
+            path: ItemPath::File(path),
             duration: None,
             alias: None,
             mime_type: Some("application/pdf".to_string()),
@@ -603,8 +633,10 @@ mod tests {
     #[test]
     fn format_item_line_uses_unknown_when_no_mime() {
         // Given an item without mime type.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "file.xyz");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/file.xyz"))),
+            path: ItemPath::File(path),
             duration: None,
             alias: None,
             mime_type: None,
@@ -669,8 +701,10 @@ mod tests {
     #[test]
     fn format_item_line_shows_file_stem_for_non_virtual_items() {
         // Given a non-virtual file item.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: None,
             alias: None,
             mime_type: Some("video/mp4".to_string()),
@@ -713,8 +747,10 @@ mod tests {
     #[test]
     fn format_item_line_no_count_shown_when_count_is_zero() {
         // Given an item with playlist_count of 0.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -733,8 +769,10 @@ mod tests {
     #[test]
     fn format_item_line_no_count_shown_when_count_is_one() {
         // Given an item with playlist_count of 1.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -753,8 +791,10 @@ mod tests {
     #[test]
     fn format_item_line_shows_count_when_count_is_two() {
         // Given an item with playlist_count of 2.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -773,8 +813,10 @@ mod tests {
     #[test]
     fn format_item_line_shows_count_when_count_is_three() {
         // Given an item with playlist_count of 3.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -793,8 +835,10 @@ mod tests {
     #[test]
     fn format_item_line_no_count_when_pane_width_is_zero() {
         // Given an item with playlist_count of 5.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -813,8 +857,10 @@ mod tests {
     #[test]
     fn format_item_line_no_count_when_line_too_long() {
         // Given an item with playlist_count of 2.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -833,8 +879,10 @@ mod tests {
     #[test]
     fn format_item_line_shows_count_when_min_count_is_one_and_count_is_one() {
         // Given an item with playlist_count of 1.
+        let dir = TempDir::new().unwrap();
+        let path = create_test_file(&dir, "video.mp4");
         let item = PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from("/path/to/video.mp4"))),
+            path: ItemPath::File(path),
             duration: Some(Duration::from_secs(65)),
             alias: Some("My Video".to_string()),
             mime_type: Some("video/mp4".to_string()),
@@ -982,9 +1030,12 @@ mod tests {
     #[test]
     fn total_duration_sums_item_durations() {
         // Given items with durations.
+        let dir = TempDir::new().unwrap();
+        let a = create_test_file(&dir, "a.mp4");
+        let b = create_test_file(&dir, "b.mp4");
         let items = vec![
             PlaylistItem {
-                path: ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4"))),
+                path: ItemPath::File(a),
                 duration: Some(Duration::from_secs(60)),
                 alias: None,
                 mime_type: None,
@@ -993,7 +1044,7 @@ mod tests {
                 has_sources: true,
             },
             PlaylistItem {
-                path: ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4"))),
+                path: ItemPath::File(b),
                 duration: Some(Duration::from_secs(120)),
                 alias: None,
                 mime_type: None,
@@ -1013,9 +1064,13 @@ mod tests {
     #[test]
     fn total_duration_ignores_items_without_duration() {
         // Given items with mixed durations.
+        let dir = TempDir::new().unwrap();
+        let a = create_test_file(&dir, "a.mp4");
+        let b = create_test_file(&dir, "b.mp4");
+        let c = create_test_file(&dir, "c.mp4");
         let items = vec![
             PlaylistItem {
-                path: ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4"))),
+                path: ItemPath::File(a),
                 duration: Some(Duration::from_secs(60)),
                 alias: None,
                 mime_type: None,
@@ -1024,7 +1079,7 @@ mod tests {
                 has_sources: true,
             },
             PlaylistItem {
-                path: ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4"))),
+                path: ItemPath::File(b),
                 duration: None,
                 alias: None,
                 mime_type: None,
@@ -1033,7 +1088,7 @@ mod tests {
                 has_sources: true,
             },
             PlaylistItem {
-                path: ItemPath::File(CanonicalPath::new(PathBuf::from("c.mp4"))),
+                path: ItemPath::File(c),
                 duration: Some(Duration::from_secs(30)),
                 alias: None,
                 mime_type: None,

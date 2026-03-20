@@ -268,17 +268,44 @@ mod tests {
     use super::*;
     use crossterm::event::KeyCode;
     use marked_path::CanonicalPath;
-    use std::path::PathBuf;
+    use tempfile::NamedTempFile;
 
-    fn item(path: &str) -> PlaylistItem {
-        PlaylistItem {
-            path: ItemPath::File(CanonicalPath::new(PathBuf::from(path))),
-            duration: None,
-            alias: None,
-            mime_type: None,
-            is_virtual: false,
-            playlist_count: 0,
-            has_sources: true,
+    struct TestFiles {
+        files: Vec<NamedTempFile>,
+        paths: Vec<CanonicalPath>,
+    }
+
+    impl TestFiles {
+        fn new() -> Self {
+            Self {
+                files: Vec::new(),
+                paths: Vec::new(),
+            }
+        }
+
+        fn create_item(&mut self) -> PlaylistItem {
+            let temp = NamedTempFile::new().unwrap();
+            let path = CanonicalPath::from_path(temp.path()).unwrap();
+            let item = PlaylistItem {
+                path: ItemPath::File(path.clone()),
+                duration: None,
+                alias: None,
+                mime_type: None,
+                is_virtual: false,
+                playlist_count: 0,
+                has_sources: true,
+            };
+            self.paths.push(path);
+            self.files.push(temp);
+            item
+        }
+
+        fn create_items(&mut self, count: usize) -> Vec<PlaylistItem> {
+            (0..count).map(|_| self.create_item()).collect()
+        }
+
+        fn path(&self, index: usize) -> &CanonicalPath {
+            &self.paths[index]
         }
     }
 
@@ -307,8 +334,9 @@ mod tests {
     #[test]
     fn move_up_decrements_selection() {
         // Given a pane with 3 items, selection at index 1.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.items = files.create_items(3);
         pane.selected = 1;
 
         // When moving up.
@@ -321,8 +349,9 @@ mod tests {
     #[test]
     fn move_up_stays_at_first_item() {
         // Given a pane with selection at first item.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.items = files.create_items(2);
         pane.selected = 0;
 
         // When moving up.
@@ -335,8 +364,9 @@ mod tests {
     #[test]
     fn move_down_increments_selection() {
         // Given a pane with 3 items, selection at index 0.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.items = files.create_items(3);
         pane.selected = 0;
 
         // When moving down.
@@ -349,8 +379,9 @@ mod tests {
     #[test]
     fn move_down_stays_at_last_item() {
         // Given a pane with selection at last item.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.items = files.create_items(2);
         pane.selected = 1;
 
         // When moving down.
@@ -363,8 +394,12 @@ mod tests {
     #[test]
     fn move_up_with_filter_navigates_filtered_list() {
         // Given a pane with filter applied.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.items = files.create_items(3);
+        pane.items[0].alias = Some("apple".to_string());
+        pane.items[1].alias = Some("banana".to_string());
+        pane.items[2].alias = Some("grape".to_string());
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 1;
 
@@ -378,8 +413,12 @@ mod tests {
     #[test]
     fn move_down_with_filter_navigates_filtered_list() {
         // Given a pane with filter applied.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.items = files.create_items(3);
+        pane.items[0].alias = Some("apple".to_string());
+        pane.items[1].alias = Some("banana".to_string());
+        pane.items[2].alias = Some("grape".to_string());
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 0;
 
@@ -393,8 +432,9 @@ mod tests {
     #[test]
     fn remove_deletes_selected_item() {
         // Given a pane with 3 items, middle selected.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
+        pane.items = files.create_items(3);
         pane.selected = 1;
 
         // When removing.
@@ -402,21 +442,16 @@ mod tests {
 
         // Then selected item is removed.
         assert_eq!(pane.items.len(), 2);
-        assert_eq!(
-            pane.items[0].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("a.mp4")))
-        );
-        assert_eq!(
-            pane.items[1].path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("c.mp4")))
-        );
+        assert_eq!(pane.items[0].path, ItemPath::File(files.path(0).clone()));
+        assert_eq!(pane.items[1].path, ItemPath::File(files.path(2).clone()));
     }
 
     #[test]
     fn remove_adjusts_selection_when_at_end() {
         // Given a pane with 2 items, last selected.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.items = files.create_items(2);
         pane.selected = 1;
 
         // When removing.
@@ -429,27 +464,30 @@ mod tests {
     #[test]
     fn remove_with_filter_removes_correct_item() {
         // Given a pane with filter applied.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.items = files.create_items(3);
+        pane.items[0].alias = Some("apple".to_string());
+        pane.items[1].alias = Some("banana".to_string());
+        pane.items[2].alias = Some("grape".to_string());
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 1;
 
-        // When removing (should remove apricot, index 2 in original).
+        // When removing (should remove item at index 2 in original).
         pane.remove();
 
         // Then correct item is removed.
         assert_eq!(pane.items.len(), 2);
-        assert!(pane
-            .items
-            .iter()
-            .all(|i| i.path != ItemPath::File(CanonicalPath::new(PathBuf::from("apricot.mp4")))));
+        let removed_path = ItemPath::File(files.path(2).clone());
+        assert!(pane.items.iter().all(|i| i.path != removed_path));
     }
 
     #[test]
     fn selected_item_returns_current_selection() {
         // Given a pane with items.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.items = files.create_items(2);
         pane.selected = 1;
 
         // When getting selected item.
@@ -458,7 +496,7 @@ mod tests {
         // Then correct item is returned.
         assert_eq!(
             selected.unwrap().path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))
+            ItemPath::File(files.path(1).clone())
         );
     }
 
@@ -477,8 +515,12 @@ mod tests {
     #[test]
     fn selected_item_with_filter_returns_filtered_item() {
         // Given a pane with filter applied.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("apricot.mp4")];
+        pane.items = files.create_items(3);
+        pane.items[0].alias = Some("apple".to_string());
+        pane.items[1].alias = Some("banana".to_string());
+        pane.items[2].alias = Some("grape".to_string());
         pane.filter.applied = Some("ap".to_string());
         pane.selected = 0;
 
@@ -492,8 +534,9 @@ mod tests {
     #[test]
     fn selected_item_mut_allows_modification() {
         // Given a pane with items.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("test.mp4")];
+        pane.items = files.create_items(1);
 
         // When modifying selected item.
         if let Some(item) = pane.selected_item_mut() {
@@ -520,11 +563,12 @@ mod tests {
     #[test]
     fn refresh_adjusts_selection_when_out_of_bounds() {
         // Given a pane with selection out of bounds.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
         pane.selected = 10;
 
         // When refreshing with fewer items.
-        pane.refresh(vec![item("a.mp4"), item("b.mp4")], &[]);
+        pane.refresh(files.create_items(2), &[]);
 
         // Then selection is adjusted to last item.
         assert_eq!(pane.selected, 1);
@@ -533,11 +577,12 @@ mod tests {
     #[test]
     fn refresh_keeps_selection_when_valid() {
         // Given a pane with valid selection.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
         pane.selected = 1;
 
         // When refreshing with enough items.
-        pane.refresh(vec![item("a.mp4"), item("b.mp4"), item("c.mp4")], &[]);
+        pane.refresh(files.create_items(3), &[]);
 
         // Then selection is preserved.
         assert_eq!(pane.selected, 1);
@@ -546,8 +591,9 @@ mod tests {
     #[test]
     fn get_filtered_returns_all_when_no_filter() {
         // Given a pane without filter.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("a.mp4"), item("b.mp4")];
+        pane.items = files.create_items(2);
 
         // When getting filtered.
         let filtered = pane.get_filtered();
@@ -559,8 +605,12 @@ mod tests {
     #[test]
     fn get_filtered_filters_by_pattern() {
         // Given a pane with filter applied.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![item("apple.mp4"), item("banana.mp4"), item("cherry.mp4")];
+        pane.items = files.create_items(3);
+        pane.items[0].alias = Some("apple".to_string());
+        pane.items[1].alias = Some("banana".to_string());
+        pane.items[2].alias = Some("grape".to_string());
         pane.filter.applied = Some("an".to_string());
 
         // When getting filtered.
@@ -568,18 +618,16 @@ mod tests {
 
         // Then only matching items are returned.
         assert_eq!(filtered.len(), 1);
-        assert_eq!(
-            filtered[0].1.path,
-            ItemPath::File(CanonicalPath::new(PathBuf::from("banana.mp4")))
-        );
+        assert_eq!(filtered[0].1.path, ItemPath::File(files.path(1).clone()));
     }
 
     #[test]
     fn refresh_filters_out_playlist_items() {
         // Given a pane and playlist paths.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        let entries = vec![item("a.mp4"), item("b.mp4"), item("c.mp4")];
-        let b_path = ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")));
+        let entries = files.create_items(3);
+        let b_path = ItemPath::File(files.path(1).clone());
         let playlist_paths: Vec<&ItemPath> = vec![&b_path];
 
         // When refreshing.
@@ -587,38 +635,30 @@ mod tests {
 
         // Then items in playlist are excluded.
         assert_eq!(pane.items.len(), 2);
-        assert!(pane
-            .items
-            .iter()
-            .all(|i| i.path != ItemPath::File(CanonicalPath::new(PathBuf::from("b.mp4")))));
+        let excluded_path = ItemPath::File(files.path(1).clone());
+        assert!(pane.items.iter().all(|i| i.path != excluded_path));
     }
 
     #[test]
     fn refresh_preserves_virtual_items() {
         // Given a pane with virtual items.
+        let mut files = TestFiles::new();
         let mut pane = LibraryPane::new();
-        pane.items = vec![
-            virtual_item("https://example.com/video.mp4"),
-            item("old.mp4"),
-        ];
+        let old_item = files.create_item();
+        pane.items = vec![virtual_item("https://example.com/video.mp4"), old_item];
 
         // When refreshing with new disk entries (old.mp4 no longer exists).
-        let entries = vec![item("new.mp4")];
-        pane.refresh(entries, &[]);
+        let new_item = files.create_item();
+        pane.refresh(vec![new_item.clone()], &[]);
 
         // Then virtual items are preserved, old non-virtual is removed, new is added.
         assert_eq!(pane.items.len(), 2);
         assert!(pane.items.iter().any(|i| i.path
             == ItemPath::Url("https://example.com/video.mp4".to_string())
             && i.is_virtual));
-        assert!(pane
-            .items
-            .iter()
-            .any(|i| i.path == ItemPath::File(CanonicalPath::new(PathBuf::from("new.mp4")))));
-        assert!(!pane
-            .items
-            .iter()
-            .any(|i| i.path == ItemPath::File(CanonicalPath::new(PathBuf::from("old.mp4")))));
+        assert!(pane.items.iter().any(|i| i.path == new_item.path));
+        let old_path = ItemPath::File(files.path(0).clone());
+        assert!(!pane.items.iter().any(|i| i.path == old_path));
     }
 
     #[test]

@@ -260,9 +260,8 @@ pub use storage::SqliteStorage;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use std::time::Duration;
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
 
     #[tokio::test]
     async fn playlist_storage_delegates_to_backend() {
@@ -341,7 +340,8 @@ mod tests {
         let storage = PlaylistStorageService::new(backend.clone());
 
         // When upserting an alias.
-        let file = CanonicalPath::new(PathBuf::from("/test/video.mp4"));
+        let file_temp = NamedTempFile::new().unwrap();
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
         let result = storage
             .upsert_alias(&file, &working_dir, "My Video")
             .await;
@@ -358,7 +358,8 @@ mod tests {
         let backend = Arc::new(FakeStorageBackend::default());
         let storage = PlaylistStorageService::new(backend.clone());
 
-        let file = CanonicalPath::new(PathBuf::from("/test/video.mp4"));
+        let file_temp = NamedTempFile::new().unwrap();
+        let file = CanonicalPath::from_path(file_temp.path()).unwrap();
         storage
             .upsert_alias(&file, &working_dir, "My Video")
             .await
