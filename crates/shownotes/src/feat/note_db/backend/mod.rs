@@ -54,6 +54,10 @@ impl NoteDb for NoteDbService {
         self.backend.get_all_notes_with_paths().await
     }
 
+    async fn get_all_paths_for_fuzzy_search(&self) -> Result<Vec<(String, String)>, Report<NoteDbError>> {
+        self.backend.get_all_paths_for_fuzzy_search().await
+    }
+
     async fn close(&self) {
         self.backend.close().await;
     }

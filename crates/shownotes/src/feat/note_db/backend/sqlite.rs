@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::path::Path;
 use std::str::FromStr;
 
 use async_trait::async_trait;
@@ -165,6 +166,31 @@ impl NoteDb for SqliteNoteDb {
         .change_context(NoteDbError)?;
 
         Ok(results)
+    }
+
+    async fn get_all_paths_for_fuzzy_search(&self) -> Result<Vec<(String, String)>, Report<NoteDbError>> {
+        let results = sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT fp.path, n.content FROM file_paths fp LEFT JOIN notes n ON fp.id = n.file_path_id",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .change_context(NoteDbError)?;
+
+        let processed = results
+            .into_iter()
+            .map(|(path, content)| {
+                let search_content = content.unwrap_or_else(|| {
+                    Path::new(&path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(&path)
+                        .to_string()
+                });
+                (path, search_content)
+            })
+            .collect();
+
+        Ok(processed)
     }
 
     async fn close(&self) {
@@ -354,5 +380,91 @@ mod tests {
         let note2 = db.get_note(id2).await.unwrap();
         assert_eq!(note1, Some("note for file 1".to_string()));
         assert_eq!(note2, Some("note for file 2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn get_all_paths_for_fuzzy_search_returns_paths_with_notes() {
+        // Given a database with a file path that has a note.
+        let db = create_test_db().await;
+        let temp = create_temp_file();
+        let path = temp.path().to_str().unwrap();
+        let file_path_id = db.get_or_create_file_path(path).await.unwrap();
+        db.upsert_note(file_path_id, "my note content")
+            .await
+            .unwrap();
+
+        // When getting all paths for fuzzy search.
+        let results = db.get_all_paths_for_fuzzy_search().await.unwrap();
+
+        // Then the path is returned with its note content.
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, path);
+        assert_eq!(results[0].1, "my note content");
+    }
+
+    #[tokio::test]
+    async fn get_all_paths_for_fuzzy_search_returns_filename_when_no_note() {
+        // Given a database with a file path that has no note.
+        let db = create_test_db().await;
+        let temp = create_temp_file();
+        let path = temp.path().to_str().unwrap();
+        db.get_or_create_file_path(path).await.unwrap();
+
+        // When getting all paths for fuzzy search.
+        let results = db.get_all_paths_for_fuzzy_search().await.unwrap();
+
+        // Then the path is returned with just the filename.
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, path);
+        // The second element should be just the filename, not the full path
+        let expected_filename = Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap();
+        assert_eq!(results[0].1, expected_filename);
+        assert!(!results[0].1.contains("/")); // filename shouldn't have path separators
+    }
+
+    #[tokio::test]
+    async fn get_all_paths_for_fuzzy_search_returns_both_with_and_without_notes() {
+        // Given a database with two file paths, one with a note and one without.
+        let db = create_test_db().await;
+        let temp1 = create_temp_file();
+        let temp2 = create_temp_file();
+        let path1 = temp1.path().to_str().unwrap();
+        let path2 = temp2.path().to_str().unwrap();
+
+        let id1 = db.get_or_create_file_path(path1).await.unwrap();
+        db.upsert_note(id1, "note for file 1").await.unwrap();
+        db.get_or_create_file_path(path2).await.unwrap(); // no note
+
+        // When getting all paths for fuzzy search.
+        let results = db.get_all_paths_for_fuzzy_search().await.unwrap();
+
+        // Then both paths are returned with appropriate content.
+        assert_eq!(results.len(), 2);
+
+        let result1 = results.iter().find(|(p, _)| p == path1).unwrap();
+        assert_eq!(result1.1, "note for file 1");
+
+        let result2 = results.iter().find(|(p, _)| p == path2).unwrap();
+        let expected_filename = Path::new(path2)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap();
+        assert_eq!(result2.1, expected_filename);
+        assert!(!result2.1.contains("/"));
+    }
+
+    #[tokio::test]
+    async fn get_all_paths_for_fuzzy_search_returns_empty_when_no_paths() {
+        // Given an empty database.
+        let db = create_test_db().await;
+
+        // When getting all paths for fuzzy search.
+        let results = db.get_all_paths_for_fuzzy_search().await.unwrap();
+
+        // Then an empty list is returned.
+        assert!(results.is_empty());
     }
 }

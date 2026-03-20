@@ -234,25 +234,27 @@ where
 /// # Errors
 ///
 /// Returns an error if database operations, fuzzy search, or current directory retrieval fails.
+///
+/// This function searches both notes and filenames for matching items.
 pub async fn fuzzy(
     ctx: &SystemCtx,
     create_symlinks: bool,
 ) -> Result<(Vec<String>, usize), Report<CommandError>> {
-    let notes = ctx
+    let items = ctx
         .services
         .db
-        .get_all_notes_with_paths()
+        .get_all_paths_for_fuzzy_search()
         .await
         .change_context(CommandError)?;
 
-    if notes.is_empty() {
+    if items.is_empty() {
         return Ok((Vec::new(), 0));
     }
 
     let result = ctx
         .services
         .fuzzy_search
-        .search(&notes)
+        .search(&items)
         .change_context(CommandError)?;
 
     let mut symlinks_created = 0;

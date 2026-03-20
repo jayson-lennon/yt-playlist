@@ -23,5 +23,10 @@ pub trait NoteDb: Send + Sync {
     ) -> Result<(), Report<NoteDbError>>;
     async fn search_notes(&self, query: &str) -> Result<HashSet<String>, Report<NoteDbError>>;
     async fn get_all_notes_with_paths(&self) -> Result<Vec<(String, String)>, Report<NoteDbError>>;
+    /// Returns all file paths with searchable content for fuzzy search.
+    ///
+    /// For paths with notes, returns the note content.
+    /// For paths without notes, returns just the filename.
+    async fn get_all_paths_for_fuzzy_search(&self) -> Result<Vec<(String, String)>, Report<NoteDbError>>;
     async fn close(&self);
 }
