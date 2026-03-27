@@ -27,3 +27,12 @@ Feature: Generate show notes from playlist
     Given no files in playlist
     When I generate show notes in "markdown" format
     Then the output is empty
+
+  Scenario: Generate youtube format with sources
+    Given a file "video1.mp4" with source "https://youtube.com/watch?v=abc"
+    And a file "video2.mp4" with source "https://youtube.com/watch?v=def"
+    When I generate show notes in "youtube" format
+    Then the output contains "- https://youtube.com/watch?v=abc"
+    And the output contains "- https://youtube.com/watch?v=def"
+    And the output does not contain "video1"
+    And the output does not contain "video2"

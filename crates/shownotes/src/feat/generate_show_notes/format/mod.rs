@@ -1,6 +1,7 @@
 mod html;
 mod markdown;
 mod plain;
+mod youtube;
 
 use std::path::Path;
 
@@ -58,6 +59,7 @@ impl FormatRegistry {
                 Box::new(markdown::MarkdownFormat),
                 Box::new(plain::PlainFormat),
                 Box::new(html::HtmlFormat),
+                Box::new(youtube::YoutubeFormat),
             ],
         }
     }
@@ -178,5 +180,6 @@ mod tests {
         assert!(formats.contains(&"markdown"));
         assert!(formats.contains(&"plain"));
         assert!(formats.contains(&"html"));
+        assert!(formats.contains(&"youtube"));
     }
 }

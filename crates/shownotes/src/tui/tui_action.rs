@@ -50,6 +50,7 @@
 pub enum ShowNoteKind {
     Html,
     Markdown,
+    Youtube,
 }
 
 impl ShowNoteKind {
@@ -57,6 +58,7 @@ impl ShowNoteKind {
         match self {
             ShowNoteKind::Html => "html",
             ShowNoteKind::Markdown => "markdown",
+            ShowNoteKind::Youtube => "youtube",
         }
     }
 }

@@ -98,6 +98,7 @@ impl Keymap {
             .describe_prefix("gn", "generate show notes")
             .bind("gnh", TuiAction::GenerateShowNotes(ShowNoteKind::Html), "HTML", Cat::General, Ctx::Global)
             .bind("gnm", TuiAction::GenerateShowNotes(ShowNoteKind::Markdown), "markdown", Cat::General, Ctx::Global)
+            .bind("gny", TuiAction::GenerateShowNotes(ShowNoteKind::Youtube), "youtube", Cat::General, Ctx::Global)
             .describe_prefix("a", "add")
             .bind("au", TuiAction::AddUrl, "add url", Cat::General, Ctx::Global)
             .describe_prefix("<leader>", "<leader>")
