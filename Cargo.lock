@@ -1754,6 +1754,8 @@ dependencies = [
 [[package]]
 name = "marked-path"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f77df6d26374db0e763c2116905a877fc0bc82f5cb4f9d571c07ffff87d175e"
 dependencies = [
  "wherror",
 ]
