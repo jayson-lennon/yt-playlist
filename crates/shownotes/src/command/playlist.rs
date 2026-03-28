@@ -158,7 +158,7 @@ pub async fn refresh_library(
         let aliases: HashMap<PathBuf, Option<String>> = {
             let mut result = HashMap::new();
             for path in &paths {
-                let Ok(canonical) = CanonicalPath::from_path(&path.canonicalize().unwrap_or_else(|_| path.clone())) else {
+                let Ok(canonical) = CanonicalPath::from_path(path.canonicalize().unwrap_or_else(|_| path.clone())) else {
                     continue;
                 };
                 let alias = services

@@ -15,7 +15,7 @@ fn path_to_item_path(path: &str) -> Option<ItemPath> {
     if path.starts_with("http://") || path.starts_with("https://") {
         Some(ItemPath::Url(path.to_string()))
     } else {
-        CanonicalPath::from_path(&PathBuf::from(path))
+        CanonicalPath::from_path(PathBuf::from(path))
             .ok()
             .map(ItemPath::File)
     }

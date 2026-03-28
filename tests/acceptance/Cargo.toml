@@ -12,7 +12,7 @@ cucumber = { workspace = true }
 crossterm = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
-marked-path = { version = "0.1.0", path = "../../crates/marked-path" }
+marked-path = { workspace = true }
 
 [[test]]
 name = "symlinks"
