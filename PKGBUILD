@@ -2,7 +2,7 @@
 
 pkgname=shownotes
 pkgver=0.8.0
-pkgrel=1
+pkgrel=2
 pkgdesc='manage shownotes for podcast/video'
 url=''
 license=(GPL-3.0-only)
